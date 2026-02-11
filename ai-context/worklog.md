@@ -22,6 +22,35 @@
   2.
 
 ## 기록
+### [2026-02-11 16:30 KST] 백로그 #3/#5/#6 완료: 동적 스펙트로그램, autosave, 리더보드 라이브 점수
+- 작업 목표: 스펙트로그램 캔버스 시각화 고도화, 자동저장 인프라 구축, 리더보드 실시간 데이터 연결
+- 범위: 라벨링 워크스페이스 + 리더보드 + 스코어 스토어 + 신규 훅
+- 변경 파일:
+  - `smart-spectro-tagging/src/app/(dashboard)/labeling/[id]/page.tsx` - 동적 annotation 박스(suggestion 데이터 기반 위치/크기 계산), 상태별 색상(pending=주황점선, confirmed=초록실선, rejected=빨강점선, corrected=시안실선), 클릭-선택 + 하이라이트 링/코너핸들, 시간축 라벨, 상태 범례, autosave 훅 연결
+  - `smart-spectro-tagging/src/app/(dashboard)/leaderboard/page.tsx` - Total Score를 score-store 라이브 데이터로 교체, Back to Sessions/breadcrumb 네비게이션 연결
+  - `smart-spectro-tagging/src/lib/store/score-store.ts` - Zustand `persist` 미들웨어 적용(localStorage `sst-score` 키)
+  - `smart-spectro-tagging/src/lib/hooks/use-autosave.ts` - 신규 파일: 30초 주기 autosave + beforeunload 저장 + offline queue 유틸리티
+- 검증:
+  - 명령: `npm run build` (작업 디렉토리: `smart-spectro-tagging`)
+  - 결과: 성공 (TypeScript 오류 없음, 모든 라우트 정상 생성)
+- 커밋: `b7ca706` feat: dynamic spectrogram layers, live leaderboard scores, autosave
+- 다음 작업:
+  1. Codex 리뷰 대비 문서 정리
+  2. Phase 1 잔여: SoundLab 패턴 이식 검토
+
+### [2026-02-11 15:00 KST] 백로그 #2/#4 완료: 라벨링 3패널 UX + 핫키 시스템
+- 작업 목표: 라벨링 워크스페이스의 핫키, 편집 모드, 파일 전환, 진행 추적 완성
+- 범위: 라벨링 페이지 전면 개선
+- 변경 파일:
+  - `smart-spectro-tagging/src/app/(dashboard)/labeling/[id]/page.tsx` - 키보드 단축키(O=confirm, X=reject, B=brush, E=eraser, R=box, S=select, F=apply fix, Ctrl+Z=undo, Ctrl+Shift+Z=redo), Edit Mode UI(Apply Fix 버튼 + warning 스타일링), 모드 인디케이터 배지, Undo/Redo 툴바 버튼, Save & Next File 파일 진행, Play/Pause 토글, pending count 배지, 진행률 표시(confirmed/total), 핫키 힌트 오버레이, kbd 라벨
+- 검증:
+  - 명령: `npm run build` (작업 디렉토리: `smart-spectro-tagging`)
+  - 결과: 성공
+- 커밋: `639c109` feat: labeling 3-panel UX completion with hotkeys and edit mode
+- 다음 작업:
+  1. SpectrogramCanvas 레이어 시각화 개선 (백로그 #3)
+  2. autosave 구현 (백로그 #5)
+
 ### [2026-02-11 10:10 KST] Phase 1 Gate 안정화 스프린트 인수인계 문서화 + 핵심 버그 수정
 - 작업 목표: Claude가 즉시 구현/디버깅 가능한 상태로 실행 기준과 안정화 스펙을 고정
 - 범위: `ai-context` 협업 문서 + `smart-spectro-tagging` 핵심 화면/스토어

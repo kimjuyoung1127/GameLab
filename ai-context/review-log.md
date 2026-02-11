@@ -22,6 +22,40 @@
 2. 항목
 
 ## 기록
+### [2026-02-11 17:00 KST] 백로그 #2~#6 구현 완료 리뷰 (Codex 리뷰 대비)
+- 범위: `smart-spectro-tagging/src/app/(dashboard)/labeling/[id]/page.tsx`, `leaderboard/page.tsx`, `score-store.ts`, `use-autosave.ts`
+- 전체 위험도: 보통
+- 최종 판단: 조건부 머지 가능 (아래 보통/낮음 이슈 후속 처리)
+
+#### 이전 높음 이슈 해결 현황
+- [해결됨] Sidebar 404 라우트 → 실제 라우트만 노출 (커밋 `3dd4329`)
+- [해결됨] labeling/[id] 세션 데이터 혼입 → `setCurrentSessionById(id)` + fallback 제거 (커밋 `3dd4329`)
+- [해결됨] undo/redo suggestions만 복원 → `HistorySnapshot` 기반 3필드 복원 (커밋 `3dd4329`)
+- [해결됨] Create Session 무동작 → `createSession` 스토어 연결 + 라벨링 이동 (커밋 `3dd4329`)
+- [해결됨] 로그인 우회 플래그 문서화 부족 → README + claude-coding-guideline 명시 (커밋 `3dd4329`)
+
+#### 신규 이슈
+- [보통] `labeling/[id]/page.tsx:517` - 동적 annotation 태그 라벨의 `${sc.bg}/90` 구문이 Tailwind의 동적 클래스 생성 특성상 purge될 위험 - 운영 빌드에서 태그 배경색 미적용 가능 - safelist 추가 또는 인라인 style로 교체 권장
+- [보통] `labeling/[id]/page.tsx` - 스펙트로그램 캔버스가 CSS gradient/div 기반 mock - 실제 오디오 데이터 시각화 미구현 - Phase 2에서 Canvas API/WebGL 기반으로 교체 필요
+- [보통] `use-autosave.ts` - autosave가 localStorage 단일 키 저장 → 다중 파일 동시 작업 시 마지막 파일만 복원됨 - 키를 `sst-autosave-${audioId}`로 변경 권장 (Phase 2)
+- [낮음] `score-store.ts` - persist 초기값(9420, streak:12)이 localStorage가 비어 있을 때만 적용 → 기존 사용자가 잘못된 점수를 가질 수 있음 - reset 기능 또는 버전 키 도입 권장
+- [낮음] `leaderboard/page.tsx` - Samples(45), Speed(3.1s/tag), Duration(14m 20s) 하드코딩 → store 연동 미완 - Phase 2에서 연산 기반 값으로 교체
+- [낮음] `labeling/[id]/page.tsx` - 재생 커서 위치(38%) 하드코딩 → Web Audio API 연동 시 실시간 업데이트 필요
+
+#### 검증 항목
+1. `npm run build` 성공 (모든 라우트 정상 생성, TypeScript 오류 없음)
+2. 커밋 히스토리: `639c109` → `b7ca706` (2건 추가, origin/main 동기화 완료)
+3. 핫키 O/X/B/E/R/S/F + Ctrl+Z/Shift+Ctrl+Z 동작 확인
+4. Confirm → Reject → Undo → Redo 상태 복원 경로 정상
+5. 동적 annotation 박스: suggestion 데이터 기반 위치/크기 렌더링 확인
+6. autosave: 30초 주기 + beforeunload 저장 동작 확인
+7. score-store: localStorage 영속성 확인
+
+#### 잔여 리스크
+- Tailwind 동적 클래스 purge 가능성 (태그 라벨 배경색)
+- 다중 파일 autosave 키 충돌
+- SoundLab 패턴 이식(백로그 #7) 미착수
+
 ### [2026-02-11 10:15 KST] 안정화 스프린트(Phase 1 Gate) 우선 리스크 리뷰
 - 범위: `smart-spectro-tagging/src/*`, `ai-context/*.md`
 - 전체 위험도: 높음

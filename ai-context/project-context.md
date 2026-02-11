@@ -1,6 +1,6 @@
 ﻿# 프로젝트 컨텍스트 (GameLab)
 
-기준일: 2026-02-10 (KST)
+기준일: 2026-02-11 (KST)
 프로젝트명: Smart Spectro-Tagging
 
 ## 1) 한 줄 정의

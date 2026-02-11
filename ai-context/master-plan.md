@@ -1,7 +1,7 @@
 ﻿# GameLab Master Plan
 
-기준일: 2026-02-10 (KST)  
-프로젝트: Smart Spectro-Tagging (GameLab)  
+기준일: 2026-02-11 (KST)
+프로젝트: Smart Spectro-Tagging (GameLab)
 협업 폴더: `ai-context`
 
 ## 1) 시작 문서 경로 (레포 루트 기준, 복붙용)
@@ -41,13 +41,16 @@
   - Codex: 리뷰/리스크 검증 담당
 
 ## 5) 우선순위 백로그
-1. `sessions` 생성 모달 + 목록 필터 안정화
-2. `labeling/[id]` 3패널 UX 완성
-3. `SpectrogramCanvas` 레이어(heatmap/AI/user/selection/cursor) 반영
-4. `annotation-store` undo/redo, hotkeys(O/X/B/E/R, Ctrl+Z) 연결
-5. autosave + offline queue 최소 구현
-6. leaderboard mock + 점수/streak 반영
+1. ~~`sessions` 생성 모달 + 목록 필터 안정화~~ ✅ (커밋 `3dd4329`)
+2. ~~`labeling/[id]` 3패널 UX 완성~~ ✅ (커밋 `639c109`)
+3. ~~`SpectrogramCanvas` 레이어(heatmap/AI/user/selection/cursor) 반영~~ ✅ (커밋 `b7ca706`)
+4. ~~`annotation-store` undo/redo, hotkeys(O/X/B/E/R, Ctrl+Z) 연결~~ ✅ (커밋 `639c109`)
+5. ~~autosave + offline queue 최소 구현~~ ✅ (커밋 `b7ca706`)
+6. ~~leaderboard mock + 점수/streak 반영~~ ✅ (커밋 `b7ca706`)
 7. SoundLab 패턴 이식: heavy/light 분석 분리 + 타임라인/이벤트로그/스펙트럼모달 설계 반영
+8. Tailwind 동적 클래스 safelist 정리 (review-log 보통 이슈)
+9. autosave 키 구조 개선: 다중 파일 대응 (`sst-autosave-${audioId}`)
+10. 스펙트로그램 Canvas API/WebGL 교체 (Phase 2 전제)
 
 ## 6) Phase 전환 기준
 - Phase 1 -> 2 진입 조건:
@@ -70,14 +73,26 @@
   1. 실행 명령
   2. 결과(성공/실패 + 핵심 로그)
 
-## 9) Sprint Plan (2026-02-11, 안정화 우선)
-1. 사이드바 404 링크 제거/비활성
-   - 완료 기준: 사이드바 클릭으로 이동 가능한 메뉴만 노출되고 404 진입이 재현되지 않음
-2. 세션-파일-제안 데이터 일관성 고정
-   - 완료 기준: `/labeling/[id]` 직접 진입 시 해당 세션 파일/제안만 표시됨
-3. annotation undo/redo 상태 스냅샷 보강
-   - 완료 기준: `Reject -> Undo -> Redo`에서 `mode`, `selectedSuggestionId`, `suggestions`가 모두 일치 복원됨
-4. Sessions Create 버튼 동작 구현
-   - 완료 기준: Create 클릭 시 신규 세션 생성 후 `/labeling/{id}`로 이동됨
-5. 로그인 우회 플래그 운영 규칙화
-   - 완료 기준: 기본 우회 ON, `.env.local`의 `NEXT_PUBLIC_BYPASS_LOGIN=false` 설정 시 로그인 페이지 진입 확인
+## 9) Sprint Plan (2026-02-11, 안정화 우선) — ✅ 전체 완료
+1. ✅ 사이드바 404 링크 제거/비활성
+2. ✅ 세션-파일-제안 데이터 일관성 고정
+3. ✅ annotation undo/redo 상태 스냅샷 보강
+4. ✅ Sessions Create 버튼 동작 구현
+5. ✅ 로그인 우회 플래그 운영 규칙화
+
+## 10) Sprint Plan (2026-02-11 오후, 기능 확장)  — ✅ 전체 완료
+1. ✅ 라벨링 3패널 UX 완성 + 핫키 시스템 (커밋 `639c109`)
+2. ✅ SpectrogramCanvas 동적 레이어 시각화 (커밋 `b7ca706`)
+3. ✅ autosave + offline queue 최소 구현 (커밋 `b7ca706`)
+4. ✅ leaderboard 라이브 점수/네비게이션 연결 (커밋 `b7ca706`)
+
+## 11) Next Sprint 후보 (Phase 1 → Phase 2 게이트)
+1. SoundLab 패턴 이식 (백로그 #7)
+   - heavy/light 분석 분리 서비스 레이어
+   - 타임라인/이벤트로그 컴포넌트
+   - CSV export 흐름
+2. Tailwind 동적 클래스 safelist 정리
+3. autosave 키 구조: `sst-autosave-${audioId}`
+4. 스펙트로그램 Canvas API/WebGL 교체 PoC
+5. 모바일 레이아웃 점검/반응형 보완
+6. Mock → API 경계(`lib/api/endpoints.ts`) 고정
