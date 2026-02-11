@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { mockUsers } from "@/lib/mock/data";
 import { useScoreStore } from "@/lib/store/score-store";
 import {
@@ -46,7 +47,8 @@ const barData = [
 const BAR_MAX = 65;
 
 export default function LeaderboardPage() {
-  const { totalConfirmed, totalFixed } = useScoreStore();
+  const router = useRouter();
+  const { score, totalConfirmed, totalFixed } = useScoreStore();
   const [activeTab, setActiveTab] = useState<"today" | "week" | "alltime">(
     "today"
   );
@@ -100,7 +102,7 @@ export default function LeaderboardPage() {
       {/* ════════ BREADCRUMB + PAGE TITLE ════════ */}
       <div className="px-8 pt-5 pb-2 space-y-2 shrink-0">
         <p className="text-xs text-text-muted">
-          <span className="hover:text-primary cursor-pointer">Sessions</span>
+          <span onClick={() => router.push("/sessions")} className="hover:text-primary cursor-pointer">Sessions</span>
           <span className="mx-1.5">&gt;</span>
           <span className="text-text-secondary">Session #AUDIO-9921</span>
         </p>
@@ -181,7 +183,7 @@ export default function LeaderboardPage() {
               <p className="text-[10px] uppercase tracking-widest text-text-muted mb-1">
                 Total Score
               </p>
-              <p className="text-2xl font-extrabold text-primary">1,250</p>
+              <p className="text-2xl font-extrabold text-primary">{score.toLocaleString()}</p>
             </div>
             {/* Samples */}
             <div className="flex-1 text-center">
@@ -474,7 +476,10 @@ export default function LeaderboardPage() {
           </button>
         </div>
 
-        <button className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-danger hover:bg-danger-dark text-sm font-bold text-white transition-colors">
+        <button
+          onClick={() => router.push("/sessions")}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-danger hover:bg-danger-dark text-sm font-bold text-white transition-colors"
+        >
           Back to Sessions
           <ArrowRight className="w-4 h-4" />
         </button>

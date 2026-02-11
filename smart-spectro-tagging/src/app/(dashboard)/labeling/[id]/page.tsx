@@ -31,7 +31,35 @@ import {
 import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
-import type { DrawTool, AudioFile } from "@/types";
+import { useAutosave } from "@/lib/hooks/use-autosave";
+import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus } from "@/types";
+
+/* ------------------------------------------------------------------ */
+/*  Spectrogram helpers                                                */
+/* ------------------------------------------------------------------ */
+const MAX_FREQ = 20_000; // Hz
+
+function parseDurationToSeconds(dur: string): number {
+  const parts = dur.split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return parts[0] ?? 0;
+}
+
+function suggestionBoxStyle(s: AISuggestion, totalDuration: number) {
+  const leftPct = (s.startTime / totalDuration) * 100;
+  const widthPct = ((s.endTime - s.startTime) / totalDuration) * 100;
+  const topPct = ((MAX_FREQ - s.freqHigh) / MAX_FREQ) * 100;
+  const heightPct = ((s.freqHigh - s.freqLow) / MAX_FREQ) * 100;
+  return { left: `${leftPct}%`, width: `${widthPct}%`, top: `${topPct}%`, height: `${heightPct}%` };
+}
+
+const statusColors: Record<SuggestionStatus, { border: string; bg: string; label: string; dashed: boolean }> = {
+  pending:   { border: "border-orange-400", bg: "bg-orange-400", label: "text-orange-400", dashed: true },
+  confirmed: { border: "border-accent",     bg: "bg-accent",     label: "text-accent",     dashed: false },
+  rejected:  { border: "border-danger",     bg: "bg-danger",     label: "text-danger",     dashed: true },
+  corrected: { border: "border-cyan-400",   bg: "bg-cyan-400",   label: "text-cyan-400",   dashed: false },
+};
 
 /* ------------------------------------------------------------------ */
 /*  Tool definitions                                                   */
@@ -85,6 +113,7 @@ export default function LabelingWorkspacePage() {
     undo,
     redo,
     loadSuggestions,
+    selectSuggestion,
   } = useAnnotationStore();
 
   const { score, streak, addScore, addConfirm, addFix, incrementStreak } =
@@ -102,6 +131,10 @@ export default function LabelingWorkspacePage() {
   const audioFiles: AudioFile[] = files;
   const activeFileId = currentFileId ?? audioFiles[0]?.id ?? null;
   const activeFile = audioFiles.find((f) => f.id === activeFileId) ?? audioFiles[0];
+  const totalDuration = activeFile ? parseDurationToSeconds(activeFile.duration) : 600;
+
+  /* ----- Autosave ------------------------------------------------- */
+  useAutosave(activeFileId);
 
   const filteredFiles = audioFiles.filter((f) => {
     const matchesSearch = f.filename.toLowerCase().includes(fileFilter.toLowerCase());
@@ -458,7 +491,7 @@ export default function LabelingWorkspacePage() {
           {/* Spectrogram area */}
           <div className="flex-1 relative overflow-hidden">
             {/* Y-axis labels */}
-            <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
+            <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
               {["20kHz", "15kHz", "10kHz", "5kHz", "0Hz"].map((label) => (
                 <span key={label} className="text-[10px] text-text-muted/70 font-mono text-right pr-2">
                   {label}
@@ -467,62 +500,117 @@ export default function LabelingWorkspacePage() {
             </div>
 
             {/* Spectrogram gradient background */}
-            <div className="absolute inset-0 ml-12 bg-gradient-to-b from-indigo-900 via-purple-700 via-fuchsia-500 to-amber-200 opacity-80">
+            <div className="absolute top-0 left-12 right-0 bottom-6 bg-gradient-to-b from-indigo-950 via-purple-900 to-amber-950 opacity-90">
+              {/* Horizontal grid lines */}
               <div className="absolute inset-0">
                 {[20, 40, 60, 80].map((pct) => (
                   <div key={pct} className="absolute left-0 right-0 border-t border-white/5" style={{ top: `${pct}%` }} />
                 ))}
               </div>
+              {/* Vertical grid lines */}
               <div className="absolute inset-0">
                 {[20, 40, 60, 80].map((pct) => (
                   <div key={pct} className="absolute top-0 bottom-0 border-l border-white/5" style={{ left: `${pct}%` }} />
                 ))}
               </div>
+              {/* Scan-line noise pattern */}
               <div className="absolute inset-0 opacity-30 mix-blend-overlay bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)]" />
+              {/* Color intensity band (simulating frequency energy) */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent opacity-60" />
+              <div className="absolute left-[25%] right-[30%] top-[30%] bottom-[40%] bg-orange-500/8 rounded-full blur-3xl" />
+              <div className="absolute left-[55%] right-[10%] top-[55%] bottom-[15%] bg-red-500/6 rounded-full blur-3xl" />
             </div>
 
-            {/* Annotation box 1 - User annotation (solid cyan) */}
-            <div
-              className="absolute border-2 border-cyan-400 rounded-sm z-20"
-              style={{ left: "calc(12px + 15%)", top: "25%", width: "20%", height: "20%" }}
-            >
-              <div className="absolute -top-5 left-0 bg-cyan-400/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm">
-                ID:01
-              </div>
-              <div className="absolute -top-1 -left-1 w-2 h-2 bg-cyan-400 rounded-sm" />
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-sm" />
-              <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-cyan-400 rounded-sm" />
-              <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-cyan-400 rounded-sm" />
-            </div>
-
-            {/* Annotation box 2 - AI suggestion (dashed orange) */}
-            <div
-              className="absolute border-2 border-dashed border-orange-400 rounded-sm z-20"
-              style={{ left: "calc(12px + 50%)", top: "60%", width: "22%", height: "18%" }}
-            >
-              <div className="absolute -top-5 left-0 bg-orange-400/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1">
-                <Sparkles className="w-2.5 h-2.5" />
-                AI?
-              </div>
-              <div className="absolute -top-1 -left-1 w-2 h-2 bg-orange-400 rounded-sm" />
-              <div className="absolute -top-1 -right-1 w-2 h-2 bg-orange-400 rounded-sm" />
-              <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-orange-400 rounded-sm" />
-              <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-orange-400 rounded-sm" />
-            </div>
+            {/* Dynamic annotation boxes from suggestions */}
+            {suggestions.map((s) => {
+              const sc = statusColors[s.status];
+              const isSelected = s.id === selectedSuggestionId;
+              const boxPos = suggestionBoxStyle(s, totalDuration);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => selectSuggestion(s.id)}
+                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 ${
+                    sc.border
+                  } ${sc.dashed ? "border-dashed" : ""} ${
+                    isSelected
+                      ? "ring-2 ring-white/30 shadow-lg shadow-white/10"
+                      : "hover:ring-1 hover:ring-white/20"
+                  }`}
+                  style={{
+                    left: `calc(48px + ${boxPos.left})`,
+                    top: boxPos.top,
+                    width: boxPos.width,
+                    height: boxPos.height,
+                    minWidth: "40px",
+                    minHeight: "20px",
+                  }}
+                >
+                  {/* Tag label */}
+                  <div className={`absolute -top-5 left-0 ${sc.bg}/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap`}>
+                    {s.status === "pending" && <Sparkles className="w-2.5 h-2.5" />}
+                    {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
+                    {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
+                    {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
+                    {s.label.slice(0, 18)}
+                  </div>
+                  {/* Corner handles */}
+                  {isSelected && (
+                    <>
+                      <div className={`absolute -top-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                      <div className={`absolute -top-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                      <div className={`absolute -bottom-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                      <div className={`absolute -bottom-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                    </>
+                  )}
+                  {/* Confidence badge */}
+                  <span className="absolute -bottom-5 left-0 text-[9px] font-mono font-bold tabular-nums" style={{ color: "inherit" }}>
+                    <span className={sc.label}>{s.confidence}%</span>
+                  </span>
+                </button>
+              );
+            })}
 
             {/* Playback cursor line */}
-            <div className="absolute top-0 bottom-0 w-px bg-white/60 z-30" style={{ left: "calc(12px + 38%)" }}>
-              <div className="absolute -top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
+            <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: "calc(48px + 38%)" }}>
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
+            </div>
+
+            {/* Time axis (bottom) */}
+            <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
+              {Array.from({ length: 6 }, (_, i) => {
+                const t = (totalDuration / 5) * i;
+                const m = Math.floor(t / 60);
+                const sec = Math.floor(t % 60);
+                return (
+                  <span key={i} className="text-[9px] text-text-muted/60 font-mono tabular-nums">
+                    {String(m).padStart(2, "0")}:{String(sec).padStart(2, "0")}
+                  </span>
+                );
+              })}
+            </div>
+
+            {/* Annotation legend */}
+            <div className="absolute top-2 right-3 z-30 flex gap-2">
+              {(["pending", "confirmed", "rejected", "corrected"] as const).map((st) => {
+                const c = statusColors[st];
+                return (
+                  <div key={st} className="flex items-center gap-1">
+                    <span className={`inline-block w-2 h-2 rounded-sm ${c.bg} ${c.dashed ? "opacity-70" : ""}`} />
+                    <span className="text-[9px] text-text-muted capitalize">{st}</span>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Hotkey hint overlay */}
-            <div className="absolute bottom-3 right-3 z-30 flex gap-1.5">
+            <div className="absolute bottom-8 right-3 z-30 flex gap-1.5">
               {[
                 { key: "O", label: "Confirm" },
                 { key: "X", label: "Reject" },
                 { key: "B", label: "Brush" },
                 { key: "R", label: "Box" },
-                { key: "⌘Z", label: "Undo" },
+                { key: "^Z", label: "Undo" },
               ].map((hint) => (
                 <div
                   key={hint.key}
@@ -555,7 +643,7 @@ export default function LabelingWorkspacePage() {
             <div className="text-xs font-mono text-text-secondary tabular-nums">
               <span className="text-text font-medium">03:12.045</span>
               <span className="mx-1 text-text-muted">/</span>
-              <span>08:22.000</span>
+              <span>{activeFile?.duration ?? "00:00"}</span>
             </div>
 
             <div className="flex-1" />

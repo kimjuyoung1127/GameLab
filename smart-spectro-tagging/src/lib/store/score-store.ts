@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface ScoreState {
   score: number;
@@ -12,15 +13,28 @@ interface ScoreState {
   addFix: () => void;
 }
 
-export const useScoreStore = create<ScoreState>((set) => ({
-  score: 9420,
-  streak: 12,
-  totalConfirmed: 42,
-  totalFixed: 3,
+export const useScoreStore = create<ScoreState>()(
+  persist(
+    (set) => ({
+      score: 9420,
+      streak: 12,
+      totalConfirmed: 42,
+      totalFixed: 3,
 
-  addScore: (points) => set((s) => ({ score: s.score + points })),
-  incrementStreak: () => set((s) => ({ streak: s.streak + 1 })),
-  resetStreak: () => set({ streak: 0 }),
-  addConfirm: () => set((s) => ({ totalConfirmed: s.totalConfirmed + 1 })),
-  addFix: () => set((s) => ({ totalFixed: s.totalFixed + 1 })),
-}));
+      addScore: (points) => set((s) => ({ score: s.score + points })),
+      incrementStreak: () => set((s) => ({ streak: s.streak + 1 })),
+      resetStreak: () => set({ streak: 0 }),
+      addConfirm: () => set((s) => ({ totalConfirmed: s.totalConfirmed + 1 })),
+      addFix: () => set((s) => ({ totalFixed: s.totalFixed + 1 })),
+    }),
+    {
+      name: "sst-score",
+      partialize: (state) => ({
+        score: state.score,
+        streak: state.streak,
+        totalConfirmed: state.totalConfirmed,
+        totalFixed: state.totalFixed,
+      }),
+    }
+  )
+);
