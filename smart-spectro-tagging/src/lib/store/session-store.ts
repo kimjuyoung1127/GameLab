@@ -1,36 +1,33 @@
 import { create } from "zustand";
 import type { Session, AudioFile } from "@/types";
-import { mockSessions, mockAudioFiles } from "@/lib/mock/data";
-
-interface CreateSessionInput {
-  name: string;
-  deviceType?: string;
-  fileCount?: number;
-}
 
 interface SessionState {
   sessions: Session[];
   currentSession: Session | null;
   files: AudioFile[];
   currentFileId: string | null;
+  setSessions: (sessions: Session[]) => void;
+  setFiles: (files: AudioFile[]) => void;
   setCurrentSession: (session: Session) => void;
   setCurrentSessionById: (sessionId: string) => Session | null;
   setCurrentFile: (fileId: string) => void;
-  createSession: (input: CreateSessionInput) => Session;
   filterSessions: (status: string) => Session[];
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
-  sessions: mockSessions,
+  sessions: [],
   currentSession: null,
   files: [],
   currentFileId: null,
 
+  setSessions: (sessions) => set({ sessions }),
+  setFiles: (files) => set({ files, currentFileId: files[0]?.id ?? null }),
+
   setCurrentSession: (session) =>
     set({
       currentSession: session,
-      files: mockAudioFiles.filter((f) => f.sessionId === session.id),
-      currentFileId: mockAudioFiles.find((f) => f.sessionId === session.id)?.id ?? null,
+      files: [],
+      currentFileId: null,
     }),
 
   setCurrentSessionById: (sessionId) => {
@@ -39,42 +36,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     set({
       currentSession: session,
-      files: mockAudioFiles.filter((f) => f.sessionId === session.id),
-      currentFileId: mockAudioFiles.find((f) => f.sessionId === session.id)?.id ?? null,
+      files: [],
+      currentFileId: null,
     });
     return session;
   },
 
   setCurrentFile: (fileId) => set({ currentFileId: fileId }),
-
-  createSession: (input) => {
-    const { sessions } = get();
-    const nextNumber =
-      sessions
-        .map((s) => Number.parseInt(s.id.replace("SES-", ""), 10))
-        .filter((n) => Number.isFinite(n))
-        .reduce((max, n) => Math.max(max, n), 0) + 1;
-
-    const newSession: Session = {
-      id: `SES-${nextNumber}`,
-      name: input.name,
-      deviceType: input.deviceType ?? "Industrial Sensor",
-      status: "pending",
-      fileCount: input.fileCount ?? 0,
-      progress: 0,
-      score: null,
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-
-    set({
-      sessions: [newSession, ...sessions],
-      currentSession: newSession,
-      files: [],
-      currentFileId: null,
-    });
-
-    return newSession;
-  },
 
   filterSessions: (status) => {
     const { sessions } = get();

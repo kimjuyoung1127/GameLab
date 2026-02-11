@@ -6,7 +6,6 @@ import type {
   DrawTool,
   HistorySnapshot,
 } from "@/types";
-import { mockSuggestions } from "@/lib/mock/data";
 
 interface AnnotationState {
   mode: LabelingMode;
@@ -27,7 +26,7 @@ interface AnnotationState {
   applyFix: () => { points: number } | null;
   undo: () => void;
   redo: () => void;
-  loadSuggestions: (audioId: string) => void;
+  loadSuggestions: (items: AISuggestion[]) => void;
   restoreSuggestions: (suggestions: AISuggestion[]) => void;
 }
 
@@ -35,9 +34,9 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   mode: "review",
   tool: "select",
   snapEnabled: true,
-  suggestions: mockSuggestions.filter((s) => s.audioId === "af-1"),
+  suggestions: [],
   annotations: [],
-  selectedSuggestionId: mockSuggestions[0]?.id ?? null,
+  selectedSuggestionId: null,
   undoStack: [],
   redoStack: [],
 
@@ -161,11 +160,10 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     });
   },
 
-  loadSuggestions: (audioId) => {
-    const filtered = mockSuggestions.filter((s) => s.audioId === audioId);
+  loadSuggestions: (items) => {
     set({
-      suggestions: filtered,
-      selectedSuggestionId: filtered.find((s) => s.status === "pending")?.id ?? null,
+      suggestions: items,
+      selectedSuggestionId: items.find((s) => s.status === "pending")?.id ?? null,
       mode: "review",
       undoStack: [],
       redoStack: [],

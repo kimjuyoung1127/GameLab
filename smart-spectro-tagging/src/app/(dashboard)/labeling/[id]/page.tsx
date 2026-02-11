@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AudioLines,
@@ -32,7 +32,11 @@ import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
 import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
-import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus } from "@/types";
+import { useWaveform } from "@/lib/hooks/use-waveform";
+import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
+import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
+import { endpoints } from "@/lib/api/endpoints";
+import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus, Session } from "@/types";
 
 /* ------------------------------------------------------------------ */
 /*  Spectrogram helpers                                                */
@@ -44,6 +48,19 @@ function parseDurationToSeconds(dur: string): number {
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   if (parts.length === 2) return parts[0] * 60 + parts[1];
   return parts[0] ?? 0;
+}
+
+function normalizeAudioUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  const apiBase = process.env.NEXT_PUBLIC_API_URL;
+  if (!apiBase) return url;
+  try {
+    const origin = new URL(apiBase).origin;
+    return `${origin}${url.startsWith("/") ? "" : "/"}${url}`;
+  } catch {
+    return url;
+  }
 }
 
 function suggestionBoxStyle(s: AISuggestion, totalDuration: number) {
@@ -120,46 +137,38 @@ export default function LabelingWorkspacePage() {
   const { score, streak, addScore, addConfirm, addFix, incrementStreak } =
     useScoreStore();
 
-  const { files, currentFileId, setCurrentFile, setCurrentSessionById } =
-    useSessionStore();
+  const {
+    files,
+    currentFileId,
+    setCurrentFile,
+    setCurrentSessionById,
+    setSessions,
+    setFiles,
+  } = useSessionStore();
 
   /* ----- Local UI state ------------------------------------------- */
   const [fileFilter, setFileFilter] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "done">("all");
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackPct, setPlaybackPct] = useState(0);
-  const rafRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number>(0);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
+  const sessionId = Array.isArray(params.id) ? params.id[0] : params.id;
   const activeFileId = currentFileId ?? audioFiles[0]?.id ?? null;
   const activeFile = audioFiles.find((f) => f.id === activeFileId) ?? audioFiles[0];
-  const totalDuration = activeFile ? parseDurationToSeconds(activeFile.duration) : 600;
+  const parsedDuration = activeFile ? Math.max(parseDurationToSeconds(activeFile.duration), 1) : 600;
+
+  /* ----- Audio player + Waveform hooks ----------------------------- */
+  const audioUrl: string | null = normalizeAudioUrl(activeFile?.audioUrl);
+  const player = useAudioPlayer(audioUrl, parsedDuration);
+  const { data: waveformData } = useWaveform(audioUrl);
+
+  const totalDuration = player.duration || parsedDuration;
+  const playbackPct = totalDuration > 0 ? (player.currentTime / totalDuration) * 100 : 0;
 
   /* ----- Autosave ------------------------------------------------- */
   useAutosave(activeFileId);
-
-  /* ----- Playback cursor simulation -------------------------------- */
-  useEffect(() => {
-    if (!isPlaying) {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      return;
-    }
-    lastTimeRef.current = performance.now();
-    const tick = (now: number) => {
-      const dt = (now - lastTimeRef.current) / 1000; // seconds elapsed
-      lastTimeRef.current = now;
-      setPlaybackPct((prev) => {
-        const next = prev + (dt / totalDuration) * 100;
-        if (next >= 100) { setIsPlaying(false); return 0; }
-        return next;
-      });
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [isPlaying, totalDuration]);
 
   const filteredFiles = audioFiles.filter((f) => {
     const matchesSearch = f.filename.toLowerCase().includes(fileFilter.toLowerCase());
@@ -185,22 +194,65 @@ export default function LabelingWorkspacePage() {
 
   /* ----- Session init --------------------------------------------- */
   useEffect(() => {
-    const sessionId = Array.isArray(params.id) ? params.id[0] : params.id;
     if (!sessionId) return;
-    const targetSession = setCurrentSessionById(sessionId);
-    if (!targetSession) {
-      router.replace("/sessions");
-    }
-  }, [params.id, router, setCurrentSessionById]);
+    setSessionError(null);
+    const loadSessionData = async () => {
+      try {
+        const [sessionsRes, filesRes] = await Promise.all([
+          fetch(endpoints.sessions.list),
+          fetch(endpoints.sessions.files(sessionId)),
+        ]);
+
+        if (!sessionsRes.ok) {
+          throw new Error("Failed to load sessions");
+        }
+        if (!filesRes.ok) {
+          throw new Error("Failed to load session files");
+        }
+
+        const sessionsData = (await sessionsRes.json()) as Session[];
+        const filesData = (await filesRes.json()) as AudioFile[];
+
+        setSessions(sessionsData);
+        setFiles(filesData);
+
+        const targetSession = setCurrentSessionById(sessionId);
+        if (!targetSession && filesData.length === 0) {
+          router.replace("/sessions");
+        }
+      } catch (err) {
+        setSessionError((err as Error).message || "Failed to load labeling data");
+      }
+    };
+
+    void loadSessionData();
+  }, [router, sessionId, setCurrentSessionById, setFiles, setSessions]);
 
   useEffect(() => {
-    if (!activeFileId) return;
-    loadSuggestions(activeFileId);
-    const saved = loadSavedProgress(activeFileId);
-    if (saved?.suggestions?.length) {
-      restoreSuggestions(saved.suggestions);
-    }
-  }, [activeFileId, loadSuggestions, restoreSuggestions]);
+    if (!sessionId || !activeFileId) return;
+    setSuggestionError(null);
+    const loadSuggestionData = async () => {
+      try {
+        const res = await fetch(endpoints.labeling.suggestions(sessionId));
+        if (!res.ok) {
+          throw new Error("Failed to load suggestions");
+        }
+        const all = (await res.json()) as AISuggestion[];
+        const filtered = all.filter((s) => s.audioId === activeFileId);
+        loadSuggestions(filtered);
+
+        const saved = loadSavedProgress(activeFileId);
+        if (saved?.suggestions?.length) {
+          restoreSuggestions(saved.suggestions);
+        }
+      } catch (err) {
+        loadSuggestions([]);
+        setSuggestionError((err as Error).message || "Failed to load suggestions");
+      }
+    };
+
+    void loadSuggestionData();
+  }, [activeFileId, loadSuggestions, restoreSuggestions, sessionId]);
 
   /* ----- Handlers ------------------------------------------------- */
   const handleConfirm = useCallback(() => {
@@ -353,6 +405,11 @@ export default function LabelingWorkspacePage() {
           </div>
         </div>
       </header>
+      {(sessionError || suggestionError) && (
+        <div className="shrink-0 bg-danger/10 border-b border-danger/30 px-4 py-2 text-xs text-danger">
+          {sessionError ?? suggestionError}
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/*  3-PANEL BODY                                                */}
@@ -517,8 +574,22 @@ export default function LabelingWorkspacePage() {
             </div>
           </div>
 
-          {/* Spectrogram area */}
-          <div className="flex-1 relative overflow-hidden">
+          {/* Spectrogram + Waveform area */}
+          <div className="flex-1 relative overflow-hidden flex flex-col">
+            {/* Waveform preview (real data / synthetic fallback) */}
+            {waveformData && (
+              <div className="h-20 shrink-0 bg-surface/50 border-b border-border/30 relative">
+                <WaveformCanvas
+                  peaks={waveformData.peaks}
+                  currentTime={player.currentTime}
+                  duration={totalDuration}
+                  onSeek={player.seek}
+                />
+              </div>
+            )}
+
+            {/* Spectrogram zone */}
+            <div className="flex-1 relative overflow-hidden">
             {/* Y-axis labels */}
             <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
               {["20kHz", "15kHz", "10kHz", "5kHz", "0Hz"].map((label) => (
@@ -650,7 +721,8 @@ export default function LabelingWorkspacePage() {
                 </div>
               ))}
             </div>
-          </div>
+          </div>{/* /spectrogram zone */}
+          </div>{/* /spectrogram + waveform area */}
 
           {/* Audio Player Controls */}
           <div className="h-14 shrink-0 bg-panel border-t border-border flex items-center px-4 gap-4">
@@ -659,10 +731,10 @@ export default function LabelingWorkspacePage() {
                 <SkipBack className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setIsPlaying((p) => !p)}
+                onClick={player.toggle}
                 className="p-2.5 rounded-lg bg-primary text-white hover:bg-primary-light transition-colors"
               >
-                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {player.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
               </button>
               <button className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
                 <SkipForward className="w-4 h-4" />
@@ -672,7 +744,7 @@ export default function LabelingWorkspacePage() {
             <div className="text-xs font-mono text-text-secondary tabular-nums">
               <span className="text-text font-medium">
                 {(() => {
-                  const cur = (playbackPct / 100) * totalDuration;
+                  const cur = player.currentTime;
                   const m = Math.floor(cur / 60);
                   const s = Math.floor(cur % 60);
                   const ms = Math.floor((cur % 1) * 1000);
@@ -705,7 +777,7 @@ export default function LabelingWorkspacePage() {
           <div className="flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0">
             <div className="text-xs text-text-muted">
               {activeSuggestion ? (
-                <span><span className="font-bold text-text">{activeSuggestion.label}</span> — {(activeSuggestion.confidence * 100).toFixed(0)}%</span>
+                <span><span className="font-bold text-text">{activeSuggestion.label}</span> ??{(activeSuggestion.confidence * 100).toFixed(0)}%</span>
               ) : (
                 <span>No suggestion selected</span>
               )}

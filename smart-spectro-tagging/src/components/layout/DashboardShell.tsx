@@ -3,6 +3,8 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
+import HotkeyHelp from "./HotkeyHelp";
+import UnsavedModal from "./UnsavedModal";
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,6 +46,9 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       </div>
 
       <main className="flex-1 min-w-0">{children}</main>
+
+      <HotkeyHelp />
+      <UnsavedModal />
     </div>
   );
 }

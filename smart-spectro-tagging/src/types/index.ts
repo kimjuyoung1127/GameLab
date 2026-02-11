@@ -22,6 +22,7 @@ export interface AudioFile {
   duration: string;
   sampleRate: string;
   status: FileStatus;
+  audioUrl?: string;
 }
 
 // === AI Suggestion ===
@@ -77,6 +78,35 @@ export interface User {
   allTimeScore: number;
 }
 
+// === Upload (Sprint 12) ===
+export type UploadJobStatus = "idle" | "uploading" | "queued" | "processing" | "done" | "failed";
+
+export interface UploadResult {
+  fileId: string;
+  filename: string;
+  status: UploadJobStatus;
+  progress: number;
+  sessionId?: string;
+  error?: string;
+}
+
+export interface JobStatusResponse {
+  jobId: string;
+  status: UploadJobStatus;
+  progress: number;
+  result?: { sessionId: string; fileCount: number };
+  error?: string;
+}
+
+export interface OverviewMetrics {
+  totalSessions: number;
+  totalFiles: number;
+  filesProcessed: number;
+  avgAccuracy: number;
+  recentUploads: number;
+  activeSessions: number;
+}
+
 // === Labeling Mode ===
 export type LabelingMode = "review" | "edit";
 export type DrawTool = "select" | "brush" | "eraser" | "box" | "anchor";
@@ -85,4 +115,11 @@ export interface HistorySnapshot {
   mode: LabelingMode;
   selectedSuggestionId: string | null;
   suggestions: AISuggestion[];
+}
+
+// === Waveform (Sprint 12 — Section 16) ===
+export interface WaveformData {
+  peaks: number[];
+  duration: number;
+  sampleRate?: number;
 }

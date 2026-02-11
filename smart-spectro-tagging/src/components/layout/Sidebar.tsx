@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
-import { AudioLines, LayoutDashboard, List, Trophy } from "lucide-react";
+import { AudioLines, LayoutDashboard, List, Trophy, Upload } from "lucide-react";
 
 const navItems = [
-  { label: "Overview", href: "/", icon: LayoutDashboard },
+  { label: "Overview", href: "/overview", icon: LayoutDashboard },
+  { label: "Upload", href: "/upload", icon: Upload },
   { label: "Sessions", href: "/sessions", icon: List },
   { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
 ];
@@ -12,7 +13,7 @@ export default function Sidebar({ activePath = "/" }: { activePath?: string }) {
   return (
     <aside className="w-60 bg-panel border-r border-border flex flex-col h-screen sticky top-0">
       {/* Logo */}
-      <div className="p-5 flex items-center gap-3">
+      <Link href="/overview" className="p-5 flex items-center gap-3 hover:bg-panel-light transition-colors">
         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
           <AudioLines className="w-5 h-5 text-white" />
         </div>
@@ -20,7 +21,7 @@ export default function Sidebar({ activePath = "/" }: { activePath?: string }) {
           <h1 className="text-sm font-bold text-text">SpectroTag</h1>
           <p className="text-[10px] text-text-muted">Smart Spectro-Tagging & Anomaly Detection</p>
         </div>
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className="flex-1 px-3 mt-4 space-y-1">

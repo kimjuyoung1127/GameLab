@@ -22,8 +22,8 @@
 - [ ] 기준 문서가 `docs/Prd.md`, `docs/react.md`, `docs/bone.md`인지 확인
 - [ ] 충돌 문서/오래된 외부 문서 참조 제거
 
-## 5) Sprint 11 내일 시작 프롬프트 (복붙)
-`레포 루트 ai-context 기준으로 시작. master-plan -> project-context -> sprint-handoff-2026-02-11-pm -> worklog -> review-log 순으로 읽고, Sprint 11 진행중 항목(동적 클래스/autosave 키/문서 포맷 정규화)부터 처리.`
+## 5) Sprint 12.1 내일 시작 프롬프트 (복붙)
+`레포 루트 ai-context 기준으로 시작. master-plan -> project-context -> sprint-handoff-2026-02-11-pm(18,19 섹션) -> worklog -> review-log 순으로 읽고, 우선 AI 기능 고도화(placeholder suggestion 제거, 실추론 기반 생성)부터 처리. 이후 Vercel 배포(환경변수/CORS/업로드-라벨링-파형 검증)까지 완료.`
 
 실행 경로/명령(필수):
 1. `cd smart-spectro-tagging`
@@ -34,6 +34,10 @@
 1. session log append
 2. handoff 갱신
 3. `npm run build` 결과 기록
+
+내일 최우선 2개:
+1. AI 기능 고도화
+2. Vercel 배포 완료
 
 마일스톤 종료일 추가 필수:
 1. `worklog.md` 일괄 업데이트

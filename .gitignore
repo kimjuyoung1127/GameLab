@@ -23,6 +23,7 @@ yarn-error.log*
 # env files
 .env*.local
 .env
+backend/.env
 
 # vercel
 .vercel
@@ -37,3 +38,11 @@ next-env.d.ts
 
 # Claude
 .claude/
+
+# Python/cache/uploads
+__pycache__/
+*.py[cod]
+backend/uploads/
+
+# Windows reserved artifact
+nul

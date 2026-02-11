@@ -22,6 +22,35 @@
   2.
 
 ## 기록
+### [2026-02-11 23:10 KST] Sprint 12.1 안정화: Supabase-only 정합 + 라벨링 실흐름 고정
+- 목표: mock 제거 이후 끊긴 실사용 흐름을 복구하고 내일 AI 고도화/배포 준비 상태로 마감
+- 범위: backend 업로드/세션/라벨링/잡/오버뷰 라우터, frontend 업로드/라벨링/overview/sessions/leaderboard, handoff 문서
+- 변경 파일:
+  - `backend/app/api/upload/router.py` - 업로드 상태 전이(queued/processing/done/failed), 절대 `audio_url`, 원자성(RPC 우선 + 보상 롤백), 메타데이터 추출 반영
+  - `backend/app/api/jobs/router.py` - `set_job_status` 추가
+  - `backend/app/api/sessions/router.py` - 예외 시 503 + 로깅
+  - `backend/app/api/labeling/router.py` - 예외 시 503 + 로깅
+  - `backend/app/api/overview/router.py` - 예외 시 503 + 로깅
+  - `backend/app/api/leaderboard/router.py` - 예외 시 503 + 로깅
+  - `backend/app/core/config.py` - `public_file_base_url` 추가
+  - `backend/app/models/schemas.py` - `UploadResult.session_id` 추가
+  - `scripts/sql-chunks/create_upload_session_with_files.sql` - 업로드 원자성 RPC 함수 추가
+  - `smart-spectro-tagging/src/app/(dashboard)/upload/page.tsx` - `done` 기준 완료 처리 + `sessionId` 자동 라벨링 이동
+  - `smart-spectro-tagging/src/app/(dashboard)/labeling/[id]/page.tsx` - 상대경로 `audioUrl` 보정 + 오류 배너
+  - `smart-spectro-tagging/src/app/(dashboard)/overview/page.tsx` - API 오류 상태 분리
+  - `smart-spectro-tagging/src/app/(dashboard)/sessions/page.tsx` - API 오류 상태 분리
+  - `smart-spectro-tagging/src/app/(dashboard)/leaderboard/page.tsx` - API 오류 상태 분리
+  - `smart-spectro-tagging/src/types/index.ts` - `UploadResult.sessionId?: string` 추가
+  - `ai-context/sprint-handoff-2026-02-11-pm.md` - Sprint 12.1 반영 + 내일 계획 추가
+- 검증 명령:
+  - `python -m compileall backend/app`
+  - `cd smart-spectro-tagging && npm run build`
+- 결과: 성공 (BE 컴파일 통과, FE 빌드 통과, 라우트 생성 정상)
+- 커밋: (미커밋)
+- 다음 작업:
+  1. AI 제안 생성 로직을 placeholder -> 실추론 파이프라인으로 전환
+  2. Vercel 배포(환경변수/CORS/실흐름 검증) 완료
+
 ### [2026-02-11 19:30 KST] Codex P2 잔여: leaderboard 동적화 + score-store 마이그레이션 + 재생 커서 시뮬레이션
 - 목표: Codex 리뷰 낮음 이슈 3건(하드코딩 지표/persist 버전/커서 고정) 일괄 해소
 - 범위: `leaderboard/page.tsx`, `score-store.ts`, `labeling/[id]/page.tsx`
@@ -93,4 +122,3 @@
 - 다음 작업:
   1. Spectrogram 레이어 시각화 강화
   2. autosave 구현
-
