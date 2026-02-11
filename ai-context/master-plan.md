@@ -69,3 +69,15 @@
 - 검증
   1. 실행 명령
   2. 결과(성공/실패 + 핵심 로그)
+
+## 9) Sprint Plan (2026-02-11, 안정화 우선)
+1. 사이드바 404 링크 제거/비활성
+   - 완료 기준: 사이드바 클릭으로 이동 가능한 메뉴만 노출되고 404 진입이 재현되지 않음
+2. 세션-파일-제안 데이터 일관성 고정
+   - 완료 기준: `/labeling/[id]` 직접 진입 시 해당 세션 파일/제안만 표시됨
+3. annotation undo/redo 상태 스냅샷 보강
+   - 완료 기준: `Reject -> Undo -> Redo`에서 `mode`, `selectedSuggestionId`, `suggestions`가 모두 일치 복원됨
+4. Sessions Create 버튼 동작 구현
+   - 완료 기준: Create 클릭 시 신규 세션 생성 후 `/labeling/{id}`로 이동됨
+5. 로그인 우회 플래그 운영 규칙화
+   - 완료 기준: 기본 우회 ON, `.env.local`의 `NEXT_PUBLIC_BYPASS_LOGIN=false` 설정 시 로그인 페이지 진입 확인

@@ -22,6 +22,31 @@
   2.
 
 ## 기록
+### [2026-02-11 10:10 KST] Phase 1 Gate 안정화 스프린트 인수인계 문서화 + 핵심 버그 수정
+- 작업 목표: Claude가 즉시 구현/디버깅 가능한 상태로 실행 기준과 안정화 스펙을 고정
+- 범위: `ai-context` 협업 문서 + `smart-spectro-tagging` 핵심 화면/스토어
+- 변경 파일:
+  - `ai-context/master-plan.md` - Sprint Plan(2026-02-11) 우선순위와 완료 기준 추가
+  - `ai-context/sprint-handoff-2026-02-11.md` - 결정 완료형 handoff 문서 신규 생성
+  - `ai-context/day-close-checklist.md` - 실행 경로/명령 및 로그인 우회 규칙 추가
+  - `ai-context/claude-coding-guideline.md` - 실행 전 체크 섹션 추가
+  - `ai-context/worklog.md` - 이번 스프린트 문서화 로그 추가
+  - `ai-context/review-log.md` - 안정화 우선 리스크/우선순위 기록 추가
+  - `smart-spectro-tagging/src/components/layout/Sidebar.tsx` - 404 유발 메뉴 제거, 실제 라우트만 노출
+  - `smart-spectro-tagging/src/lib/store/session-store.ts` - `createSession`, `setCurrentSessionById` 추가
+  - `smart-spectro-tagging/src/lib/store/annotation-store.ts` - undo/redo를 `HistorySnapshot` 기반으로 변경
+  - `smart-spectro-tagging/src/types/index.ts` - `HistorySnapshot` 타입 추가
+  - `smart-spectro-tagging/src/app/(dashboard)/sessions/page.tsx` - Create Session 클릭 동작 구현
+  - `smart-spectro-tagging/src/app/(dashboard)/labeling/[id]/page.tsx` - URL 세션 기준 데이터 동기화 및 빈 상태 처리
+  - `smart-spectro-tagging/src/app/(auth)/login/page.tsx` - 깨진 비밀번호 placeholder 정리
+  - `smart-spectro-tagging/README.md` - 실행 위치(`smart-spectro-tagging`) 명시
+- 검증:
+  - 명령: `npm run lint`, `npm run build` (작업 디렉토리: `smart-spectro-tagging`)
+  - 결과: 성공 (lint/build 통과)
+- 다음 작업:
+  1. lint/build 결과를 worklog/review-log에 후속 반영
+  2. API 연동 전제의 세션 생성 입력 스키마 고정
+
 ### [2026-02-10 13:00 KST] SoundLab 프론트엔드 리뷰 및 문서 반영
 - 작업 목표: 기존 SoundLab 자산 중 GameLab에 적용 가능한 패턴 식별 및 문서화
 - 범위: `SoundLab/frontend` 코드리뷰 + `GameLab/docs`, `GameLab/ai-context` 업데이트
@@ -71,3 +96,4 @@
 - 다음 작업:
   1. 실제 코드 진행 시 항목별 로그 누적
   2. 첫 구현 단위 완료 후 리뷰 로그 추가
+

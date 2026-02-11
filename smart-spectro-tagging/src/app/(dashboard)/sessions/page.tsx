@@ -7,7 +7,6 @@ import {
   Plus,
   MoreVertical,
   FileText,
-  Activity,
   Shield,
   ChevronLeft,
   ChevronRight,
@@ -86,7 +85,7 @@ function formatDate(iso: string) {
 
 export default function SessionsPage() {
   const router = useRouter();
-  const { sessions, setCurrentSession } = useSessionStore();
+  const { sessions, setCurrentSession, createSession } = useSessionStore();
 
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -105,6 +104,13 @@ export default function SessionsPage() {
   function handleRowClick(session: Session) {
     setCurrentSession(session);
     router.push(`/labeling/${session.id}`);
+  }
+
+  function handleCreateSession() {
+    const newSession = createSession({
+      name: `New Session ${sessions.length + 1}`,
+    });
+    router.push(`/labeling/${newSession.id}`);
   }
 
   /* ---------------------------------------------------------------- */
@@ -212,7 +218,10 @@ export default function SessionsPage() {
             </div>
 
             {/* Create Session */}
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-light text-white text-sm font-medium transition-colors">
+            <button
+              onClick={handleCreateSession}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-light text-white text-sm font-medium transition-colors"
+            >
               <Plus className="w-4 h-4" />
               Create Session
             </button>

@@ -1,13 +1,11 @@
 "use client";
 import Link from "next/link";
-import { AudioLines, LayoutDashboard, List, BarChart3, FolderOpen, Settings } from "lucide-react";
+import { AudioLines, LayoutDashboard, List, Trophy } from "lucide-react";
 
 const navItems = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
   { label: "Sessions", href: "/sessions", icon: List },
-  { label: "Analysis", href: "/analysis", icon: BarChart3 },
-  { label: "File Manager", href: "/files", icon: FolderOpen },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
 ];
 
 export default function Sidebar({ activePath = "/" }: { activePath?: string }) {

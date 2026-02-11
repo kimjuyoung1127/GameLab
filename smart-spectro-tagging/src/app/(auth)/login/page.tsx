@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, LogIn, AudioLines } from "lucide-react";
 
@@ -15,11 +15,26 @@ const WAVEFORM_BARS = [
 
 export default function LoginPage() {
   const router = useRouter();
+  const bypassLogin = process.env.NEXT_PUBLIC_BYPASS_LOGIN !== "false";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (bypassLogin) {
+      router.replace("/sessions");
+    }
+  }, [bypassLogin, router]);
+
+  if (bypassLogin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas text-text">
+        <p className="text-sm text-text-secondary">Debug mode: entering without login...</p>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -149,7 +164,7 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="analyst@company.com"
+                    placeholder="Enter your password"
                     className="h-11 w-full rounded-lg border border-border bg-surface pl-10 pr-4 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                   />
                 </div>
@@ -179,7 +194,7 @@ export default function LoginPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
+                    placeholder="Enter your password"
                     className="h-11 w-full rounded-lg border border-border bg-surface pl-10 pr-4 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                   />
                 </div>
@@ -333,3 +348,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

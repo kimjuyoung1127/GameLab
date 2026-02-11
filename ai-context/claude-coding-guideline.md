@@ -40,3 +40,12 @@
 ## 6) 기록 규칙
 - 구현 완료 즉시 `worklog.md`에 추가
 - Codex 리뷰 피드백 반영 시 `review-log.md` 상태도 갱신
+
+## 7) 실행 전 체크 (디버깅 표준)
+- 작업 디렉토리는 반드시 `smart-spectro-tagging`로 이동 후 시작
+- 시작 명령:
+  1. `npm install`
+  2. `npm run dev`
+- 로그인 우회 정책:
+  - 기본값: 우회 ON
+  - 로그인 강제 디버깅: `.env.local`에 `NEXT_PUBLIC_BYPASS_LOGIN=false`

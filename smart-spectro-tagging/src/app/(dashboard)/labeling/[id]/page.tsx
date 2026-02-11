@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
   AudioLines,
   Search,
@@ -26,7 +27,6 @@ import {
 import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
-import { mockAudioFiles, mockSuggestions } from "@/lib/mock/data";
 import type { DrawTool, AudioFile } from "@/types";
 
 /* ------------------------------------------------------------------ */
@@ -76,6 +76,9 @@ function StatusBadge({ status }: { status: string }) {
 /*  MAIN PAGE COMPONENT                                               */
 /* ================================================================== */
 export default function LabelingWorkspacePage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+
   /* ----- Stores --------------------------------------------------- */
   const {
     tool,
@@ -90,7 +93,8 @@ export default function LabelingWorkspacePage() {
   const { score, streak, addScore, addConfirm, incrementStreak } =
     useScoreStore();
 
-  const { files, currentFileId, setCurrentFile } = useSessionStore();
+  const { files, currentFileId, setCurrentFile, setCurrentSessionById } =
+    useSessionStore();
 
   /* ----- Local UI state ------------------------------------------- */
   const [fileFilter, setFileFilter] = useState("");
@@ -98,8 +102,8 @@ export default function LabelingWorkspacePage() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   /* ----- Derived -------------------------------------------------- */
-  const audioFiles: AudioFile[] = files.length > 0 ? files : mockAudioFiles;
-  const activeFileId = currentFileId ?? audioFiles[0]?.id ?? "af-1";
+  const audioFiles: AudioFile[] = files;
+  const activeFileId = currentFileId ?? audioFiles[0]?.id ?? null;
   const activeFile =
     audioFiles.find((f) => f.id === activeFileId) ?? audioFiles[0];
 
@@ -119,6 +123,21 @@ export default function LabelingWorkspacePage() {
       (s) => s.id === selectedSuggestionId && s.status === "pending"
     ) ?? suggestions.find((s) => s.status === "pending");
 
+  useEffect(() => {
+    const sessionId = Array.isArray(params.id) ? params.id[0] : params.id;
+    if (!sessionId) return;
+
+    const targetSession = setCurrentSessionById(sessionId);
+    if (!targetSession) {
+      router.replace("/sessions");
+    }
+  }, [params.id, router, setCurrentSessionById]);
+
+  useEffect(() => {
+    if (!activeFileId) return;
+    loadSuggestions(activeFileId);
+  }, [activeFileId, loadSuggestions]);
+
   /* ----- Handlers ------------------------------------------------- */
   function handleConfirm() {
     const result = confirmSuggestion();
@@ -135,7 +154,6 @@ export default function LabelingWorkspacePage() {
 
   function handleFileClick(file: AudioFile) {
     setCurrentFile(file.id);
-    loadSuggestions(file.id);
   }
 
   function handleToolSelect(t: DrawTool) {
@@ -275,6 +293,14 @@ export default function LabelingWorkspacePage() {
                 </button>
               );
             })}
+
+            {filteredFiles.length === 0 && (
+              <div className="px-3 py-10 text-center">
+                <p className="text-xs text-text-muted">
+                  No files found for this session.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Daily Goal */}

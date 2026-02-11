@@ -2,7 +2,14 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Run commands inside `smart-spectro-tagging`:
+
+```bash
+cd smart-spectro-tagging
+npm install
+```
+
+Then run the development server:
 
 ```bash
 npm run dev
@@ -15,6 +22,20 @@ bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## Debug Login Bypass
+
+For faster debugging, login can be bypassed with an environment variable.
+
+- Default behavior in this repo: bypass enabled unless explicitly disabled.
+- To require login page:
+
+```bash
+# .env.local
+NEXT_PUBLIC_BYPASS_LOGIN=false
+```
+
+When bypass is enabled, `/` and `/login` both route directly to `/sessions`.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

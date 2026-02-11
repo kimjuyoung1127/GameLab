@@ -80,3 +80,9 @@ export interface User {
 // === Labeling Mode ===
 export type LabelingMode = "review" | "edit";
 export type DrawTool = "select" | "brush" | "eraser" | "box" | "anchor";
+
+export interface HistorySnapshot {
+  mode: LabelingMode;
+  selectedSuggestionId: string | null;
+  suggestions: AISuggestion[];
+}

@@ -24,3 +24,12 @@
 
 ## 5) 내일 시작 프롬프트 (복붙)
 `레포 루트의 ai-context 기준으로 작업. master-plan -> project-context -> worklog -> review-log 순으로 읽고 1순위부터 진행.`
+
+실행 경로/명령(필수):
+1. `cd smart-spectro-tagging`
+2. `npm install`
+3. `npm run dev`
+
+로그인 우회 기본값:
+- 기본 ON (바로 `/sessions` 진입)
+- 로그인 강제 필요 시 `.env.local`에 `NEXT_PUBLIC_BYPASS_LOGIN=false`

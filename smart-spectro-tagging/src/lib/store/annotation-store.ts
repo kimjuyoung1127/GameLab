@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { AISuggestion, Annotation, LabelingMode, DrawTool } from "@/types";
+import type {
+  AISuggestion,
+  Annotation,
+  LabelingMode,
+  DrawTool,
+  HistorySnapshot,
+} from "@/types";
 import { mockSuggestions } from "@/lib/mock/data";
 
 interface AnnotationState {
@@ -9,8 +15,8 @@ interface AnnotationState {
   suggestions: AISuggestion[];
   annotations: Annotation[];
   selectedSuggestionId: string | null;
-  undoStack: AISuggestion[][];
-  redoStack: AISuggestion[][];
+  undoStack: HistorySnapshot[];
+  redoStack: HistorySnapshot[];
 
   setMode: (mode: LabelingMode) => void;
   setTool: (tool: DrawTool) => void;
@@ -41,10 +47,14 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   selectSuggestion: (id) => set({ selectedSuggestionId: id }),
 
   confirmSuggestion: () => {
-    const { suggestions, selectedSuggestionId, undoStack } = get();
+    const { suggestions, selectedSuggestionId, mode, undoStack } = get();
     if (!selectedSuggestionId) return null;
 
-    const prevSuggestions = [...suggestions];
+    const prevSnapshot: HistorySnapshot = {
+      mode,
+      selectedSuggestionId,
+      suggestions: [...suggestions],
+    };
     const updated = suggestions.map((s) =>
       s.id === selectedSuggestionId ? { ...s, status: "confirmed" as const } : s
     );
@@ -56,7 +66,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({
       suggestions: updated,
       selectedSuggestionId: nextPending?.id ?? null,
-      undoStack: [...undoStack, prevSuggestions],
+      undoStack: [...undoStack, prevSnapshot],
       redoStack: [],
     });
 
@@ -64,10 +74,14 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   },
 
   rejectSuggestion: () => {
-    const { suggestions, selectedSuggestionId, undoStack } = get();
+    const { suggestions, selectedSuggestionId, mode, undoStack } = get();
     if (!selectedSuggestionId) return;
 
-    const prevSuggestions = [...suggestions];
+    const prevSnapshot: HistorySnapshot = {
+      mode,
+      selectedSuggestionId,
+      suggestions: [...suggestions],
+    };
     const updated = suggestions.map((s) =>
       s.id === selectedSuggestionId ? { ...s, status: "rejected" as const } : s
     );
@@ -75,16 +89,20 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({
       suggestions: updated,
       mode: "edit",
-      undoStack: [...undoStack, prevSuggestions],
+      undoStack: [...undoStack, prevSnapshot],
       redoStack: [],
     });
   },
 
   applyFix: () => {
-    const { suggestions, selectedSuggestionId, undoStack } = get();
+    const { suggestions, selectedSuggestionId, mode, undoStack } = get();
     if (!selectedSuggestionId) return null;
 
-    const prevSuggestions = [...suggestions];
+    const prevSnapshot: HistorySnapshot = {
+      mode,
+      selectedSuggestionId,
+      suggestions: [...suggestions],
+    };
     const updated = suggestions.map((s) =>
       s.id === selectedSuggestionId ? { ...s, status: "corrected" as const } : s
     );
@@ -95,7 +113,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       suggestions: updated,
       mode: "review",
       selectedSuggestionId: nextPending?.id ?? null,
-      undoStack: [...undoStack, prevSuggestions],
+      undoStack: [...undoStack, prevSnapshot],
       redoStack: [],
     });
 
@@ -103,26 +121,42 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   },
 
   undo: () => {
-    const { undoStack, suggestions, redoStack } = get();
+    const { undoStack, suggestions, mode, selectedSuggestionId, redoStack } = get();
     if (undoStack.length === 0) return;
 
     const prev = undoStack[undoStack.length - 1];
+    const currentSnapshot: HistorySnapshot = {
+      mode,
+      selectedSuggestionId,
+      suggestions: [...suggestions],
+    };
+
     set({
-      suggestions: prev,
+      mode: prev.mode,
+      selectedSuggestionId: prev.selectedSuggestionId,
+      suggestions: prev.suggestions,
       undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, suggestions],
+      redoStack: [...redoStack, currentSnapshot],
     });
   },
 
   redo: () => {
-    const { redoStack, suggestions, undoStack } = get();
+    const { redoStack, suggestions, mode, selectedSuggestionId, undoStack } = get();
     if (redoStack.length === 0) return;
 
     const next = redoStack[redoStack.length - 1];
+    const currentSnapshot: HistorySnapshot = {
+      mode,
+      selectedSuggestionId,
+      suggestions: [...suggestions],
+    };
+
     set({
-      suggestions: next,
+      mode: next.mode,
+      selectedSuggestionId: next.selectedSuggestionId,
+      suggestions: next.suggestions,
       redoStack: redoStack.slice(0, -1),
-      undoStack: [...undoStack, suggestions],
+      undoStack: [...undoStack, currentSnapshot],
     });
   },
 
