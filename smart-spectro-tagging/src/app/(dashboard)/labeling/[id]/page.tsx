@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AudioLines,
@@ -13,6 +13,7 @@ import {
   ZoomOut,
   SkipBack,
   Play,
+  Pause,
   SkipForward,
   Lock,
   Volume2,
@@ -22,6 +23,9 @@ import {
   Filter,
   FileAudio,
   ChevronRight,
+  Undo2,
+  Redo2,
+  Wrench,
 } from "lucide-react";
 
 import { useAnnotationStore } from "@/lib/store/annotation-store";
@@ -30,13 +34,13 @@ import { useSessionStore } from "@/lib/store/session-store";
 import type { DrawTool, AudioFile } from "@/types";
 
 /* ------------------------------------------------------------------ */
-/*  Tool definitions for the center toolbar                           */
+/*  Tool definitions                                                   */
 /* ------------------------------------------------------------------ */
-const tools: { id: DrawTool; icon: typeof MousePointer2; label: string }[] = [
-  { id: "select", icon: MousePointer2, label: "Select" },
-  { id: "brush", icon: Pencil, label: "Brush" },
-  { id: "anchor", icon: Anchor, label: "Anchor" },
-  { id: "box", icon: Square, label: "Box" },
+const tools: { id: DrawTool; icon: typeof MousePointer2; label: string; hotkey: string }[] = [
+  { id: "select", icon: MousePointer2, label: "Select", hotkey: "S" },
+  { id: "brush", icon: Pencil, label: "Brush", hotkey: "B" },
+  { id: "anchor", icon: Anchor, label: "Anchor", hotkey: "A" },
+  { id: "box", icon: Square, label: "Box", hotkey: "R" },
 ];
 
 const zoomTools = [
@@ -45,35 +49,24 @@ const zoomTools = [
 ];
 
 /* ------------------------------------------------------------------ */
-/*  Status badge helper                                               */
+/*  Status badge helper                                                */
 /* ------------------------------------------------------------------ */
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    wip: {
-      label: "WIP",
-      cls: "bg-warning/20 text-warning",
-    },
-    pending: {
-      label: "PENDING",
-      cls: "bg-primary/20 text-primary-light",
-    },
-    done: {
-      label: "DONE",
-      cls: "bg-accent/20 text-accent",
-    },
+    wip: { label: "WIP", cls: "bg-warning/20 text-warning" },
+    pending: { label: "PENDING", cls: "bg-primary/20 text-primary-light" },
+    done: { label: "DONE", cls: "bg-accent/20 text-accent" },
   };
   const info = map[status] ?? map.pending;
   return (
-    <span
-      className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${info.cls}`}
-    >
+    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${info.cls}`}>
       {info.label}
     </span>
   );
 }
 
 /* ================================================================== */
-/*  MAIN PAGE COMPONENT                                               */
+/*  MAIN PAGE COMPONENT                                                */
 /* ================================================================== */
 export default function LabelingWorkspacePage() {
   const params = useParams<{ id: string }>();
@@ -81,16 +74,20 @@ export default function LabelingWorkspacePage() {
 
   /* ----- Stores --------------------------------------------------- */
   const {
+    mode,
     tool,
     setTool,
     suggestions,
     selectedSuggestionId,
     confirmSuggestion,
     rejectSuggestion,
+    applyFix,
+    undo,
+    redo,
     loadSuggestions,
   } = useAnnotationStore();
 
-  const { score, streak, addScore, addConfirm, incrementStreak } =
+  const { score, streak, addScore, addConfirm, addFix, incrementStreak } =
     useScoreStore();
 
   const { files, currentFileId, setCurrentFile, setCurrentSessionById } =
@@ -104,13 +101,10 @@ export default function LabelingWorkspacePage() {
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
   const activeFileId = currentFileId ?? audioFiles[0]?.id ?? null;
-  const activeFile =
-    audioFiles.find((f) => f.id === activeFileId) ?? audioFiles[0];
+  const activeFile = audioFiles.find((f) => f.id === activeFileId) ?? audioFiles[0];
 
   const filteredFiles = audioFiles.filter((f) => {
-    const matchesSearch = f.filename
-      .toLowerCase()
-      .includes(fileFilter.toLowerCase());
+    const matchesSearch = f.filename.toLowerCase().includes(fileFilter.toLowerCase());
     const matchesTab =
       filterTab === "all" ||
       (filterTab === "pending" && f.status === "pending") ||
@@ -119,14 +113,22 @@ export default function LabelingWorkspacePage() {
   });
 
   const activeSuggestion =
-    suggestions.find(
-      (s) => s.id === selectedSuggestionId && s.status === "pending"
-    ) ?? suggestions.find((s) => s.status === "pending");
+    suggestions.find((s) => s.id === selectedSuggestionId && s.status === "pending") ??
+    suggestions.find((s) => s.status === "pending");
 
+  const rejectedSuggestion =
+    mode === "edit"
+      ? suggestions.find((s) => s.id === selectedSuggestionId && s.status === "rejected")
+      : null;
+
+  const pendingCount = suggestions.filter((s) => s.status === "pending").length;
+  const confirmedCount = suggestions.filter((s) => s.status === "confirmed").length;
+  const totalCount = suggestions.length;
+
+  /* ----- Session init --------------------------------------------- */
   useEffect(() => {
     const sessionId = Array.isArray(params.id) ? params.id[0] : params.id;
     if (!sessionId) return;
-
     const targetSession = setCurrentSessionById(sessionId);
     if (!targetSession) {
       router.replace("/sessions");
@@ -139,26 +141,87 @@ export default function LabelingWorkspacePage() {
   }, [activeFileId, loadSuggestions]);
 
   /* ----- Handlers ------------------------------------------------- */
-  function handleConfirm() {
+  const handleConfirm = useCallback(() => {
     const result = confirmSuggestion();
     if (result) {
       addScore(result.points);
       addConfirm();
       incrementStreak();
     }
-  }
+  }, [confirmSuggestion, addScore, addConfirm, incrementStreak]);
 
-  function handleReject() {
+  const handleReject = useCallback(() => {
     rejectSuggestion();
-  }
+  }, [rejectSuggestion]);
+
+  const handleApplyFix = useCallback(() => {
+    const result = applyFix();
+    if (result) {
+      addScore(result.points);
+      addFix();
+      incrementStreak();
+    }
+  }, [applyFix, addScore, addFix, incrementStreak]);
 
   function handleFileClick(file: AudioFile) {
     setCurrentFile(file.id);
   }
 
-  function handleToolSelect(t: DrawTool) {
-    setTool(t);
+  function handleNextFile() {
+    if (!activeFileId) return;
+    const idx = audioFiles.findIndex((f) => f.id === activeFileId);
+    const nextFile = audioFiles[idx + 1];
+    if (nextFile) {
+      setCurrentFile(nextFile.id);
+    }
   }
+
+  /* ----- Hotkeys -------------------------------------------------- */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "z") {
+          e.preventDefault();
+          if (e.shiftKey) {
+            redo();
+          } else {
+            undo();
+          }
+          return;
+        }
+      }
+
+      switch (e.key.toLowerCase()) {
+        case "o":
+          if (mode === "review") handleConfirm();
+          break;
+        case "x":
+          if (mode === "review") handleReject();
+          break;
+        case "b":
+          setTool("brush");
+          break;
+        case "e":
+          setTool("eraser");
+          break;
+        case "r":
+          setTool("box");
+          break;
+        case "s":
+          if (!e.ctrlKey && !e.metaKey) setTool("select");
+          break;
+        case "f":
+          if (mode === "edit") handleApplyFix();
+          break;
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mode, handleConfirm, handleReject, handleApplyFix, undo, redo, setTool]);
 
   /* ================================================================ */
   /*  RENDER                                                          */
@@ -184,9 +247,7 @@ export default function LabelingWorkspacePage() {
 
           <span className="text-xs text-text-secondary">
             Project:{" "}
-            <span className="text-text font-medium">
-              Turbine_Vibration_X42
-            </span>
+            <span className="text-text font-medium">Turbine_Vibration_X42</span>
           </span>
 
           <span className="text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full">
@@ -196,12 +257,23 @@ export default function LabelingWorkspacePage() {
 
         {/* Right cluster */}
         <div className="flex items-center gap-5">
+          {/* Mode indicator */}
+          <div
+            className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
+              mode === "review"
+                ? "bg-accent/15 text-accent"
+                : "bg-warning/15 text-warning"
+            }`}
+          >
+            {mode} mode
+          </div>
+
+          <div className="h-5 w-px bg-border-light" />
+
           <div className="flex items-center gap-1.5 text-xs font-bold text-warning">
             <span className="text-base">&#127942;</span>
             <span>SCORE</span>
-            <span className="text-text tabular-nums">
-              {score.toLocaleString()}
-            </span>
+            <span className="text-text tabular-nums">{score.toLocaleString()}</span>
           </div>
 
           <div className="h-5 w-px bg-border-light" />
@@ -286,9 +358,7 @@ export default function LabelingWorkspacePage() {
                     <span className="text-[10px] text-text-muted tabular-nums">
                       {file.duration}
                     </span>
-                    <span className="text-[10px] text-text-muted">
-                      {file.sampleRate}
-                    </span>
+                    <span className="text-[10px] text-text-muted">{file.sampleRate}</span>
                   </div>
                 </button>
               );
@@ -296,9 +366,7 @@ export default function LabelingWorkspacePage() {
 
             {filteredFiles.length === 0 && (
               <div className="px-3 py-10 text-center">
-                <p className="text-xs text-text-muted">
-                  No files found for this session.
-                </p>
+                <p className="text-xs text-text-muted">No files found for this session.</p>
               </div>
             )}
           </div>
@@ -306,17 +374,17 @@ export default function LabelingWorkspacePage() {
           {/* Daily Goal */}
           <div className="p-3 border-t border-border">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-semibold text-text-secondary">
-                Daily Goal
-              </span>
+              <span className="text-[11px] font-semibold text-text-secondary">Daily Goal</span>
               <span className="text-[11px] font-bold text-primary-light">
-                75%
+                {totalCount > 0 ? Math.round(((confirmedCount + (totalCount - pendingCount - confirmedCount)) / totalCount) * 100) : 0}%
               </span>
             </div>
             <div className="h-1.5 bg-surface rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary rounded-full transition-all duration-500"
-                style={{ width: "75%" }}
+                style={{
+                  width: `${totalCount > 0 ? ((confirmedCount + (totalCount - pendingCount - confirmedCount)) / totalCount) * 100 : 0}%`,
+                }}
               />
             </div>
           </div>
@@ -331,8 +399,8 @@ export default function LabelingWorkspacePage() {
             {tools.map((t) => (
               <button
                 key={t.id}
-                onClick={() => handleToolSelect(t.id)}
-                title={t.label}
+                onClick={() => setTool(t.id)}
+                title={`${t.label} (${t.hotkey})`}
                 className={`p-2 rounded-md transition-colors ${
                   tool === t.id
                     ? "bg-primary text-white"
@@ -355,12 +423,35 @@ export default function LabelingWorkspacePage() {
               </button>
             ))}
 
-            {/* File indicator */}
-            <div className="ml-auto flex items-center gap-2 text-[11px] text-text-muted">
-              <FileAudio className="w-3.5 h-3.5" />
-              <span className="font-medium text-text-secondary">
-                {activeFile?.filename}
+            <div className="h-5 w-px bg-border-light mx-1" />
+
+            {/* Undo / Redo */}
+            <button
+              onClick={undo}
+              title="Undo (Ctrl+Z)"
+              className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
+            >
+              <Undo2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={redo}
+              title="Redo (Ctrl+Shift+Z)"
+              className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
+            >
+              <Redo2 className="w-4 h-4" />
+            </button>
+
+            {/* File indicator + progress */}
+            <div className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
+              <span className="text-text-secondary">
+                {confirmedCount}/{totalCount} tagged
               </span>
+              <div className="flex items-center gap-2">
+                <FileAudio className="w-3.5 h-3.5" />
+                <span className="font-medium text-text-secondary">
+                  {activeFile?.filename}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -369,10 +460,7 @@ export default function LabelingWorkspacePage() {
             {/* Y-axis labels */}
             <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
               {["20kHz", "15kHz", "10kHz", "5kHz", "0Hz"].map((label) => (
-                <span
-                  key={label}
-                  className="text-[10px] text-text-muted/70 font-mono text-right pr-2"
-                >
+                <span key={label} className="text-[10px] text-text-muted/70 font-mono text-right pr-2">
                   {label}
                 </span>
               ))}
@@ -380,46 +468,27 @@ export default function LabelingWorkspacePage() {
 
             {/* Spectrogram gradient background */}
             <div className="absolute inset-0 ml-12 bg-gradient-to-b from-indigo-900 via-purple-700 via-fuchsia-500 to-amber-200 opacity-80">
-              {/* Horizontal grid lines */}
               <div className="absolute inset-0">
                 {[20, 40, 60, 80].map((pct) => (
-                  <div
-                    key={pct}
-                    className="absolute left-0 right-0 border-t border-white/5"
-                    style={{ top: `${pct}%` }}
-                  />
+                  <div key={pct} className="absolute left-0 right-0 border-t border-white/5" style={{ top: `${pct}%` }} />
                 ))}
               </div>
-
-              {/* Vertical grid lines */}
               <div className="absolute inset-0">
                 {[20, 40, 60, 80].map((pct) => (
-                  <div
-                    key={pct}
-                    className="absolute top-0 bottom-0 border-l border-white/5"
-                    style={{ left: `${pct}%` }}
-                  />
+                  <div key={pct} className="absolute top-0 bottom-0 border-l border-white/5" style={{ left: `${pct}%` }} />
                 ))}
               </div>
-
-              {/* Noise texture overlay */}
               <div className="absolute inset-0 opacity-30 mix-blend-overlay bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)]" />
             </div>
 
-            {/* Annotation box 1 - Confirmed/User annotation (solid cyan) */}
+            {/* Annotation box 1 - User annotation (solid cyan) */}
             <div
               className="absolute border-2 border-cyan-400 rounded-sm z-20"
-              style={{
-                left: "calc(12px + 15%)",
-                top: "25%",
-                width: "20%",
-                height: "20%",
-              }}
+              style={{ left: "calc(12px + 15%)", top: "25%", width: "20%", height: "20%" }}
             >
               <div className="absolute -top-5 left-0 bg-cyan-400/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm">
                 ID:01
               </div>
-              {/* Corner handles */}
               <div className="absolute -top-1 -left-1 w-2 h-2 bg-cyan-400 rounded-sm" />
               <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-sm" />
               <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-cyan-400 rounded-sm" />
@@ -429,18 +498,12 @@ export default function LabelingWorkspacePage() {
             {/* Annotation box 2 - AI suggestion (dashed orange) */}
             <div
               className="absolute border-2 border-dashed border-orange-400 rounded-sm z-20"
-              style={{
-                left: "calc(12px + 50%)",
-                top: "60%",
-                width: "22%",
-                height: "18%",
-              }}
+              style={{ left: "calc(12px + 50%)", top: "60%", width: "22%", height: "18%" }}
             >
               <div className="absolute -top-5 left-0 bg-orange-400/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
                 AI?
               </div>
-              {/* Corner handles */}
               <div className="absolute -top-1 -left-1 w-2 h-2 bg-orange-400 rounded-sm" />
               <div className="absolute -top-1 -right-1 w-2 h-2 bg-orange-400 rounded-sm" />
               <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-orange-400 rounded-sm" />
@@ -448,53 +511,63 @@ export default function LabelingWorkspacePage() {
             </div>
 
             {/* Playback cursor line */}
-            <div
-              className="absolute top-0 bottom-0 w-px bg-white/60 z-30"
-              style={{ left: "calc(12px + 38%)" }}
-            >
+            <div className="absolute top-0 bottom-0 w-px bg-white/60 z-30" style={{ left: "calc(12px + 38%)" }}>
               <div className="absolute -top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
+            </div>
+
+            {/* Hotkey hint overlay */}
+            <div className="absolute bottom-3 right-3 z-30 flex gap-1.5">
+              {[
+                { key: "O", label: "Confirm" },
+                { key: "X", label: "Reject" },
+                { key: "B", label: "Brush" },
+                { key: "R", label: "Box" },
+                { key: "⌘Z", label: "Undo" },
+              ].map((hint) => (
+                <div
+                  key={hint.key}
+                  className="bg-black/60 backdrop-blur-sm text-[9px] text-text-muted px-1.5 py-0.5 rounded font-mono"
+                >
+                  <span className="text-text-secondary font-bold">{hint.key}</span>{" "}
+                  {hint.label}
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Audio Player Controls */}
           <div className="h-14 shrink-0 bg-panel border-t border-border flex items-center px-4 gap-4">
-            {/* Transport controls */}
             <div className="flex items-center gap-1">
               <button className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
                 <SkipBack className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setIsPlaying(!isPlaying)}
+                onClick={() => setIsPlaying((p) => !p)}
                 className="p-2.5 rounded-lg bg-primary text-white hover:bg-primary-light transition-colors"
               >
-                <Play className="w-4 h-4" />
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
               </button>
               <button className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
                 <SkipForward className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Timecode */}
             <div className="text-xs font-mono text-text-secondary tabular-nums">
               <span className="text-text font-medium">03:12.045</span>
               <span className="mx-1 text-text-muted">/</span>
               <span>08:22.000</span>
             </div>
 
-            {/* Spacer */}
             <div className="flex-1" />
 
-            {/* Lock */}
             <button className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors">
               <Lock className="w-3.5 h-3.5" />
             </button>
 
-            {/* Speed */}
             <span className="text-[11px] font-medium text-text-secondary bg-surface px-2 py-1 rounded-md">
               1.0x
             </span>
 
-            {/* Volume */}
             <div className="flex items-center gap-2">
               <Volume2 className="w-4 h-4 text-text-muted" />
               <div className="w-20 h-1 bg-surface rounded-full overflow-hidden">
@@ -514,24 +587,21 @@ export default function LabelingWorkspacePage() {
             <h2 className="text-xs font-bold text-text uppercase tracking-wider">
               AI Analysis
             </h2>
-            <span className="ml-auto text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full uppercase">
-              New
-            </span>
+            {pendingCount > 0 && (
+              <span className="ml-auto text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full uppercase">
+                {pendingCount} pending
+              </span>
+            )}
           </div>
 
-          {/* ---- Suggestion Card ---- */}
-          {activeSuggestion ? (
+          {/* ---- Review Mode: Suggestion Card ---- */}
+          {mode === "review" && activeSuggestion && (
             <div className="p-4 border-b border-border">
               <div className="bg-surface rounded-xl p-4">
-                {/* Label & confidence */}
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="text-sm font-bold text-text">
-                      {activeSuggestion.label}
-                    </h3>
-                    <p className="text-[10px] text-text-muted mt-0.5">
-                      AI Detected Anomaly
-                    </p>
+                    <h3 className="text-sm font-bold text-text">{activeSuggestion.label}</h3>
+                    <p className="text-[10px] text-text-muted mt-0.5">AI Detected Anomaly</p>
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-black text-primary-light tabular-nums">
@@ -540,7 +610,6 @@ export default function LabelingWorkspacePage() {
                   </div>
                 </div>
 
-                {/* Confidence bar */}
                 <div className="h-1.5 bg-panel rounded-full overflow-hidden mb-3">
                   <div
                     className="h-full bg-primary rounded-full transition-all duration-500"
@@ -548,12 +617,10 @@ export default function LabelingWorkspacePage() {
                   />
                 </div>
 
-                {/* Description */}
                 <p className="text-[11px] text-text-secondary leading-relaxed mb-4">
                   {activeSuggestion.description}
                 </p>
 
-                {/* Action buttons */}
                 <div className="flex gap-2">
                   <button
                     onClick={handleReject}
@@ -561,6 +628,7 @@ export default function LabelingWorkspacePage() {
                   >
                     <X className="w-3.5 h-3.5" />
                     Reject
+                    <kbd className="text-[9px] text-text-muted ml-1 bg-panel px-1 rounded">X</kbd>
                   </button>
                   <button
                     onClick={handleConfirm}
@@ -568,16 +636,49 @@ export default function LabelingWorkspacePage() {
                   >
                     <Check className="w-3.5 h-3.5" />
                     Confirm
+                    <kbd className="text-[9px] text-white/60 ml-1 bg-white/10 px-1 rounded">O</kbd>
                   </button>
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* ---- Edit Mode: Apply Fix Card ---- */}
+          {mode === "edit" && rejectedSuggestion && (
+            <div className="p-4 border-b border-border">
+              <div className="bg-warning/5 border border-warning/20 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Wrench className="w-4 h-4 text-warning" />
+                  <h3 className="text-sm font-bold text-warning">Edit Mode</h3>
+                </div>
+
+                <p className="text-[11px] text-text-secondary leading-relaxed mb-2">
+                  Rejected: <span className="text-text font-medium">{rejectedSuggestion.label}</span>
+                </p>
+                <p className="text-[11px] text-text-muted mb-4">
+                  Draw the correct annotation region on the spectrogram, then apply the fix.
+                </p>
+
+                <button
+                  onClick={handleApplyFix}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-warning hover:bg-warning/90 text-black text-xs font-bold transition-colors"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Apply Fix (+20 pts)
+                  <kbd className="text-[9px] text-black/50 ml-1 bg-black/10 px-1 rounded">F</kbd>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ---- No pending suggestions ---- */}
+          {mode === "review" && !activeSuggestion && (
             <div className="p-4 border-b border-border">
               <div className="bg-surface rounded-xl p-6 flex flex-col items-center text-center">
                 <Sparkles className="w-6 h-6 text-text-muted mb-2" />
-                <p className="text-xs text-text-muted">
-                  No pending suggestions
+                <p className="text-xs text-text-muted">All suggestions processed</p>
+                <p className="text-[10px] text-text-muted mt-1">
+                  {confirmedCount} confirmed, {totalCount - confirmedCount - pendingCount} fixed
                 </p>
               </div>
             </div>
@@ -590,12 +691,8 @@ export default function LabelingWorkspacePage() {
                 <Filter className="w-4 h-4 text-primary-light" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-xs font-semibold text-text">
-                  Apply Noise Reduction?
-                </h4>
-                <p className="text-[10px] text-text-muted mt-0.5">
-                  Filters background hum (-12dB)
-                </p>
+                <h4 className="text-xs font-semibold text-text">Apply Noise Reduction?</h4>
+                <p className="text-[10px] text-text-muted mt-0.5">Filters background hum (-12dB)</p>
               </div>
               <button className="text-[11px] font-bold text-primary-light hover:text-primary transition-colors shrink-0">
                 APPLY
@@ -608,63 +705,29 @@ export default function LabelingWorkspacePage() {
             <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3">
               Properties
             </h3>
-
-            <div className="space-y-2.5">
-              {/* Sensor ID */}
+            <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  Sensor ID
-                </label>
-                <input
-                  type="text"
-                  defaultValue="TURB-X42-A"
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
-                />
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Sensor ID</label>
+                <input type="text" defaultValue="TURB-X42-A" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
               </div>
-
-              {/* Sample Rate */}
               <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  Sample Rate
-                </label>
-                <input
-                  type="text"
-                  defaultValue="44,100 Hz"
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
-                />
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Sample Rate</label>
+                <input type="text" defaultValue="44,100 Hz" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
               </div>
-
-              {/* Duration */}
-              <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  Duration
-                </label>
-                <input
-                  type="text"
-                  defaultValue="00:08:22.00"
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
-                />
-              </div>
-
-              {/* Captured At */}
-              <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">
-                  Captured At
-                </label>
-                <input
-                  type="text"
-                  defaultValue="Oct 24, 2023 - 14:30 UTC"
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
-                />
-              </div>
+            </div>
+            <div className="mt-2.5">
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Duration</label>
+              <input type="text" defaultValue="00:08:22.00" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
+            </div>
+            <div className="mt-2.5">
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Captured At</label>
+              <input type="text" defaultValue="Oct 24, 2023 - 14:30 UTC" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
             </div>
           </div>
 
           {/* ---- Notes Section ---- */}
           <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">
-              Notes
-            </h3>
+            <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Notes</h3>
             <textarea
               placeholder="Add annotation notes here..."
               rows={3}
@@ -674,7 +737,10 @@ export default function LabelingWorkspacePage() {
 
           {/* ---- Save & Next Button ---- */}
           <div className="p-4 mt-auto">
-            <button className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-light text-white text-sm font-semibold py-2.5 rounded-lg transition-colors">
+            <button
+              onClick={handleNextFile}
+              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-light text-white text-sm font-semibold py-2.5 rounded-lg transition-colors"
+            >
               Save &amp; Next File
               <ChevronRight className="w-4 h-4" />
             </button>
