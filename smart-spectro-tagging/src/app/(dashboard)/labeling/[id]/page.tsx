@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AudioLines,
@@ -127,6 +127,9 @@ export default function LabelingWorkspacePage() {
   const [fileFilter, setFileFilter] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "done">("all");
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackPct, setPlaybackPct] = useState(0);
+  const rafRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -136,6 +139,27 @@ export default function LabelingWorkspacePage() {
 
   /* ----- Autosave ------------------------------------------------- */
   useAutosave(activeFileId);
+
+  /* ----- Playback cursor simulation -------------------------------- */
+  useEffect(() => {
+    if (!isPlaying) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return;
+    }
+    lastTimeRef.current = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - lastTimeRef.current) / 1000; // seconds elapsed
+      lastTimeRef.current = now;
+      setPlaybackPct((prev) => {
+        const next = prev + (dt / totalDuration) * 100;
+        if (next >= 100) { setIsPlaying(false); return 0; }
+        return next;
+      });
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [isPlaying, totalDuration]);
 
   const filteredFiles = audioFiles.filter((f) => {
     const matchesSearch = f.filename.toLowerCase().includes(fileFilter.toLowerCase());
@@ -269,32 +293,32 @@ export default function LabelingWorkspacePage() {
       {/* ============================================================ */}
       {/*  TOP HEADER BAR                                              */}
       {/* ============================================================ */}
-      <header className="h-14 shrink-0 bg-panel border-b border-border flex items-center justify-between px-5">
+      <header className="h-14 shrink-0 bg-panel border-b border-border flex items-center justify-between px-3 md:px-5 overflow-x-auto">
         {/* Left cluster */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <AudioLines className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-bold text-text tracking-tight">
+            <span className="text-sm font-bold text-text tracking-tight hidden sm:inline">
               Smart Spectro-Tagging
             </span>
           </div>
 
-          <div className="h-5 w-px bg-border-light" />
+          <div className="h-5 w-px bg-border-light hidden md:block" />
 
-          <span className="text-xs text-text-secondary">
+          <span className="text-xs text-text-secondary hidden md:inline">
             Project:{" "}
             <span className="text-text font-medium">Turbine_Vibration_X42</span>
           </span>
 
-          <span className="text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full hidden lg:inline">
             v2.4.0
           </span>
         </div>
 
         {/* Right cluster */}
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-2 md:gap-5 shrink-0">
           {/* Mode indicator */}
           <div
             className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
@@ -306,23 +330,23 @@ export default function LabelingWorkspacePage() {
             {mode} mode
           </div>
 
-          <div className="h-5 w-px bg-border-light" />
+          <div className="h-5 w-px bg-border-light hidden sm:block" />
 
           <div className="flex items-center gap-1.5 text-xs font-bold text-warning">
             <span className="text-base">&#127942;</span>
-            <span>SCORE</span>
+            <span className="hidden sm:inline">SCORE</span>
             <span className="text-text tabular-nums">{score.toLocaleString()}</span>
           </div>
 
-          <div className="h-5 w-px bg-border-light" />
+          <div className="h-5 w-px bg-border-light hidden md:block" />
 
-          <div className="flex items-center gap-1.5 text-xs font-bold text-orange-400">
+          <div className="hidden md:flex items-center gap-1.5 text-xs font-bold text-orange-400">
             <span className="text-base">&#128293;</span>
             <span>STREAK</span>
             <span className="text-text tabular-nums">{streak} Days</span>
           </div>
 
-          <div className="h-5 w-px bg-border-light" />
+          <div className="h-5 w-px bg-border-light hidden md:block" />
 
           <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">
             AR
@@ -333,11 +357,11 @@ export default function LabelingWorkspacePage() {
       {/* ============================================================ */}
       {/*  3-PANEL BODY                                                */}
       {/* ============================================================ */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* ========================================================== */}
         {/*  LEFT PANEL - File List                                    */}
         {/* ========================================================== */}
-        <aside className="w-[280px] shrink-0 bg-panel border-r border-border flex flex-col">
+        <aside className="hidden md:flex w-[280px] shrink-0 bg-panel border-r border-border flex-col">
           {/* Search */}
           <div className="p-3">
             <div className="relative">
@@ -577,7 +601,7 @@ export default function LabelingWorkspacePage() {
             })}
 
             {/* Playback cursor line */}
-            <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: "calc(48px + 38%)" }}>
+            <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: `calc(48px + ${playbackPct}%)` }}>
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
             </div>
 
@@ -646,7 +670,15 @@ export default function LabelingWorkspacePage() {
             </div>
 
             <div className="text-xs font-mono text-text-secondary tabular-nums">
-              <span className="text-text font-medium">03:12.045</span>
+              <span className="text-text font-medium">
+                {(() => {
+                  const cur = (playbackPct / 100) * totalDuration;
+                  const m = Math.floor(cur / 60);
+                  const s = Math.floor(cur % 60);
+                  const ms = Math.floor((cur % 1) * 1000);
+                  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
+                })()}
+              </span>
               <span className="mx-1 text-text-muted">/</span>
               <span>{activeFile?.duration ?? "00:00"}</span>
             </div>
@@ -668,12 +700,39 @@ export default function LabelingWorkspacePage() {
               </div>
             </div>
           </div>
+
+          {/* Mobile-only quick action bar */}
+          <div className="flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0">
+            <div className="text-xs text-text-muted">
+              {activeSuggestion ? (
+                <span><span className="font-bold text-text">{activeSuggestion.label}</span> — {(activeSuggestion.confidence * 100).toFixed(0)}%</span>
+              ) : (
+                <span>No suggestion selected</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleConfirm}
+                disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold disabled:opacity-40"
+              >
+                <Check className="w-3.5 h-3.5" /> OK
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-40"
+              >
+                <X className="w-3.5 h-3.5" /> NG
+              </button>
+            </div>
+          </div>
         </main>
 
         {/* ========================================================== */}
         {/*  RIGHT PANEL - AI Analysis & Properties                    */}
         {/* ========================================================== */}
-        <aside className="w-[320px] shrink-0 bg-panel border-l border-border flex flex-col overflow-y-auto">
+        <aside className="hidden md:flex w-[320px] shrink-0 bg-panel border-l border-border flex-col overflow-y-auto">
           {/* ---- AI Analysis Header ---- */}
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary-light" />

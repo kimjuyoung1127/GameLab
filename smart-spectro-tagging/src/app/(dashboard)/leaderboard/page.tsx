@@ -49,6 +49,10 @@ const BAR_MAX = 65;
 export default function LeaderboardPage() {
   const router = useRouter();
   const { score, totalConfirmed, totalFixed } = useScoreStore();
+  const totalSamples = totalConfirmed + totalFixed;
+  const confirmedPts = totalConfirmed * 10;
+  const fixedPts = totalFixed * 20;
+  const avgSpeed = totalSamples > 0 ? (860 / totalSamples).toFixed(1) : "—";
   const [activeTab, setActiveTab] = useState<"today" | "week" | "alltime">(
     "today"
   );
@@ -62,16 +66,16 @@ export default function LeaderboardPage() {
   return (
     <div className="flex flex-col min-h-screen bg-canvas">
       {/* ════════ TOP HEADER BAR ════════ */}
-      <header className="h-16 border-b border-border bg-panel flex items-center justify-between px-6 shrink-0">
+      <header className="h-16 border-b border-border bg-panel flex items-center justify-between px-4 md:px-6 shrink-0">
         {/* left – logo */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <AudioLines className="w-5 h-5 text-white" />
           </div>
-          <span className="text-sm font-bold text-text">
+          <span className="text-sm font-bold text-text hidden sm:inline">
             Smart Spectro-Tagging
           </span>
-          <span className="ml-1 text-[10px] font-semibold bg-primary/20 text-primary px-2 py-0.5 rounded-full">
+          <span className="ml-1 text-[10px] font-semibold bg-primary/20 text-primary px-2 py-0.5 rounded-full hidden md:inline">
             v2.4.0
           </span>
         </div>
@@ -190,7 +194,7 @@ export default function LeaderboardPage() {
               <p className="text-[10px] uppercase tracking-widest text-text-muted mb-1">
                 Samples
               </p>
-              <p className="text-2xl font-extrabold text-text">45</p>
+              <p className="text-2xl font-extrabold text-text">{totalSamples}</p>
             </div>
             {/* Speed */}
             <div className="flex-1 text-center">
@@ -198,7 +202,7 @@ export default function LeaderboardPage() {
                 Speed
               </p>
               <p className="text-2xl font-extrabold text-text">
-                3.1s{" "}
+                {avgSpeed}s{" "}
                 <span className="text-sm font-normal text-text-muted">
                   /tag
                 </span>
@@ -214,7 +218,7 @@ export default function LeaderboardPage() {
                 <div className="w-9 h-9 rounded-lg bg-accent/15 flex items-center justify-center">
                   <Check className="w-5 h-5 text-accent" />
                 </div>
-                <span className="text-xs font-bold text-accent">+840 pts</span>
+                <span className="text-xs font-bold text-accent">+{confirmedPts} pts</span>
               </div>
               <p className="text-xs text-text-muted">Confirmed Normal</p>
               <p className="text-4xl font-extrabold text-text">
@@ -224,7 +228,7 @@ export default function LeaderboardPage() {
               <div className="w-full h-1.5 bg-accent/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-accent rounded-full"
-                  style={{ width: `${(totalConfirmed / 45) * 100}%` }}
+                  style={{ width: `${totalSamples > 0 ? (totalConfirmed / totalSamples) * 100 : 0}%` }}
                 />
               </div>
             </div>
@@ -235,7 +239,7 @@ export default function LeaderboardPage() {
                 <div className="w-9 h-9 rounded-lg bg-danger/15 flex items-center justify-center">
                   <X className="w-5 h-5 text-danger" />
                 </div>
-                <span className="text-xs font-bold text-danger">+410 pts</span>
+                <span className="text-xs font-bold text-danger">+{fixedPts} pts</span>
               </div>
               <p className="text-xs text-text-muted">Anomalies Fixed</p>
               <p className="text-4xl font-extrabold text-text">{totalFixed}</p>
@@ -243,7 +247,7 @@ export default function LeaderboardPage() {
               <div className="w-full h-1.5 bg-danger/10 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-danger rounded-full"
-                  style={{ width: `${(totalFixed / 45) * 100}%` }}
+                  style={{ width: `${totalSamples > 0 ? (totalFixed / totalSamples) * 100 : 0}%` }}
                 />
               </div>
             </div>
@@ -464,7 +468,7 @@ export default function LeaderboardPage() {
       </div>
 
       {/* ════════ BOTTOM ACTION BAR ════════ */}
-      <div className="border-t border-border bg-panel px-8 py-4 flex items-center justify-between shrink-0">
+      <div className="border-t border-border bg-panel px-4 md:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-panel-light border border-border-light text-sm font-medium text-text hover:bg-surface transition-colors">
             <Save className="w-4 h-4" />

@@ -29,12 +29,26 @@ export const useScoreStore = create<ScoreState>()(
     }),
     {
       name: "sst-score",
+      version: 1,
       partialize: (state) => ({
         score: state.score,
         streak: state.streak,
         totalConfirmed: state.totalConfirmed,
         totalFixed: state.totalFixed,
       }),
+      migrate: (persisted: unknown, version: number) => {
+        if (version === 0) {
+          // v0 → v1: ensure totalConfirmed/totalFixed exist
+          const old = persisted as Record<string, unknown>;
+          return {
+            score: (old.score as number) ?? 9420,
+            streak: (old.streak as number) ?? 12,
+            totalConfirmed: (old.totalConfirmed as number) ?? 42,
+            totalFixed: (old.totalFixed as number) ?? 3,
+          };
+        }
+        return persisted as ScoreState;
+      },
     }
   )
 );

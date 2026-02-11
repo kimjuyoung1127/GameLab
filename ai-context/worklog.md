@@ -22,6 +22,20 @@
   2.
 
 ## 기록
+### [2026-02-11 19:30 KST] Codex P2 잔여: leaderboard 동적화 + score-store 마이그레이션 + 재생 커서 시뮬레이션
+- 목표: Codex 리뷰 낮음 이슈 3건(하드코딩 지표/persist 버전/커서 고정) 일괄 해소
+- 범위: `leaderboard/page.tsx`, `score-store.ts`, `labeling/[id]/page.tsx`
+- 변경 파일:
+  - `smart-spectro-tagging/src/app/(dashboard)/leaderboard/page.tsx` - Samples→totalSamples, Speed→avgSpeed, pts→confirmedPts/fixedPts, progress bar 분모를 totalSamples로 교체
+  - `smart-spectro-tagging/src/lib/store/score-store.ts` - persist version:1 + migrate 함수 추가 (v0 → v1 자동 마이그레이션)
+  - `smart-spectro-tagging/src/app/(dashboard)/labeling/[id]/page.tsx` - playbackPct 상태 + rAF 기반 재생 커서 시뮬레이션 + 타임코드 동적 표시
+- 검증 명령: `cd smart-spectro-tagging && npm run build`
+- 결과: 성공 (TypeScript 통과, 모든 라우트 생성 정상)
+- 커밋: (미커밋)
+- 다음 작업:
+  1. 커밋 + 푸시
+  2. 모바일 1차 점검 (Sprint 11 #5)
+
 ### [2026-02-11 19:00 KST] Sprint 11 P1: Tailwind 동적 클래스 정적화 + autosave 키 분리
 - 목표: production 빌드 purge 안전성 확보 + 다중 파일 autosave 키 충돌 해소
 - 범위: `labeling/[id]/page.tsx`, `use-autosave.ts`

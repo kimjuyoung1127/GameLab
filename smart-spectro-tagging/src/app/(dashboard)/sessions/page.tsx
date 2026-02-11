@@ -213,7 +213,7 @@ export default function SessionsPage() {
                 placeholder="Search Session ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-64 pl-9 pr-4 py-2 rounded-lg bg-panel border border-border text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+                className="w-full sm:w-64 pl-9 pr-4 py-2 rounded-lg bg-panel border border-border text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
               />
             </div>
 
@@ -331,7 +331,7 @@ export default function SessionsPage() {
           </div>
 
           {/* ---- Footer / Pagination ---- */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-t border-border">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-5 py-3.5 border-t border-border">
             <p className="text-xs text-text-muted">
               Showing 1 to {filtered.length} of 128 results
             </p>
