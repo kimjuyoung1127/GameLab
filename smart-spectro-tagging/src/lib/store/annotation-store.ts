@@ -28,6 +28,7 @@ interface AnnotationState {
   undo: () => void;
   redo: () => void;
   loadSuggestions: (audioId: string) => void;
+  restoreSuggestions: (suggestions: AISuggestion[]) => void;
 }
 
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
@@ -165,6 +166,17 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({
       suggestions: filtered,
       selectedSuggestionId: filtered.find((s) => s.status === "pending")?.id ?? null,
+      mode: "review",
+      undoStack: [],
+      redoStack: [],
+    });
+  },
+
+  restoreSuggestions: (savedSuggestions) => {
+    set({
+      suggestions: savedSuggestions,
+      selectedSuggestionId:
+        savedSuggestions.find((s) => s.status === "pending")?.id ?? null,
       mode: "review",
       undoStack: [],
       redoStack: [],

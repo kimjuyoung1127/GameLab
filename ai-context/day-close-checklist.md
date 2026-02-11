@@ -9,26 +9,36 @@
 - [ ] 내일 1~3순위 작업 확정
 
 ## 2) 로그 정리
-- [ ] `worklog.md`에 변경 파일/검증 결과 기록
-- [ ] `review-log.md`에 리뷰 결과/판단 기록
-- [ ] 열린 이슈(open)와 해결 이슈(closed) 상태 구분
+- [ ] `ai-context/logs/YYYY-MM-DD-session-log.md`에 오늘 작업 append
+- [ ] handoff(`sprint-handoff-*.md`)가 최신 상태인지 확인
+- [ ] 마일스톤 종료일이 아니면 `worklog.md/review-log.md`는 스킵
 
 ## 3) 품질 확인
-- [ ] 최소 1개 검증 명령 수행 (`npm run build` 권장)
+- [ ] `npm run build` 결과 기록
 - [ ] 라벨링 핵심 플로우(O/X/Edit/Apply) 수동 점검
 - [ ] UI 깨짐(모바일/데스크톱) 확인
 
 ## 4) 문서 신선도 점검
-- [ ] 기준 문서가 여전히 `docs/Prd.md`, `docs/react.md`, `docs/bone.md`인지 확인
+- [ ] 기준 문서가 `docs/Prd.md`, `docs/react.md`, `docs/bone.md`인지 확인
 - [ ] 충돌 문서/오래된 외부 문서 참조 제거
 
-## 5) 내일 시작 프롬프트 (복붙)
-`레포 루트의 ai-context 기준으로 작업. master-plan -> project-context -> worklog -> review-log 순으로 읽고 1순위부터 진행.`
+## 5) Sprint 11 내일 시작 프롬프트 (복붙)
+`레포 루트 ai-context 기준으로 시작. master-plan -> project-context -> sprint-handoff-2026-02-11-pm -> worklog -> review-log 순으로 읽고, Sprint 11 진행중 항목(동적 클래스/autosave 키/문서 포맷 정규화)부터 처리.`
 
 실행 경로/명령(필수):
 1. `cd smart-spectro-tagging`
 2. `npm install`
 3. `npm run dev`
+
+당일 마감 필수 3개(기본):
+1. session log append
+2. handoff 갱신
+3. `npm run build` 결과 기록
+
+마일스톤 종료일 추가 필수:
+1. `worklog.md` 일괄 업데이트
+2. `review-log.md` 일괄 업데이트
+3. `master-plan.md` 상태 반영
 
 로그인 우회 기본값:
 - 기본 ON (바로 `/sessions` 진입)

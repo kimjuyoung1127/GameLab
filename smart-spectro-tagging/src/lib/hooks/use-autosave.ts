@@ -3,9 +3,14 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAnnotationStore } from "@/lib/store/annotation-store";
 
-const AUTOSAVE_KEY = "sst-autosave";
+const AUTOSAVE_PREFIX = "sst-autosave-";
+const LEGACY_AUTOSAVE_KEY = "sst-autosave";
 const OFFLINE_QUEUE_KEY = "sst-offline-queue";
 const AUTOSAVE_INTERVAL = 30_000; // 30 seconds
+
+function autosaveKey(audioId: string) {
+  return `${AUTOSAVE_PREFIX}${audioId}`;
+}
 
 interface SavedProgress {
   audioId: string;
@@ -45,6 +50,7 @@ export function clearOfflineQueue() {
 /**
  * Hook that auto-saves annotation progress to localStorage every 30s.
  * Also saves on beforeunload to prevent data loss.
+ * Each audioId gets its own localStorage key to prevent cross-file overwrites.
  */
 export function useAutosave(audioId: string | null) {
   const lastSavedRef = useRef<string>("");
@@ -59,7 +65,7 @@ export function useAutosave(audioId: string | null) {
     };
     const json = JSON.stringify(payload);
     if (json === lastSavedRef.current) return; // no changes
-    localStorage.setItem(AUTOSAVE_KEY, json);
+    localStorage.setItem(autosaveKey(audioId), json);
     lastSavedRef.current = json;
   }, [audioId]);
 
@@ -84,11 +90,26 @@ export function useAutosave(audioId: string | null) {
 export function loadSavedProgress(audioId: string): SavedProgress | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
-    if (!raw) return null;
-    const parsed: SavedProgress = JSON.parse(raw);
-    if (parsed.audioId !== audioId) return null;
-    return parsed;
+    // Try per-file key first
+    const raw = localStorage.getItem(autosaveKey(audioId));
+    if (raw) {
+      const parsed: SavedProgress = JSON.parse(raw);
+      if (parsed.audioId === audioId) return parsed;
+    }
+
+    // Legacy fallback: migrate old single-key data
+    const legacy = localStorage.getItem(LEGACY_AUTOSAVE_KEY);
+    if (legacy) {
+      const parsed: SavedProgress = JSON.parse(legacy);
+      if (parsed.audioId === audioId) {
+        // Migrate to per-file key and remove legacy
+        localStorage.setItem(autosaveKey(audioId), legacy);
+        localStorage.removeItem(LEGACY_AUTOSAVE_KEY);
+        return parsed;
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }

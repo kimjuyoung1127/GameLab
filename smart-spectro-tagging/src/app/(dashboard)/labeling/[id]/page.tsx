@@ -31,7 +31,7 @@ import {
 import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
-import { useAutosave } from "@/lib/hooks/use-autosave";
+import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
 import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus } from "@/types";
 
 /* ------------------------------------------------------------------ */
@@ -54,11 +54,11 @@ function suggestionBoxStyle(s: AISuggestion, totalDuration: number) {
   return { left: `${leftPct}%`, width: `${widthPct}%`, top: `${topPct}%`, height: `${heightPct}%` };
 }
 
-const statusColors: Record<SuggestionStatus, { border: string; bg: string; label: string; dashed: boolean }> = {
-  pending:   { border: "border-orange-400", bg: "bg-orange-400", label: "text-orange-400", dashed: true },
-  confirmed: { border: "border-accent",     bg: "bg-accent",     label: "text-accent",     dashed: false },
-  rejected:  { border: "border-danger",     bg: "bg-danger",     label: "text-danger",     dashed: true },
-  corrected: { border: "border-cyan-400",   bg: "bg-cyan-400",   label: "text-cyan-400",   dashed: false },
+const statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }> = {
+  pending:   { border: "border-orange-400", bg: "bg-orange-400", tagBg: "bg-orange-400/90", label: "text-orange-400", dashed: true },
+  confirmed: { border: "border-accent",     bg: "bg-accent",     tagBg: "bg-accent/90",     label: "text-accent",     dashed: false },
+  rejected:  { border: "border-danger",     bg: "bg-danger",     tagBg: "bg-danger/90",     label: "text-danger",     dashed: true },
+  corrected: { border: "border-cyan-400",   bg: "bg-cyan-400",   tagBg: "bg-cyan-400/90",   label: "text-cyan-400",   dashed: false },
 };
 
 /* ------------------------------------------------------------------ */
@@ -113,6 +113,7 @@ export default function LabelingWorkspacePage() {
     undo,
     redo,
     loadSuggestions,
+    restoreSuggestions,
     selectSuggestion,
   } = useAnnotationStore();
 
@@ -171,7 +172,11 @@ export default function LabelingWorkspacePage() {
   useEffect(() => {
     if (!activeFileId) return;
     loadSuggestions(activeFileId);
-  }, [activeFileId, loadSuggestions]);
+    const saved = loadSavedProgress(activeFileId);
+    if (saved?.suggestions?.length) {
+      restoreSuggestions(saved.suggestions);
+    }
+  }, [activeFileId, loadSuggestions, restoreSuggestions]);
 
   /* ----- Handlers ------------------------------------------------- */
   const handleConfirm = useCallback(() => {
@@ -547,7 +552,7 @@ export default function LabelingWorkspacePage() {
                   }}
                 >
                   {/* Tag label */}
-                  <div className={`absolute -top-5 left-0 ${sc.bg}/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap`}>
+                  <div className={`absolute -top-5 left-0 ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap`}>
                     {s.status === "pending" && <Sparkles className="w-2.5 h-2.5" />}
                     {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
                     {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
