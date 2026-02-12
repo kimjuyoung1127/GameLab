@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from typing import List
-from app.models.schemas import SessionResponse, AudioFileResponse
+from app.models.sessions import SessionResponse, AudioFileResponse
 from app.core.supabase_client import supabase
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])

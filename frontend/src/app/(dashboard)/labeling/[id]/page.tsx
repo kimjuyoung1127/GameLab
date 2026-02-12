@@ -36,6 +36,7 @@ import { useWaveform } from "@/lib/hooks/use-waveform";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
 import { endpoints } from "@/lib/api/endpoints";
+import { enqueueStatusUpdate } from "@/lib/api/action-queue";
 import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus, Session } from "@/types";
 
 /* ------------------------------------------------------------------ */
@@ -256,26 +257,32 @@ export default function LabelingWorkspacePage() {
 
   /* ----- Handlers ------------------------------------------------- */
   const handleConfirm = useCallback(() => {
+    const currentId = selectedSuggestionId;
     const result = confirmSuggestion();
     if (result) {
       addScore(result.points);
       addConfirm();
       incrementStreak();
+      if (currentId) enqueueStatusUpdate(currentId, "confirmed");
     }
-  }, [confirmSuggestion, addScore, addConfirm, incrementStreak]);
+  }, [confirmSuggestion, addScore, addConfirm, incrementStreak, selectedSuggestionId]);
 
   const handleReject = useCallback(() => {
+    const currentId = selectedSuggestionId;
     rejectSuggestion();
-  }, [rejectSuggestion]);
+    if (currentId) enqueueStatusUpdate(currentId, "rejected");
+  }, [rejectSuggestion, selectedSuggestionId]);
 
   const handleApplyFix = useCallback(() => {
+    const currentId = selectedSuggestionId;
     const result = applyFix();
     if (result) {
       addScore(result.points);
       addFix();
       incrementStreak();
+      if (currentId) enqueueStatusUpdate(currentId, "corrected");
     }
-  }, [applyFix, addScore, addFix, incrementStreak]);
+  }, [applyFix, addScore, addFix, incrementStreak, selectedSuggestionId]);
 
   function handleFileClick(file: AudioFile) {
     setCurrentFile(file.id);

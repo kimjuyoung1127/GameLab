@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from typing import List
-from app.models.schemas import LeaderboardEntry
+from app.models.leaderboard import LeaderboardEntry
 from app.core.supabase_client import supabase
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])

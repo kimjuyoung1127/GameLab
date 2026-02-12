@@ -16,7 +16,7 @@ import type { UploadJobStatus } from "@/types";
 import { endpoints } from "@/lib/api/endpoints";
 
 const ACCEPTED_FORMATS = [".wav", ".m4a", ".mp3"];
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
 
 interface FileEntry {
   id: string;
@@ -67,7 +67,7 @@ function validateFile(file: File): string | null {
     return `Unsupported format (${ext}). Only .wav, .m4a, .mp3 are allowed.`;
   }
   if (file.size > MAX_FILE_SIZE) {
-    return `File is larger than 100MB (${formatBytes(file.size)}).`;
+    return `File is larger than 1GB (${formatBytes(file.size)}).`;
   }
   return null;
 }
@@ -275,7 +275,7 @@ export default function UploadPage() {
               <span className="text-accent font-medium">.wav</span> (recommended),{" "}
               <span className="text-accent font-medium">.m4a</span> (iPhone),{" "}
               <span className="text-accent font-medium">.mp3</span> (Android/messenger)
-              {" "}&middot; max 100MB
+              {" "}&middot; max 1GB
             </p>
             <p className="text-text-muted text-xs">
               Files are converted on the server to wav/mono/16kHz before analysis.
@@ -309,7 +309,7 @@ export default function UploadPage() {
             <Upload className="w-7 h-7 text-primary" />
           </div>
           <p className="text-sm font-medium text-text mb-1">Drag files here or click to select</p>
-          <p className="text-xs text-text-muted">.wav, .m4a, .mp3 &middot; max 100MB &middot; multi-select supported</p>
+          <p className="text-xs text-text-muted">.wav, .m4a, .mp3 &middot; max 1GB &middot; multi-select supported</p>
         </div>
 
         {files.length > 0 && (

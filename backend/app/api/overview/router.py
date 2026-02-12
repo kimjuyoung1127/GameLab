@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException
-from app.models.schemas import OverviewMetrics
+from app.models.overview import OverviewMetrics
 from app.core.supabase_client import supabase
 
 router = APIRouter(prefix="/api/overview", tags=["overview"])

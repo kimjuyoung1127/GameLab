@@ -1,17 +1,111 @@
 ﻿# GameLab Master Plan
 
-기준일: 2026-02-11 (KST)
+기준일: 2026-02-12 (KST)
 프로젝트: Smart Spectro-Tagging (GameLab)
 협업 폴더: `ai-context`
 
+## 0) 프로젝트 트리 구조
+
+```
+GameLab/
+├── ai-context/                         ← 협업 문서
+│   ├── START-HERE.md
+│   ├── master-plan.md
+│   ├── project-context.md
+│   ├── sprint-close-2026-02-12.md
+│   ├── claude-coding-guideline.md
+│   ├── codex-review-guideline.md
+│   ├── logs/
+│   └── archive/
+├── backend/                            ← FastAPI + Supabase
+│   ├── .env
+│   ├── requirements.txt
+│   └── app/
+│       ├── main.py
+│       ├── core/
+│       │   ├── config.py
+│       │   └── supabase_client.py
+│       ├── models/                     ← 도메인별 모델 (1:1 미러)
+│       │   ├── common.py              ↔ FE types/common.ts
+│       │   ├── upload.py              ↔ FE types/upload.ts
+│       │   ├── jobs.py
+│       │   ├── sessions.py            ↔ FE types/sessions.ts
+│       │   ├── labeling.py            ↔ FE types/labeling.ts
+│       │   ├── overview.py            ↔ FE types/overview.ts
+│       │   ├── leaderboard.py         ↔ FE types/leaderboard.ts
+│       │   └── schemas.py             (re-export barrel)
+│       ├── api/                        ← 도메인별 라우터 (1:1 미러)
+│       │   ├── upload/router.py       ↔ FE lib/api/upload.ts
+│       │   ├── jobs/router.py         ↔ FE lib/api/jobs.ts
+│       │   ├── sessions/router.py     ↔ FE lib/api/sessions.ts
+│       │   ├── labeling/router.py     ↔ FE lib/api/labeling.ts
+│       │   ├── overview/router.py     ↔ FE lib/api/overview.ts
+│       │   └── leaderboard/router.py  ↔ FE lib/api/leaderboard.ts
+│       └── services/
+│           ├── job_manager.py
+│           └── analysis/
+│               ├── engine.py           (AnalysisEngine ABC)
+│               ├── soundlab_v57.py
+│               ├── rule_fallback.py
+│               ├── registry.py
+│               └── service.py          (AnalysisService facade)
+├── frontend/                           ← Next.js + React
+│   └── src/
+│       ├── types/                      ← 도메인별 타입 (1:1 미러)
+│       │   ├── common.ts
+│       │   ├── upload.ts
+│       │   ├── sessions.ts
+│       │   ├── labeling.ts
+│       │   ├── overview.ts
+│       │   ├── leaderboard.ts
+│       │   └── index.ts               (re-export barrel)
+│       ├── lib/
+│       │   ├── api/                    ← 도메인별 API (1:1 미러)
+│       │   │   ├── upload.ts
+│       │   │   ├── jobs.ts
+│       │   │   ├── sessions.ts
+│       │   │   ├── labeling.ts
+│       │   │   ├── overview.ts
+│       │   │   ├── leaderboard.ts
+│       │   │   ├── action-queue.ts     (핫키 스팸 방어 큐)
+│       │   │   └── endpoints.ts        (re-export barrel)
+│       │   ├── store/
+│       │   │   ├── annotation-store.ts
+│       │   │   ├── session-store.ts
+│       │   │   ├── score-store.ts
+│       │   │   └── ui-store.ts
+│       │   └── hooks/
+│       │       ├── use-autosave.ts
+│       │       ├── use-waveform.ts
+│       │       └── use-audio-player.ts
+│       ├── components/
+│       │   ├── layout/ (TopBar, Sidebar, DashboardShell, HotkeyHelp, UnsavedModal)
+│       │   └── domain/labeling/WaveformCanvas.tsx
+│       └── app/
+│           ├── (auth)/login/page.tsx
+│           └── (dashboard)/
+│               ├── upload/page.tsx
+│               ├── labeling/[id]/page.tsx
+│               ├── overview/page.tsx
+│               ├── sessions/page.tsx
+│               └── leaderboard/page.tsx
+├── docs/ (Prd.md, react.md, bone.md, schema.md, ...)
+└── scripts/ (sql-chunks/, extract-and-insert.js)
+```
+
+### 1:1 미러 매핑 규칙
+- `BE models/{domain}.py` ↔ `FE types/{domain}.ts`
+- `BE api/{domain}/router.py` ↔ `FE lib/api/{domain}.ts`
+- 도메인: upload, jobs, sessions, labeling, overview, leaderboard, common
+
 ## 1) 시작 문서 경로 (레포 루트 기준)
-1. `ai-context/master-plan.md`
-2. `ai-context/project-context.md`
-3. `ai-context/claude-coding-guideline.md`
-4. `ai-context/sprint-handoff-2026-02-11-pm.md`
-5. `ai-context/worklog.md`
-6. `ai-context/review-log.md`
-7. `ai-context/day-close-checklist.md`
+1. `ai-context/START-HERE.md`
+2. `ai-context/master-plan.md`
+3. `ai-context/project-context.md`
+4. `ai-context/sprint-close-2026-02-12.md`
+5. `ai-context/claude-coding-guideline.md`
+6. `ai-context/codex-review-guideline.md`
+7. `ai-context/logs/2026-02-12-session-log.md`
 
 ## 2) 제품 기준 문서 (Source of Truth)
 1. `docs/Prd.md`
@@ -22,8 +116,8 @@
 - 절대경로 금지
 - 레포 루트 상대경로만 사용
 - 실행 명령은 항상 `smart-spectro-tagging` 기준으로 기록
-- 협업 문서 운영 기본: 작업 중에는 `sprint-handoff-*.md` + `ai-context/logs/*.md`만 갱신
-- `worklog.md`, `review-log.md`, `master-plan.md`는 마일스톤 종료 시 일괄 정리
+- 협업 문서 운영 기본: 작업 중에는 `ai-context/sprint-close-YYYY-MM-DD.md` + `ai-context/logs/*.md` 중심으로 갱신
+- 완료된 implementation brief/handoff/worklog/review/slack/day-close 문서는 날짜 폴더로 archive 보관
 
 ## 4) 현재 단계와 목표
 - 현재 단계: Phase 1.5 (Phase 2 준비)
@@ -62,6 +156,15 @@
 
 5. 모바일 1차 점검
 - 완료 기준: `/sessions`, `/labeling/[id]`, `/leaderboard`에서 핵심 플로우 수행 가능
+
+## 6-1) Sprint 12.2 완료 상태 (2026-02-12)
+- 완료 보고: `ai-context/sprint-close-2026-02-12.md`
+- 핵심 결과:
+  1. Backend API 강화(PATCH suggestion, jobs payload 표준화, upload 비동기 분석)
+  2. Analysis plugin path 적용(`AnalysisService -> EngineRegistry -> Engine`)
+  3. Frontend action queue 신뢰성 보강(serialize/coalesce/offline hydrate)
+  4. Large file 1GB 정책 FE/BE 동시 적용
+  5. schema/migration/docs 반영 완료
 
 ## 7) Phase 전환 기준
 - Phase 1 -> 2 진입 조건:
