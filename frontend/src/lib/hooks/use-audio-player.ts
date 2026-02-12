@@ -10,6 +10,7 @@ export interface AudioPlayerState {
   pause: () => void;
   toggle: () => void;
   seek: (time: number) => void;
+  playRegion: (start: number, end: number) => void;
 }
 
 /**
@@ -23,6 +24,7 @@ export function useAudioPlayer(
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
+  const regionEndRef = useRef<number | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -77,7 +79,14 @@ export function useAudioPlayer(
     if (audioRef.current) {
       const tick = () => {
         if (audioRef.current) {
-          setCurrentTime(audioRef.current.currentTime);
+          const t = audioRef.current.currentTime;
+          if (regionEndRef.current !== null && t >= regionEndRef.current) {
+            audioRef.current.pause();
+            setIsPlaying(false);
+            regionEndRef.current = null;
+            return;
+          }
+          setCurrentTime(t);
         }
         rafRef.current = requestAnimationFrame(tick);
       };
@@ -90,6 +99,11 @@ export function useAudioPlayer(
         lastTimeRef.current = now;
         setCurrentTime((prev) => {
           const next = prev + dt;
+          if (regionEndRef.current !== null && next >= regionEndRef.current) {
+            setIsPlaying(false);
+            regionEndRef.current = null;
+            return regionEndRef.current ?? next;
+          }
           if (next >= duration) {
             setIsPlaying(false);
             return 0;
@@ -139,5 +153,14 @@ export function useAudioPlayer(
     [duration],
   );
 
-  return { isPlaying, currentTime, duration, play, pause, toggle, seek };
+  const playRegion = useCallback(
+    (start: number, end: number) => {
+      regionEndRef.current = end;
+      seek(start);
+      play();
+    },
+    [seek, play],
+  );
+
+  return { isPlaying, currentTime, duration, play, pause, toggle, seek, playRegion };
 }

@@ -11,6 +11,8 @@ class SuggestionDraft:
     end_time: float
     freq_low: int
     freq_high: int
+    band_type: str = ""
+    metadata: dict | None = None
 
 
 class AnalysisEngine(ABC):

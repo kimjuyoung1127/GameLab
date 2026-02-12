@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AudioLines,
@@ -152,6 +152,9 @@ export default function LabelingWorkspacePage() {
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "done">("all");
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [fileProgressMap, setFileProgressMap] = useState<Record<string, { total: number; reviewed: number }>>({});
+  const [fileCompleteToast, setFileCompleteToast] = useState(false);
+  const hasInteracted = useRef(false);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -215,9 +218,9 @@ export default function LabelingWorkspacePage() {
         const filesData = (await filesRes.json()) as AudioFile[];
 
         setSessions(sessionsData);
+        const targetSession = setCurrentSessionById(sessionId);
         setFiles(filesData);
 
-        const targetSession = setCurrentSessionById(sessionId);
         if (!targetSession && filesData.length === 0) {
           router.replace("/sessions");
         }
@@ -232,7 +235,9 @@ export default function LabelingWorkspacePage() {
   useEffect(() => {
     if (!sessionId || !activeFileId) return;
     setSuggestionError(null);
-    const loadSuggestionData = async () => {
+    let cancelled = false;
+
+    const loadSuggestionData = async (retryCount = 0) => {
       try {
         const res = await fetch(endpoints.labeling.suggestions(sessionId));
         if (!res.ok) {
@@ -240,6 +245,24 @@ export default function LabelingWorkspacePage() {
         }
         const all = (await res.json()) as AISuggestion[];
         const filtered = all.filter((s) => s.audioId === activeFileId);
+
+        if (filtered.length === 0 && retryCount < 5 && !cancelled) {
+          await new Promise((r) => setTimeout(r, 3000));
+          if (!cancelled) return loadSuggestionData(retryCount + 1);
+          return;
+        }
+
+        if (cancelled) return;
+
+        // Compute per-file progress map from all session suggestions
+        const progressMap: Record<string, { total: number; reviewed: number }> = {};
+        for (const s of all) {
+          if (!progressMap[s.audioId]) progressMap[s.audioId] = { total: 0, reviewed: 0 };
+          progressMap[s.audioId].total++;
+          if (s.status !== "pending") progressMap[s.audioId].reviewed++;
+        }
+        setFileProgressMap(progressMap);
+
         loadSuggestions(filtered);
 
         const saved = loadSavedProgress(activeFileId);
@@ -247,16 +270,19 @@ export default function LabelingWorkspacePage() {
           restoreSuggestions(saved.suggestions);
         }
       } catch (err) {
+        if (cancelled) return;
         loadSuggestions([]);
         setSuggestionError((err as Error).message || "Failed to load suggestions");
       }
     };
 
     void loadSuggestionData();
+    return () => { cancelled = true; };
   }, [activeFileId, loadSuggestions, restoreSuggestions, sessionId]);
 
   /* ----- Handlers ------------------------------------------------- */
   const handleConfirm = useCallback(() => {
+    hasInteracted.current = true;
     const currentId = selectedSuggestionId;
     const result = confirmSuggestion();
     if (result) {
@@ -268,12 +294,14 @@ export default function LabelingWorkspacePage() {
   }, [confirmSuggestion, addScore, addConfirm, incrementStreak, selectedSuggestionId]);
 
   const handleReject = useCallback(() => {
+    hasInteracted.current = true;
     const currentId = selectedSuggestionId;
     rejectSuggestion();
     if (currentId) enqueueStatusUpdate(currentId, "rejected");
   }, [rejectSuggestion, selectedSuggestionId]);
 
   const handleApplyFix = useCallback(() => {
+    hasInteracted.current = true;
     const currentId = selectedSuggestionId;
     const result = applyFix();
     if (result) {
@@ -288,14 +316,41 @@ export default function LabelingWorkspacePage() {
     setCurrentFile(file.id);
   }
 
+  const isLastFile = (() => {
+    if (!activeFileId) return true;
+    const idx = audioFiles.findIndex((f) => f.id === activeFileId);
+    return idx >= audioFiles.length - 1;
+  })();
+
   function handleNextFile() {
     if (!activeFileId) return;
     const idx = audioFiles.findIndex((f) => f.id === activeFileId);
     const nextFile = audioFiles[idx + 1];
     if (nextFile) {
       setCurrentFile(nextFile.id);
+    } else {
+      router.push("/sessions");
     }
   }
+
+  /* ----- File completion detection + auto-next -------------------- */
+  useEffect(() => {
+    if (!hasInteracted.current) return;
+    if (pendingCount === 0 && totalCount > 0 && !fileCompleteToast) {
+      setFileCompleteToast(true);
+      const timer = setTimeout(() => {
+        setFileCompleteToast(false);
+        handleNextFile();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingCount, totalCount, fileCompleteToast]);
+
+  // Reset toast when file changes
+  useEffect(() => {
+    setFileCompleteToast(false);
+    hasInteracted.current = false;
+  }, [activeFileId]);
 
   /* ----- Hotkeys -------------------------------------------------- */
   useEffect(() => {
@@ -337,12 +392,42 @@ export default function LabelingWorkspacePage() {
         case "f":
           if (mode === "edit") handleApplyFix();
           break;
+        case " ": {
+          e.preventDefault();
+          const sel = suggestions.find((s) => s.id === selectedSuggestionId);
+          if (sel && !player.isPlaying) {
+            player.playRegion(sel.startTime, sel.endTime);
+          } else {
+            player.toggle();
+          }
+          break;
+        }
+        case "tab": {
+          e.preventDefault();
+          const idx = suggestions.findIndex((s) => s.id === selectedSuggestionId);
+          const dir = e.shiftKey ? -1 : 1;
+          const next = (idx + dir + suggestions.length) % suggestions.length;
+          selectSuggestion(suggestions[next]?.id ?? null);
+          break;
+        }
+        case "arrowdown": {
+          e.preventDefault();
+          const idx = suggestions.findIndex((s) => s.id === selectedSuggestionId);
+          selectSuggestion(suggestions[Math.min(idx + 1, suggestions.length - 1)]?.id ?? null);
+          break;
+        }
+        case "arrowup": {
+          e.preventDefault();
+          const idx = suggestions.findIndex((s) => s.id === selectedSuggestionId);
+          selectSuggestion(suggestions[Math.max(idx - 1, 0)]?.id ?? null);
+          break;
+        }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mode, handleConfirm, handleReject, handleApplyFix, undo, redo, setTool]);
+  }, [mode, handleConfirm, handleReject, handleApplyFix, undo, redo, setTool, player, suggestions, selectedSuggestionId, selectSuggestion]);
 
   /* ================================================================ */
   /*  RENDER                                                          */
@@ -485,6 +570,11 @@ export default function LabelingWorkspacePage() {
                       {file.duration}
                     </span>
                     <span className="text-[10px] text-text-muted">{file.sampleRate}</span>
+                    {fileProgressMap[file.id] && (
+                      <span className="text-[10px] text-text-muted">
+                        {fileProgressMap[file.id].reviewed}/{fileProgressMap[file.id].total}
+                      </span>
+                    )}
                   </div>
                 </button>
               );
@@ -567,11 +657,25 @@ export default function LabelingWorkspacePage() {
               <Redo2 className="w-4 h-4" />
             </button>
 
-            {/* File indicator + progress */}
+            {/* File indicator + progress + export */}
             <div className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
               <span className="text-text-secondary">
                 {confirmedCount}/{totalCount} tagged
               </span>
+              <a
+                href={endpoints.labeling.export(sessionId, "csv")}
+                download
+                className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
+              >
+                CSV
+              </a>
+              <a
+                href={endpoints.labeling.export(sessionId, "json")}
+                download
+                className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
+              >
+                JSON
+              </a>
               <div className="flex items-center gap-2">
                 <FileAudio className="w-3.5 h-3.5" />
                 <span className="font-medium text-text-secondary">
@@ -597,6 +701,16 @@ export default function LabelingWorkspacePage() {
 
             {/* Spectrogram zone */}
             <div className="flex-1 relative overflow-hidden">
+            {/* File complete toast */}
+            {fileCompleteToast && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+                <div className="bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg">
+                  <Check className="w-8 h-8 mx-auto mb-2" />
+                  <p className="text-sm font-bold">{isLastFile ? "All Files Complete!" : "File Complete!"}</p>
+                  <p className="text-xs opacity-80 mt-1">{isLastFile ? "Returning to sessions..." : "Moving to next file..."}</p>
+                </div>
+              </div>
+            )}
             {/* Y-axis labels */}
             <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
               {["20kHz", "15kHz", "10kHz", "5kHz", "0Hz"].map((label) => (
@@ -784,7 +898,7 @@ export default function LabelingWorkspacePage() {
           <div className="flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0">
             <div className="text-xs text-text-muted">
               {activeSuggestion ? (
-                <span><span className="font-bold text-text">{activeSuggestion.label}</span> ??{(activeSuggestion.confidence * 100).toFixed(0)}%</span>
+                <span><span className="font-bold text-text">{activeSuggestion.label}</span> | {activeSuggestion.confidence}%</span>
               ) : (
                 <span>No suggestion selected</span>
               )}
@@ -818,11 +932,23 @@ export default function LabelingWorkspacePage() {
             <h2 className="text-xs font-bold text-text uppercase tracking-wider">
               AI Analysis
             </h2>
-            {pendingCount > 0 && (
-              <span className="ml-auto text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full uppercase">
-                {pendingCount} pending
-              </span>
-            )}
+            <div className="ml-auto flex items-center gap-1.5">
+              {pendingCount > 0 && (
+                <span className="text-[9px] font-bold bg-orange-400/20 text-orange-400 px-2 py-0.5 rounded-full">
+                  {pendingCount} pending
+                </span>
+              )}
+              {confirmedCount > 0 && (
+                <span className="text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full">
+                  {confirmedCount} ok
+                </span>
+              )}
+              {totalCount - pendingCount - confirmedCount > 0 && (
+                <span className="text-[9px] font-bold bg-danger/20 text-danger px-2 py-0.5 rounded-full">
+                  {totalCount - pendingCount - confirmedCount} fixed
+                </span>
+              )}
+            </div>
           </div>
 
           {/* ---- Review Mode: Suggestion Card ---- */}

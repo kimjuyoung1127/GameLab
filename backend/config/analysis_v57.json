@@ -1,0 +1,38 @@
+{
+  "version": "5.7",
+  "chunk_duration_sec": 5.0,
+  "bands": {
+    "id_wide":   { "freq": 535.0, "bw": 10.0, "label": "Machine ON" },
+    "surge_60":  { "freq": 60.0,  "bw": 2.0,  "label": "Startup Surge Detected" },
+    "surge_120": { "freq": 120.0, "bw": 2.0,  "label": "Startup Surge Detected" },
+    "diag_180":  { "freq": 180.0, "bw": 2.0,  "label": "Diagnostic Band Activity" }
+  },
+  "threshold": {
+    "method": "otsu",
+    "multiplier": 1.5,
+    "hysteresis_factor": 0.8
+  },
+  "surge": {
+    "median_multiplier": 2.0
+  },
+  "gap_fill": {
+    "max_gap_minutes": 2.0
+  },
+  "trim": {
+    "safety_buffer_sec": 60.0,
+    "drop_ratio": 0.5,
+    "drop_threshold_factor": 0.5
+  },
+  "noise_removal": {
+    "min_segment_duration_minutes": 1.0
+  },
+  "steps": [
+    "load_audio",
+    "feature_extraction",
+    "threshold",
+    "state_machine",
+    "gap_fill",
+    "trim",
+    "noise_removal"
+  ]
+}

@@ -5,8 +5,8 @@
 ## 1) 시작 순서
 1. `master-plan.md`
 2. `project-context.md`
-3. `worklog.md`
-4. `review-log.md`
+3. `ai-context/archive/2026-02-11/worklog.md`
+4. `ai-context/archive/2026-02-11/review-log.md`
 5. 기준 문서: `docs/Prd.md`, `docs/react.md`
 
 ## 2) 역할

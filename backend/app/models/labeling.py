@@ -17,9 +17,9 @@ class SuggestionResponse(CamelModel):
     description: str
     start_time: float
     end_time: float
-    freq_low: int
-    freq_high: int
-    status: str
+    freq_low: float
+    freq_high: float
+    status: SuggestionStatusValue
 
 
 class UpdateSuggestionRequest(CamelModel):

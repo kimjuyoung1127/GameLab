@@ -5,3 +5,12 @@ python-multipart==0.0.20
 pydantic==2.10.5
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
+
+# Analysis engine dependencies (Sprint 12.3)
+numpy>=1.24.0,<2.0
+scipy>=1.11.0,<2.0
+scikit-image>=0.21.0,<1.0
+
+# Test dependencies
+pytest>=7.0
+pytest-asyncio>=0.21

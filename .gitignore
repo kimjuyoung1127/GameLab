@@ -43,6 +43,7 @@ next-env.d.ts
 __pycache__/
 *.py[cod]
 backend/uploads/
+.tmp-accept/
 
 # Windows reserved artifact
 nul

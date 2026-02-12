@@ -9,7 +9,9 @@ class Settings(BaseSettings):
     max_file_size_mb: int = 1024
     upload_dir: str = "./uploads"
     allowed_extensions: list[str] = [".wav", ".m4a", ".mp3"]
-    analysis_engine: str = "rule_fallback"
+    analysis_engine: str = "soundlab_v57"
+    analysis_timeout_sec: int = 120
+    analysis_config_dir: str = "./config"
 
     class Config:
         env_file = ".env"

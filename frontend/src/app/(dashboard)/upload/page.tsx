@@ -122,8 +122,8 @@ export default function UploadPage() {
   }, []);
 
   const pollJobStatus = useCallback(async (entryId: string, jobId: string) => {
-    for (let i = 0; i < 6; i += 1) {
-      await new Promise((r) => setTimeout(r, 1000));
+    for (let i = 0; i < 30; i += 1) {
+      await new Promise((r) => setTimeout(r, 2000));
       try {
         const res = await fetch(endpoints.jobs.status(jobId));
         if (!res.ok) continue;

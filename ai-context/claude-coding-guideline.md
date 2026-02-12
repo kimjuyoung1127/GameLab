@@ -5,8 +5,8 @@
 ## 1) 시작 순서
 1. `master-plan.md`
 2. `project-context.md`
-3. `sprint-handoff-2026-02-11-pm.md`
-4. `ai-context/logs`의 최신 session log 파일
+3. `ai-context/archive/2026-02-12/sprint-close-2026-02-12-s12.5.md`
+4. `ai-context/logs/2026-02-12-session-log.md`
 5. 제품 기준 문서 확인: `docs/Prd.md`, `docs/react.md`, `docs/bone.md`
 
 실행 표준(시작 순서 바로 적용):

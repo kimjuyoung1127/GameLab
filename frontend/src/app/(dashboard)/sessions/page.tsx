@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Search,
   Plus,
-  MoreVertical,
+  Trash2,
   FileText,
   Shield,
   ChevronLeft,
@@ -84,6 +84,9 @@ export default function SessionsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [apiError, setApiError] = useState<string | null>(null);
+  const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +134,56 @@ export default function SessionsPage() {
 
   function handleCreateSession() {
     router.push("/upload");
+  }
+
+  async function handleDeleteSession(sessionId: string) {
+    setDeleting(true);
+    try {
+      const res = await fetch(endpoints.sessions.delete(sessionId), { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSessions(sessions.filter((s) => s.id !== sessionId));
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(sessionId); return n; });
+    } catch (err) {
+      setApiError((err as Error).message || "Failed to delete session");
+    } finally {
+      setDeleting(false);
+      setDeleteSessionId(null);
+    }
+  }
+
+  async function handleBulkDelete() {
+    setDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        const res = await fetch(endpoints.sessions.delete(id), { method: "DELETE" });
+        if (!res.ok) throw new Error(`Failed to delete ${id}`);
+      }
+      setSessions(sessions.filter((s) => !selectedIds.has(s.id)));
+      setSelectedIds(new Set());
+    } catch (err) {
+      setApiError((err as Error).message || "Bulk delete failed");
+    } finally {
+      setDeleting(false);
+      setDeleteSessionId(null);
+    }
+  }
+
+  function toggleSelect(sessionId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((s) => s.id)));
+    }
   }
 
   return (
@@ -235,11 +288,40 @@ export default function SessionsPage() {
           </div>
         </div>
 
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 bg-danger/5 border border-danger/20 rounded-lg px-4 py-2">
+            <span className="text-sm text-text-secondary font-medium">
+              {selectedIds.size} selected
+            </span>
+            <button
+              onClick={() => setDeleteSessionId("__bulk__")}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-danger text-white text-xs font-bold"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Selected
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-text-muted hover:text-text-secondary"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         <div className="bg-panel rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
+                  <th className="w-10 px-3 py-3.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === filtered.length && filtered.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-border"
+                    />
+                  </th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Session ID</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Files</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Progress</th>
@@ -258,6 +340,14 @@ export default function SessionsPage() {
                       onClick={() => handleRowClick(session)}
                       className="hover:bg-panel-light/50 cursor-pointer transition-colors"
                     >
+                      <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(session.id)}
+                          onChange={() => toggleSelect(session.id)}
+                          className="rounded border-border"
+                        />
+                      </td>
                       <td className="px-5 py-4">
                         <div>
                           <p className="font-semibold text-text">{session.id}</p>
@@ -282,10 +372,12 @@ export default function SessionsPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            setDeleteSessionId(session.id);
                           }}
-                          className="p-1.5 rounded-md hover:bg-panel-light transition-colors"
+                          className="p-1.5 rounded-md hover:bg-danger/10 hover:text-danger transition-colors"
+                          title="Delete session"
                         >
-                          <MoreVertical className="w-4 h-4 text-text-muted" />
+                          <Trash2 className="w-4 h-4 text-text-muted" />
                         </button>
                       </td>
                     </tr>
@@ -294,7 +386,7 @@ export default function SessionsPage() {
 
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-text-muted">
+                    <td colSpan={8} className="px-5 py-12 text-center text-text-muted">
                       No real sessions found yet. Upload files first.
                     </td>
                   </tr>
@@ -318,6 +410,43 @@ export default function SessionsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteSessionId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-panel border border-border rounded-xl p-6 w-96 shadow-xl">
+            <h3 className="text-sm font-bold text-text mb-2">
+              {deleteSessionId === "__bulk__" ? `Delete ${selectedIds.size} Sessions?` : "Delete Session?"}
+            </h3>
+            <p className="text-xs text-text-muted mb-4">
+              {deleteSessionId === "__bulk__"
+                ? "This will permanently delete the selected sessions, all audio files, and all suggestions. This action cannot be undone."
+                : "This will permanently delete the session, all audio files, and all suggestions. This action cannot be undone."}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteSessionId(null)}
+                className="px-4 py-2 rounded-lg text-xs text-text-secondary hover:bg-panel-light"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (deleteSessionId === "__bulk__") {
+                    void handleBulkDelete();
+                  } else {
+                    void handleDeleteSession(deleteSessionId);
+                  }
+                }}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

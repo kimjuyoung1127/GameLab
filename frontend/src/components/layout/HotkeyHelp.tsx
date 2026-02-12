@@ -23,6 +23,20 @@ const HOTKEY_SECTIONS = [
     ],
   },
   {
+    title: "Playback",
+    keys: [
+      { key: "Space", desc: "Play / Pause (region if selected)" },
+    ],
+  },
+  {
+    title: "Navigation",
+    keys: [
+      { key: "Tab", desc: "Next suggestion" },
+      { key: "Shift+Tab", desc: "Previous suggestion" },
+      { key: "↑ / ↓", desc: "Navigate suggestions" },
+    ],
+  },
+  {
     title: "Actions",
     keys: [
       { key: "Ctrl+Z", desc: "Undo" },

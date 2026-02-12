@@ -102,10 +102,17 @@ GameLab/
 1. `ai-context/START-HERE.md`
 2. `ai-context/master-plan.md`
 3. `ai-context/project-context.md`
-4. `ai-context/sprint-close-2026-02-12.md`
+4. `ai-context/maintenance-analysis-pipeline.md` (파이프라인 유지보수)
 5. `ai-context/claude-coding-guideline.md`
 6. `ai-context/codex-review-guideline.md`
 7. `ai-context/logs/2026-02-12-session-log.md`
+
+### 아카이브 (참고용)
+- `ai-context/archive/2026-02-12/sprint-close-2026-02-12.md` (Sprint 12.2)
+- `ai-context/archive/2026-02-12/sprint-close-2026-02-12-s12.3.md` (Sprint 12.3)
+- `ai-context/archive/2026-02-12/sprint-close-2026-02-12-s12.4.md` (Sprint 12.4)
+- `ai-context/archive/2026-02-12/sprint-close-2026-02-12-s12.5.md` (Sprint 12.5)
+- `ai-context/archive/2026-02-12/claude-implementation-brief-2026-02-12.md`
 
 ## 2) 제품 기준 문서 (Source of Truth)
 1. `docs/Prd.md`
@@ -138,15 +145,58 @@ GameLab/
 7. 사이드바 404 링크 제거 (`3dd4329`)
 
 ### 진행중
-1. ~~Tailwind 동적 클래스 purge 리스크 제거~~ ✅
-2. ~~autosave 키 구조 개선(`sst-autosave-${audioId}`)~~ ✅
-3. ~~협업 문서 포맷 단일화(로그/리뷰/handoff)~~ ✅
+1. SoundLab V5.7 실 WAV fallback 원인 조사 (BE 로그 분석)
+2. 좁은 주파수 대역 UI 가시성 개선 (zoom 또는 freq 스케일 조정)
 
 ### 후보
 1. SoundLab 패턴 이식(heavy/light, timeline/event-log)
 2. 스펙트로그램 Canvas/WebGL PoC
 3. 모바일 반응형 보강
 4. Mock -> API 경계(`lib/api/endpoints.ts`) 고정
+
+## 5-1) Sprint 12.3 완료 상태 (2026-02-12)
+- 완료 보고: `ai-context/sprint-close-2026-02-12-s12.3.md`
+- 유지보수 가이드: `ai-context/maintenance-analysis-pipeline.md`
+- 핵심 결과:
+  1. ✅ 플러그형 파이프라인 아키텍처 (PipelineStep ABC + STEP_REGISTRY + build_pipeline)
+  2. ✅ SoundLab V5.7 알고리즘 포팅 (Goertzel, Otsu, state machine, gap fill, trim, noise removal)
+  3. ✅ JSON 설정 파일 (`backend/config/analysis_v57.json`) — 코드 변경 없이 파라미터 조정
+  4. ✅ AnalysisService timeout(120s) + auto-fallback + structured logging
+  5. ✅ 테스트 하네스 11개 통과 (스텝 단위 + 파이프라인 통합 + 회귀)
+  6. ✅ SuggestionDraft 계약 확장 (band_type, metadata 옵셔널)
+
+## 5-2) Sprint 12.4 완료 상태 (2026-02-12)
+- 완료 보고: `ai-context/sprint-close-2026-02-12-s12.4.md`
+- 핵심 결과:
+  1. ✅ FE ↔ BE E2E 연동 완료 (업로드 → 분석 → DB → labeling 표시)
+  2. ✅ 기본 엔진 soundlab_v57 전환 + .env 반영
+  3. ✅ freq_low/freq_high 타입 float 정렬 (DB float8 일치)
+  4. ✅ 분석 완료 후 세션 status=completed 자동 업데이트
+  5. ✅ FE 폴링 60초 확장 + labeling 재시도 로직
+  6. ✅ 세션 초기화 순서 버그(files 리셋) 수정
+
+## 5-3) Sprint 12.5 완료 상태 (2026-02-12)
+- 완료 보고: `ai-context/archive/2026-02-12/sprint-close-2026-02-12-s12.5.md`
+- 핵심 결과:
+  1. ✅ 스페이스바 Play/Pause + Region Playback (선택 구간 재생)
+  2. ✅ Tab/Arrow 키보드 Suggestion 이동
+  3. ✅ 파일별 진행 상황 세분화 (reviewed/total + 배지)
+  4. ✅ 세션/파일 삭제 API + UI (DELETE + RLS 정책 추가)
+  5. ✅ 라벨 데이터 내보내기 (CSV/JSON StreamingResponse)
+  6. ✅ 파일 완료 감지 + 자동 다음 이동 (마지막 파일 → sessions 복귀)
+  7. ✅ 다중 선택 + 일괄 삭제
+  8. ✅ DELETE 404 버그 수정 (PostgREST 빈 응답 + RLS 누락)
+
+## 5-4) 다음 세션 우선순위 (Sprint 12.6)
+
+### 후보 과제
+1. SoundLab V5.7 실 WAV fallback 원인 조사 (BE 로그 분석)
+2. 좁은 주파수 대역 UI 가시성 개선 (zoom 또는 freq 스케일 조정)
+3. 스펙트로그램 Canvas/WebGL PoC
+4. Non-WAV 포맷 지원 (librosa/soundfile)
+5. In-memory job store → DB 전환
+6. Phase 2 인증 도입 + RLS 정책 강화
+7. Playwright E2E 핫키 스팸 테스트
 
 ## 6) Sprint 11 (실행 순서 + 완료 기준)
 1. ✅ `sprint-handoff-2026-02-11-pm.md` 인코딩/가독성 복구

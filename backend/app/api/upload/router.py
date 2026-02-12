@@ -186,6 +186,14 @@ async def _run_analysis_jobs(session_id: str, uploaded_records: list[dict]) -> N
                 file_count=1,
             )
 
+    # Update session status after all files processed
+    try:
+        supabase.table("sst_sessions").update(
+            {"status": "completed"}
+        ).eq("id", session_id).execute()
+    except Exception:
+        logger.exception("Failed to update session status after analysis")
+
 
 def _write_uploads_atomically(
     *,
