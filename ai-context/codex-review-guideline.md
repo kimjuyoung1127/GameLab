@@ -5,8 +5,8 @@
 ## 1) 시작 순서
 1. `master-plan.md`
 2. `project-context.md`
-3. `ai-context/archive/2026-02-11/worklog.md`
-4. `ai-context/archive/2026-02-11/review-log.md`
+3. `ai-context/archive/2026-02-23/full-project-archive.md`
+4. 최신 세션 로그 (`ai-context/logs/*.md`)
 5. 기준 문서: `docs/Prd.md`, `docs/react.md`
 
 ## 2) 역할
@@ -31,5 +31,5 @@
 - 머지 불가: 치명적 또는 사용자 플로우 차단 이슈 존재
 
 ## 6) 기록 규칙
-- 리뷰 완료 즉시 `review-log.md`에 누적
+- 리뷰 완료 즉시 세션 로그(`ai-context/logs/*.md`) 또는 아카이브 문서에 누적
 - 동일 이슈 재발 시 "재발"로 표기하고 원인 추적 메모 추가

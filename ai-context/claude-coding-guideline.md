@@ -5,12 +5,12 @@
 ## 1) 시작 순서
 1. `master-plan.md`
 2. `project-context.md`
-3. `ai-context/archive/2026-02-12/sprint-close-2026-02-12-s12.5.md`
-4. `ai-context/logs/2026-02-12-session-log.md`
+3. `ai-context/archive/2026-02-23/full-project-archive.md`
+4. 최신 세션 로그 (`ai-context/logs/*.md`)
 5. 제품 기준 문서 확인: `docs/Prd.md`, `docs/react.md`, `docs/bone.md`
 
 실행 표준(시작 순서 바로 적용):
-1. `cd smart-spectro-tagging`
+1. `cd frontend`
 2. `npm install`
 3. `npm run dev`
 
@@ -46,13 +46,13 @@
 
 ## 6) 기록 규칙 (토큰 절약 운영)
 - 작업 중에는 `sprint-handoff-*.md` + `ai-context/logs/*.md`만 갱신
-- `worklog.md`, `review-log.md`, `master-plan.md`는 마일스톤 종료 시 1회 일괄 갱신
+- `master-plan.md`는 마일스톤 종료 시 1회 일괄 갱신
 - 커밋 ID와 작업 항목은 session log에 먼저 매핑하고, 마감 시 공용 문서로 반영
 
 권장 흐름:
 1. 작업 중: `sprint-handoff-*.md` 최신화
 2. 작업 중: `ai-context/logs/YYYY-MM-DD-session-log.md` append
-3. 마감 시: `worklog.md` + `review-log.md` + `master-plan.md` 일괄 정리
+3. 마감 시: `master-plan.md` + `archive` 문서 일괄 정리
 
 ## 7) 로그인 우회 정책
 - 기본값: 우회 ON

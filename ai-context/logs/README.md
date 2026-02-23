@@ -1,12 +1,15 @@
 ﻿# Session Logs
 
 목적:
-- 코딩 작업 중 토큰 절약을 위해 상세 진행 기록을 이 폴더에 누적한다.
-- 작업 중에는 handoff + session log만 갱신하고, 마일스톤 종료 시 공용 문서(worklog/review-log/master-plan)로 일괄 반영한다.
+- 작업 중 상세 진행 기록을 누적한다.
 
 파일 규칙:
 - 파일명: `YYYY-MM-DD-session-log.md`
 - append-only 권장
+
+운영 규칙:
+- 진행 중 세션 로그만 이 폴더에 유지
+- 종료된 과거 로그는 `ai-context/archive/YYYY-MM-DD/`로 이동
 
 최소 기록 항목:
 - 시간(KST)
