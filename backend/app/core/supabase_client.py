@@ -1,5 +1,10 @@
-"""Supabase 클라이언트 싱글턴 인스턴스 생성."""
-from supabase import create_client, Client
+"""Supabase client singleton and accessor."""
+from supabase import Client, create_client
+
 from app.core.config import settings
 
 supabase: Client = create_client(settings.supabase_url, settings.supabase_anon_key)
+
+
+def get_supabase() -> Client:
+    return supabase

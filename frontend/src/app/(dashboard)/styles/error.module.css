@@ -1,0 +1,33 @@
+@reference "../../globals.css";
+
+.c001 {
+  @apply flex-1 flex items-center justify-center p-8;
+}
+
+.c002 {
+  @apply text-center max-w-md;
+}
+
+.c003 {
+  @apply mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 border border-red-500/30;
+}
+
+.c004 {
+  @apply h-7 w-7 text-red-400;
+}
+
+.c005 {
+  @apply text-xl font-bold text-text mb-2;
+}
+
+.c006 {
+  @apply text-sm text-text-secondary mb-6;
+}
+
+.c007 {
+  @apply inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-light transition-colors;
+}
+
+.c008 {
+  @apply h-4 w-4;
+}

@@ -1,10 +1,12 @@
 /** 로그인 페이지: Supabase Auth 이메일/비밀번호 + 회원가입, bypass 모드 지원. */
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Mail, Lock, LogIn, AudioLines, UserPlus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import styles from "./styles/page.module.css";
 
 /* ------------------------------------------------------------------ */
 /*  Mock waveform bar heights for the left-side visualization          */
@@ -19,7 +21,7 @@ type AuthMode = "signin" | "signup";
 
 export default function LoginPage() {
   const router = useRouter();
-  const bypassLogin = process.env.NEXT_PUBLIC_BYPASS_LOGIN !== "false";
+  const t = useTranslations("login");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,20 +30,6 @@ export default function LoginPage() {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [error, setError] = useState<string | null>(null);
   const [signupSuccess, setSignupSuccess] = useState(false);
-
-  useEffect(() => {
-    if (bypassLogin) {
-      router.replace("/sessions");
-    }
-  }, [bypassLogin, router]);
-
-  if (bypassLogin) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas text-text">
-        <p className="text-sm text-text-secondary">Debug mode: entering without login...</p>
-      </div>
-    );
-  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -82,61 +70,59 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-canvas">
+    <div className={styles.c003}>
       {/* ============================================================ */}
       {/*  LEFT COLUMN - Branding & Visualization                      */}
       {/* ============================================================ */}
-      <div className="hidden w-1/2 flex-col justify-between px-16 py-12 lg:flex">
+      <div className={styles.c004}>
         {/* Top section */}
-        <div className="flex flex-col gap-8">
+        <div className={styles.c005}>
           {/* System operational badge */}
-          <div className="flex items-start">
-            <span className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+          <div className={styles.c006}>
+            <span className={styles.c007}>
+              <span className={styles.c008}>
+                <span className={styles.c009} />
+                <span className={styles.c010} />
               </span>
-              SYSTEM OPERATIONAL
+              {t("systemStatus")}
             </span>
           </div>
 
           {/* Hero heading */}
-          <div className="flex flex-col gap-4">
-            <h1 className="text-5xl font-bold leading-tight tracking-tight xl:text-6xl">
-              <span className="text-text">Advanced Audio</span>
+          <div className={styles.c011}>
+            <h1 className={styles.c012}>
+              <span className={styles.c013}>{t("heroLine1")}</span>
               <br />
-              <span className="text-primary">Anomaly Detection</span>
+              <span className={styles.c014}>{t("heroLine2")}</span>
             </h1>
 
-            <p className="max-w-md text-base leading-relaxed text-text-secondary">
-              Access the Smart Spectro-Tagging portal to analyze industrial
-              audio streams, label anomalies, and train your predictive
-              maintenance models.
+            <p className={styles.c015}>
+              {t("heroDescription")}
             </p>
           </div>
         </div>
 
         {/* Waveform visualization card */}
-        <div className="mb-8 rounded-xl border border-border bg-panel p-6">
+        <div className={styles.c016}>
           {/* Header row */}
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AudioLines className="h-4 w-4 text-primary" />
-              <span className="text-xs font-semibold tracking-wider text-text-secondary">
-                LIVE STREAM
+          <div className={styles.c017}>
+            <div className={styles.c018}>
+              <AudioLines className={styles.c019} />
+              <span className={styles.c020}>
+                {t("liveStream")}
               </span>
             </div>
-            <span className="text-xs font-mono text-text-muted">
-              SECTOR 7G // 44.1KHZ
+            <span className={styles.c021}>
+              {t("sectorInfo")}
             </span>
           </div>
 
           {/* Waveform bars */}
-          <div className="flex h-16 items-end gap-[2px]">
+          <div className={styles.c022}>
             {WAVEFORM_BARS.map((h, i) => (
               <div
                 key={i}
-                className="flex-1 rounded-t-sm bg-primary/40 transition-all"
+                className={styles.c023}
                 style={{
                   height: `${h}%`,
                   animationName: "waveformPulse",
@@ -150,11 +136,11 @@ export default function LoginPage() {
           </div>
 
           {/* Bottom metadata */}
-          <div className="mt-3 flex items-center justify-between text-[10px] text-text-muted">
-            <span>00:42:18 ELAPSED</span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
-              RECORDING
+          <div className={styles.c024}>
+            <span>{t("elapsed")}</span>
+            <span className={styles.c025}>
+              <span className={styles.c026} />
+              {t("recording")}
             </span>
           </div>
         </div>
@@ -163,110 +149,110 @@ export default function LoginPage() {
       {/* ============================================================ */}
       {/*  RIGHT COLUMN - Login Form                                   */}
       {/* ============================================================ */}
-      <div className="flex w-full items-center justify-center px-6 lg:w-1/2">
-        <div className="w-full max-w-[420px]">
+      <div className={styles.c027}>
+        <div className={styles.c028}>
           {/* Card */}
-          <div className="rounded-2xl border border-border bg-panel p-8 shadow-2xl shadow-black/30">
+          <div className={styles.c029}>
             {/* Waveform icon circle */}
-            <div className="mb-6 flex justify-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border-light bg-surface">
-                <AudioLines className="h-7 w-7 text-primary" />
+            <div className={styles.c030}>
+              <div className={styles.c031}>
+                <AudioLines className={styles.c032} />
               </div>
             </div>
 
             {/* Heading */}
-            <div className="mb-8 text-center">
-              <h2 className="text-2xl font-bold text-text">
-                {mode === "signin" ? "Welcome Back" : "Create Account"}
+            <div className={styles.c033}>
+              <h2 className={styles.c034}>
+                {mode === "signin" ? t("welcomeBack") : t("createAccount")}
               </h2>
-              <p className="mt-1 text-sm text-text-secondary">
+              <p className={styles.c035}>
                 {mode === "signin"
-                  ? "Sign in to your enterprise account"
-                  : "Sign up for a new account"}
+                  ? t("signInSubtitle")
+                  : t("signUpSubtitle")}
               </p>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <form onSubmit={handleSubmit} className={styles.c036}>
               {/* Error message */}
               {error && (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+                <div className={styles.c037}>
                   {error}
                 </div>
               )}
 
               {/* Signup success message */}
               {signupSuccess && (
-                <div className="rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent">
-                  Check your email for a confirmation link.
+                <div className={styles.c038}>
+                  {t("signUpSuccess")}
                 </div>
               )}
 
               {/* Email field */}
-              <div className="flex flex-col gap-1.5">
+              <div className={styles.c039}>
                 <label
                   htmlFor="email"
-                  className="text-xs font-semibold uppercase tracking-wider text-text-secondary"
+                  className={styles.c040}
                 >
-                  Work Email
+                  {t("workEmail")}
                 </label>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <div className={styles.c041}>
+                  <Mail className={styles.c042} />
                   <input
                     id="email"
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@company.com"
-                    className="h-11 w-full rounded-lg border border-border bg-surface pl-10 pr-4 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    placeholder={t("emailPlaceholder")}
+                    className={styles.c043}
                   />
                 </div>
               </div>
 
               {/* Password field */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
+              <div className={styles.c039}>
+                <div className={styles.c044}>
                   <label
                     htmlFor="password"
-                    className="text-xs font-semibold uppercase tracking-wider text-text-secondary"
+                    className={styles.c040}
                   >
-                    Password
+                    {t("password")}
                   </label>
                   {mode === "signin" && (
                     <button
                       type="button"
-                      className="text-xs font-medium text-primary hover:text-primary-light transition-colors"
+                      className={styles.c045}
                     >
-                      Forgot password?
+                      {t("forgotPassword")}
                     </button>
                   )}
                 </div>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <div className={styles.c041}>
+                  <Lock className={styles.c042} />
                   <input
                     id="password"
                     type="password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="h-11 w-full rounded-lg border border-border bg-surface pl-10 pr-4 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    placeholder={t("passwordPlaceholder")}
+                    className={styles.c043}
                   />
                 </div>
               </div>
 
               {/* Remember checkbox (signin only) */}
               {mode === "signin" && (
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className={styles.c046}>
                   <input
                     type="checkbox"
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
-                    className="h-4 w-4 rounded border-border-light bg-surface text-primary accent-primary focus:ring-primary focus:ring-offset-0"
+                    className={styles.c047}
                   />
-                  <span className="text-sm text-text-secondary">
-                    Remember this device
+                  <span className={styles.c002}>
+                    {t("rememberDevice")}
                   </span>
                 </label>
               )}
@@ -275,17 +261,17 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary font-semibold text-white transition-colors hover:bg-primary-light focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-panel disabled:opacity-60 disabled:cursor-not-allowed"
+                className={styles.c048}
               >
                 {isLoading ? (
-                  <span className="flex items-center gap-2">
+                  <span className={styles.c018}>
                     <svg
-                      className="h-4 w-4 animate-spin"
+                      className={styles.c049}
                       viewBox="0 0 24 24"
                       fill="none"
                     >
                       <circle
-                        className="opacity-25"
+                        className={styles.c050}
                         cx="12"
                         cy="12"
                         r="10"
@@ -293,41 +279,41 @@ export default function LoginPage() {
                         strokeWidth="4"
                       />
                       <path
-                        className="opacity-75"
+                        className={styles.c051}
                         fill="currentColor"
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                       />
                     </svg>
-                    {mode === "signin" ? "Signing in..." : "Creating account..."}
+                    {mode === "signin" ? t("signingIn") : t("creatingAccount")}
                   </span>
                 ) : (
                   <>
                     {mode === "signin" ? (
-                      <LogIn className="h-4 w-4" />
+                      <LogIn className={styles.c052} />
                     ) : (
-                      <UserPlus className="h-4 w-4" />
+                      <UserPlus className={styles.c052} />
                     )}
-                    {mode === "signin" ? "Sign In" : "Sign Up"}
+                    {mode === "signin" ? t("signIn") : t("signUp")}
                   </>
                 )}
               </button>
             </form>
 
             {/* Divider */}
-            <div className="my-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-text-muted">Or continue with</span>
-              <div className="h-px flex-1 bg-border" />
+            <div className={styles.c053}>
+              <div className={styles.c054} />
+              <span className={styles.c055}>{t("orContinueWith")}</span>
+              <div className={styles.c054} />
             </div>
 
             {/* SSO buttons */}
-            <div className="flex gap-3">
+            <div className={styles.c056}>
               {/* Google */}
               <button
                 type="button"
-                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-surface text-sm font-medium text-text transition-colors hover:bg-panel-light"
+                className={styles.c057}
               >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <svg className={styles.c058} viewBox="0 0 24 24" fill="none">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
                     fill="#4285F4"
@@ -345,29 +331,29 @@ export default function LoginPage() {
                     fill="#EA4335"
                   />
                 </svg>
-                Google
+                {t("google")}
               </button>
 
               {/* Microsoft */}
               <button
                 type="button"
-                className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-surface text-sm font-medium text-text transition-colors hover:bg-panel-light"
+                className={styles.c057}
               >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <svg className={styles.c058} viewBox="0 0 24 24" fill="none">
                   <rect x="1" y="1" width="10" height="10" fill="#F25022" />
                   <rect x="13" y="1" width="10" height="10" fill="#7FBA00" />
                   <rect x="1" y="13" width="10" height="10" fill="#00A4EF" />
                   <rect x="13" y="13" width="10" height="10" fill="#FFB900" />
                 </svg>
-                Microsoft
+                {t("microsoft")}
               </button>
             </div>
 
             {/* Footer text — Sign In / Sign Up toggle */}
-            <p className="mt-6 text-center text-sm text-text-secondary">
+            <p className={styles.c059}>
               {mode === "signin"
-                ? "Don't have an account?"
-                : "Already have an account?"}{" "}
+                ? t("noAccount")
+                : t("hasAccount")}{" "}
               <button
                 type="button"
                 onClick={() => {
@@ -375,27 +361,27 @@ export default function LoginPage() {
                   setError(null);
                   setSignupSuccess(false);
                 }}
-                className="font-medium text-primary hover:text-primary-light transition-colors"
+                className={styles.c060}
               >
-                {mode === "signin" ? "Sign Up" : "Sign In"}
+                {mode === "signin" ? t("signUp") : t("signIn")}
               </button>
             </p>
           </div>
 
           {/* Legal links */}
-          <div className="mt-6 flex items-center justify-center gap-1.5 text-xs text-text-muted">
+          <div className={styles.c061}>
             <button
               type="button"
-              className="hover:text-text-secondary transition-colors"
+              className={styles.c062}
             >
-              Privacy Policy
+              {t("privacyPolicy")}
             </button>
             <span>&middot;</span>
             <button
               type="button"
-              className="hover:text-text-secondary transition-colors"
+              className={styles.c062}
             >
-              Terms of Service
+              {t("termsOfService")}
             </button>
           </div>
         </div>

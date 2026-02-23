@@ -33,13 +33,17 @@ import {
 import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
+import { useAchievementStore } from "@/lib/store/achievement-store";
+import { useUIStore } from "@/lib/store/ui-store";
 import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
 import { useWaveform } from "@/lib/hooks/use-waveform";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
 import { endpoints } from "@/lib/api/endpoints";
 import { enqueueStatusUpdate } from "@/lib/api/action-queue";
+import { authFetch } from "@/lib/api/auth-fetch";
 import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus, Session } from "@/types";
+import { useTranslations } from "next-intl";
 
 /* ------------------------------------------------------------------ */
 /*  Spectrogram helpers                                                */
@@ -84,26 +88,27 @@ const statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg
 /* ------------------------------------------------------------------ */
 /*  Tool definitions                                                   */
 /* ------------------------------------------------------------------ */
-const tools: { id: DrawTool; icon: typeof MousePointer2; label: string; hotkey: string }[] = [
-  { id: "select", icon: MousePointer2, label: "Select", hotkey: "S" },
-  { id: "brush", icon: Pencil, label: "Brush", hotkey: "B" },
-  { id: "anchor", icon: Anchor, label: "Anchor", hotkey: "A" },
-  { id: "box", icon: Square, label: "Box", hotkey: "R" },
+const tools: { id: DrawTool; icon: typeof MousePointer2; labelKey: string; hotkey: string }[] = [
+  { id: "select", icon: MousePointer2, labelKey: "toolSelect", hotkey: "S" },
+  { id: "brush", icon: Pencil, labelKey: "toolBrush", hotkey: "B" },
+  { id: "anchor", icon: Anchor, labelKey: "toolAnchor", hotkey: "A" },
+  { id: "box", icon: Square, labelKey: "toolBox", hotkey: "R" },
 ];
 
 const zoomTools = [
-  { id: "zoom-in" as const, icon: ZoomIn, label: "Zoom In" },
-  { id: "zoom-out" as const, icon: ZoomOut, label: "Zoom Out" },
+  { id: "zoom-in" as const, icon: ZoomIn, labelKey: "zoomIn" },
+  { id: "zoom-out" as const, icon: ZoomOut, labelKey: "zoomOut" },
 ];
 
 /* ------------------------------------------------------------------ */
 /*  Status badge helper                                                */
 /* ------------------------------------------------------------------ */
 function StatusBadge({ status }: { status: string }) {
+  const t = useTranslations("labeling");
   const map: Record<string, { label: string; cls: string }> = {
-    wip: { label: "WIP", cls: "bg-warning/20 text-warning" },
-    pending: { label: "PENDING", cls: "bg-primary/20 text-primary-light" },
-    done: { label: "DONE", cls: "bg-accent/20 text-accent" },
+    wip: { label: t("statusWip"), cls: "bg-warning/20 text-warning" },
+    pending: { label: t("statusPending"), cls: "bg-primary/20 text-primary-light" },
+    done: { label: t("statusDone"), cls: "bg-accent/20 text-accent" },
   };
   const info = map[status] ?? map.pending;
   return (
@@ -137,8 +142,10 @@ export default function LabelingWorkspacePage() {
     selectSuggestion,
   } = useAnnotationStore();
 
-  const { score, streak, addScore, addConfirm, addFix, incrementStreak, fetchFromServer } =
+  const { score, streak, addScore, addConfirm, addFix, incrementStreak, incrementDailyProgress, dailyGoal, dailyProgress, fetchFromServer } =
     useScoreStore();
+
+  const t = useTranslations("labeling");
 
   const {
     files,
@@ -149,6 +156,9 @@ export default function LabelingWorkspacePage() {
     setFiles,
   } = useSessionStore();
 
+  const { checkAndUnlock, recentUnlock, clearRecent, load: loadAchievements } = useAchievementStore();
+  const { showToast } = useUIStore();
+
   /* ----- Local UI state ------------------------------------------- */
   const [fileFilter, setFileFilter] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "done">("all");
@@ -156,6 +166,7 @@ export default function LabelingWorkspacePage() {
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [fileProgressMap, setFileProgressMap] = useState<Record<string, { total: number; reviewed: number }>>({});
   const [fileCompleteToast, setFileCompleteToast] = useState(false);
+  const [audioRetryKey, setAudioRetryKey] = useState(0);
   const hasInteracted = useRef(false);
 
   /* ----- Derived -------------------------------------------------- */
@@ -167,8 +178,9 @@ export default function LabelingWorkspacePage() {
 
   /* ----- Audio player + Waveform hooks ----------------------------- */
   const audioUrl: string | null = normalizeAudioUrl(activeFile?.audioUrl);
-  const player = useAudioPlayer(audioUrl, parsedDuration);
-  const { data: waveformData } = useWaveform(audioUrl);
+  const player = useAudioPlayer(audioUrl, parsedDuration, audioRetryKey);
+  const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey);
+  const audioLoadError = player.error ?? waveformError;
 
   const totalDuration = player.duration || parsedDuration;
   const playbackPct = totalDuration > 0 ? (player.currentTime / totalDuration) * 100 : 0;
@@ -198,10 +210,19 @@ export default function LabelingWorkspacePage() {
   const confirmedCount = suggestions.filter((s) => s.status === "confirmed").length;
   const totalCount = suggestions.length;
 
-  /* ----- Score sync from server ------------------------------------ */
+  /* ----- Score sync + achievement load ------------------------------ */
   useEffect(() => {
     void fetchFromServer();
-  }, [fetchFromServer]);
+    void loadAchievements();
+  }, [fetchFromServer, loadAchievements]);
+
+  /* ----- Achievement unlock toast --------------------------------- */
+  useEffect(() => {
+    if (recentUnlock) {
+      showToast(recentUnlock.name);
+      clearRecent();
+    }
+  }, [recentUnlock, clearRecent]);
 
   /* ----- Session init --------------------------------------------- */
   useEffect(() => {
@@ -210,8 +231,8 @@ export default function LabelingWorkspacePage() {
     const loadSessionData = async () => {
       try {
         const [sessionsRes, filesRes] = await Promise.all([
-          fetch(endpoints.sessions.list),
-          fetch(endpoints.sessions.files(sessionId)),
+          authFetch(endpoints.sessions.list),
+          authFetch(endpoints.sessions.files(sessionId)),
         ]);
 
         if (!sessionsRes.ok) {
@@ -246,7 +267,7 @@ export default function LabelingWorkspacePage() {
 
     const loadSuggestionData = async (retryCount = 0) => {
       try {
-        const res = await fetch(endpoints.labeling.suggestions(sessionId));
+        const res = await authFetch(endpoints.labeling.suggestions(sessionId));
         if (!res.ok) {
           throw new Error("Failed to load suggestions");
         }
@@ -296,9 +317,11 @@ export default function LabelingWorkspacePage() {
       addScore(result.points);
       addConfirm();
       incrementStreak();
+      incrementDailyProgress();
       if (currentId) enqueueStatusUpdate(currentId, "confirmed");
+      void checkAndUnlock();
     }
-  }, [confirmSuggestion, addScore, addConfirm, incrementStreak, selectedSuggestionId]);
+  }, [confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock]);
 
   const handleReject = useCallback(() => {
     hasInteracted.current = true;
@@ -315,9 +338,11 @@ export default function LabelingWorkspacePage() {
       addScore(result.points);
       addFix();
       incrementStreak();
+      incrementDailyProgress();
       if (currentId) enqueueStatusUpdate(currentId, "corrected");
+      void checkAndUnlock();
     }
-  }, [applyFix, addScore, addFix, incrementStreak, selectedSuggestionId]);
+  }, [applyFix, addScore, addFix, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock]);
 
   function handleFileClick(file: AudioFile) {
     setCurrentFile(file.id);
@@ -452,19 +477,19 @@ export default function LabelingWorkspacePage() {
               <AudioLines className="w-4 h-4 text-white" />
             </div>
             <span className="text-sm font-bold text-text tracking-tight hidden sm:inline">
-              Smart Spectro-Tagging
+              {t("brandName")}
             </span>
           </div>
 
           <div className="h-5 w-px bg-border-light hidden md:block" />
 
           <span className="text-xs text-text-secondary hidden md:inline">
-            Project:{" "}
-            <span className="text-text font-medium">Turbine_Vibration_X42</span>
+            {t("project")}{" "}
+            <span className="text-text font-medium">{t("projectName")}</span>
           </span>
 
           <span className="text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full hidden lg:inline">
-            v2.4.0
+            {t("version")}
           </span>
         </div>
 
@@ -478,14 +503,14 @@ export default function LabelingWorkspacePage() {
                 : "bg-warning/15 text-warning"
             }`}
           >
-            {mode} mode
+            {mode} {t("mode")}
           </div>
 
           <div className="h-5 w-px bg-border-light hidden sm:block" />
 
           <div className="flex items-center gap-1.5 text-xs font-bold text-warning">
             <span className="text-base">&#127942;</span>
-            <span className="hidden sm:inline">SCORE</span>
+            <span className="hidden sm:inline">{t("scoreLabel")}</span>
             <span className="text-text tabular-nums">{score.toLocaleString()}</span>
           </div>
 
@@ -493,14 +518,14 @@ export default function LabelingWorkspacePage() {
 
           <div className="hidden md:flex items-center gap-1.5 text-xs font-bold text-orange-400">
             <span className="text-base">&#128293;</span>
-            <span>STREAK</span>
-            <span className="text-text tabular-nums">{streak} Days</span>
+            <span>{t("streakLabel")}</span>
+            <span className="text-text tabular-nums">{streak} {t("streakUnit")}</span>
           </div>
 
           <div className="h-5 w-px bg-border-light hidden md:block" />
 
           <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">
-            AR
+            {t("arLabel")}
           </div>
         </div>
       </header>
@@ -524,7 +549,7 @@ export default function LabelingWorkspacePage() {
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
               <input
                 type="text"
-                placeholder="Filter files..."
+                placeholder={t("filterPlaceholder")}
                 value={fileFilter}
                 onChange={(e) => setFileFilter(e.target.value)}
                 className="w-full bg-surface border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-text placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
@@ -544,7 +569,7 @@ export default function LabelingWorkspacePage() {
                     : "text-text-muted hover:text-text-secondary hover:bg-panel-light"
                 }`}
               >
-                {tab === "all" ? "All" : tab === "pending" ? "Pending" : "Done"}
+                {tab === "all" ? t("filterAll") : tab === "pending" ? t("filterPending") : t("filterDone")}
               </button>
             ))}
           </div>
@@ -589,7 +614,7 @@ export default function LabelingWorkspacePage() {
 
             {filteredFiles.length === 0 && (
               <div className="px-3 py-10 text-center">
-                <p className="text-xs text-text-muted">No files found for this session.</p>
+                <p className="text-xs text-text-muted">{t("emptyFiles")}</p>
               </div>
             )}
           </div>
@@ -597,16 +622,18 @@ export default function LabelingWorkspacePage() {
           {/* Daily Goal */}
           <div className="p-3 border-t border-border">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-semibold text-text-secondary">Daily Goal</span>
-              <span className="text-[11px] font-bold text-primary-light">
-                {totalCount > 0 ? Math.round(((confirmedCount + (totalCount - pendingCount - confirmedCount)) / totalCount) * 100) : 0}%
+              <span className="text-[11px] font-semibold text-text-secondary">{t("dailyGoal")}</span>
+              <span className={`text-[11px] font-bold ${dailyProgress >= dailyGoal ? "text-accent" : "text-primary-light"}`}>
+                {dailyProgress >= dailyGoal
+                  ? t("dailyGoalComplete")
+                  : t("dailyGoalProgress", { done: dailyProgress, goal: dailyGoal })}
               </span>
             </div>
             <div className="h-1.5 bg-surface rounded-full overflow-hidden">
               <div
-                className="h-full bg-primary rounded-full transition-all duration-500"
+                className={`h-full rounded-full transition-all duration-500 ${dailyProgress >= dailyGoal ? "bg-accent" : "bg-primary"}`}
                 style={{
-                  width: `${totalCount > 0 ? ((confirmedCount + (totalCount - pendingCount - confirmedCount)) / totalCount) * 100 : 0}%`,
+                  width: `${Math.min((dailyProgress / dailyGoal) * 100, 100)}%`,
                 }}
               />
             </div>
@@ -619,30 +646,30 @@ export default function LabelingWorkspacePage() {
         <main className="flex-1 flex flex-col min-w-0 bg-canvas">
           {/* Toolbar */}
           <div className="h-11 shrink-0 bg-panel border-b border-border flex items-center px-3 gap-1">
-            {tools.map((t) => (
+            {tools.map((toolItem) => (
               <button
-                key={t.id}
-                onClick={() => setTool(t.id)}
-                title={`${t.label} (${t.hotkey})`}
+                key={toolItem.id}
+                onClick={() => setTool(toolItem.id)}
+                title={`${t(toolItem.labelKey)} (${toolItem.hotkey})`}
                 className={`p-2 rounded-md transition-colors ${
-                  tool === t.id
+                  tool === toolItem.id
                     ? "bg-primary text-white"
                     : "text-text-secondary hover:bg-panel-light hover:text-text"
                 }`}
               >
-                <t.icon className="w-4 h-4" />
+                <toolItem.icon className="w-4 h-4" />
               </button>
             ))}
 
             <div className="h-5 w-px bg-border-light mx-1" />
 
-            {zoomTools.map((t) => (
+            {zoomTools.map((zt) => (
               <button
-                key={t.id}
-                title={t.label}
+                key={zt.id}
+                title={t(zt.labelKey)}
                 className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
               >
-                <t.icon className="w-4 h-4" />
+                <zt.icon className="w-4 h-4" />
               </button>
             ))}
 
@@ -651,14 +678,14 @@ export default function LabelingWorkspacePage() {
             {/* Undo / Redo */}
             <button
               onClick={undo}
-              title="Undo (Ctrl+Z)"
+              title={t("undoTitle")}
               className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
             >
               <Undo2 className="w-4 h-4" />
             </button>
             <button
               onClick={redo}
-              title="Redo (Ctrl+Shift+Z)"
+              title={t("redoTitle")}
               className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
             >
               <Redo2 className="w-4 h-4" />
@@ -667,21 +694,21 @@ export default function LabelingWorkspacePage() {
             {/* File indicator + progress + export */}
             <div className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
               <span className="text-text-secondary">
-                {confirmedCount}/{totalCount} tagged
+                {confirmedCount}/{totalCount} {t("tagged")}
               </span>
               <a
                 href={endpoints.labeling.export(sessionId, "csv")}
                 download
                 className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
               >
-                CSV
+                {t("exportCsv")}
               </a>
               <a
                 href={endpoints.labeling.export(sessionId, "json")}
                 download
                 className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
               >
-                JSON
+                {t("exportJson")}
               </a>
               <div className="flex items-center gap-2">
                 <FileAudio className="w-3.5 h-3.5" />
@@ -701,8 +728,19 @@ export default function LabelingWorkspacePage() {
                   peaks={waveformData.peaks}
                   currentTime={player.currentTime}
                   duration={totalDuration}
-                  onSeek={player.seek}
+                  onSeek={player.canPlay ? player.seek : () => {}}
                 />
+              </div>
+            )}
+            {audioLoadError && (
+              <div className="mx-3 mt-3 shrink-0 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger flex items-center justify-between gap-3">
+                <span>{audioLoadError}</span>
+                <button
+                  onClick={() => setAudioRetryKey((k) => k + 1)}
+                  className="px-2 py-1 rounded bg-danger/20 hover:bg-danger/30 transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             )}
 
@@ -713,8 +751,8 @@ export default function LabelingWorkspacePage() {
               <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm">
                 <div className="bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg">
                   <Check className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-sm font-bold">{isLastFile ? "All Files Complete!" : "File Complete!"}</p>
-                  <p className="text-xs opacity-80 mt-1">{isLastFile ? "Returning to sessions..." : "Moving to next file..."}</p>
+                  <p className="text-sm font-bold">{isLastFile ? t("allFilesComplete") : t("fileComplete")}</p>
+                  <p className="text-xs opacity-80 mt-1">{isLastFile ? t("returningToSessions") : t("movingToNext")}</p>
                 </div>
               </div>
             )}
@@ -807,9 +845,9 @@ export default function LabelingWorkspacePage() {
             {/* Time axis (bottom) */}
             <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
               {Array.from({ length: 6 }, (_, i) => {
-                const t = (totalDuration / 5) * i;
-                const m = Math.floor(t / 60);
-                const sec = Math.floor(t % 60);
+                const timeVal = (totalDuration / 5) * i;
+                const m = Math.floor(timeVal / 60);
+                const sec = Math.floor(timeVal % 60);
                 return (
                   <span key={i} className="text-[9px] text-text-muted/60 font-mono tabular-nums">
                     {String(m).padStart(2, "0")}:{String(sec).padStart(2, "0")}
@@ -825,7 +863,7 @@ export default function LabelingWorkspacePage() {
                 return (
                   <div key={st} className="flex items-center gap-1">
                     <span className={`inline-block w-2 h-2 rounded-sm ${c.bg} ${c.dashed ? "opacity-70" : ""}`} />
-                    <span className="text-[9px] text-text-muted capitalize">{st}</span>
+                    <span className="text-[9px] text-text-muted capitalize">{t(`legend${st.charAt(0).toUpperCase() + st.slice(1)}`)}</span>
                   </div>
                 );
               })}
@@ -834,18 +872,18 @@ export default function LabelingWorkspacePage() {
             {/* Hotkey hint overlay */}
             <div className="absolute bottom-8 right-3 z-30 flex gap-1.5">
               {[
-                { key: "O", label: "Confirm" },
-                { key: "X", label: "Reject" },
-                { key: "B", label: "Brush" },
-                { key: "R", label: "Box" },
-                { key: "^Z", label: "Undo" },
+                { key: "O", labelKey: "hintConfirm" },
+                { key: "X", labelKey: "hintReject" },
+                { key: "B", labelKey: "hintBrush" },
+                { key: "R", labelKey: "hintBox" },
+                { key: "^Z", labelKey: "hintUndo" },
               ].map((hint) => (
                 <div
                   key={hint.key}
                   className="bg-black/60 backdrop-blur-sm text-[9px] text-text-muted px-1.5 py-0.5 rounded font-mono"
                 >
                   <span className="text-text-secondary font-bold">{hint.key}</span>{" "}
-                  {hint.label}
+                  {t(hint.labelKey)}
                 </div>
               ))}
             </div>
@@ -860,7 +898,8 @@ export default function LabelingWorkspacePage() {
               </button>
               <button
                 onClick={player.toggle}
-                className="p-2.5 rounded-lg bg-primary text-white hover:bg-primary-light transition-colors"
+                disabled={!player.canPlay}
+                className="p-2.5 rounded-lg bg-primary text-white hover:bg-primary-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {player.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
               </button>
@@ -896,8 +935,9 @@ export default function LabelingWorkspacePage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => player.setVolume(player.volume > 0 ? 0 : 0.75)}
+                disabled={!player.canPlay}
                 className="p-0.5 rounded text-text-muted hover:text-text-secondary transition-colors"
-                title={player.volume > 0 ? "Mute" : "Unmute"}
+                title={player.volume > 0 ? t("mute") : t("unmute")}
               >
                 {player.volume === 0 ? (
                   <VolumeX className="w-4 h-4" />
@@ -912,8 +952,9 @@ export default function LabelingWorkspacePage() {
                 step={0.01}
                 value={player.volume}
                 onChange={(e) => player.setVolume(parseFloat(e.target.value))}
-                className="w-20 h-1 accent-primary cursor-pointer"
-                title={`Volume: ${Math.round(player.volume * 100)}%`}
+                disabled={!player.canPlay}
+                className="w-20 h-1 accent-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                title={t("volumeTitle", { percent: Math.round(player.volume * 100) })}
               />
             </div>
           </div>
@@ -922,9 +963,9 @@ export default function LabelingWorkspacePage() {
           <div className="flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0">
             <div className="text-xs text-text-muted">
               {activeSuggestion ? (
-                <span><span className="font-bold text-text">{activeSuggestion.label}</span> | {activeSuggestion.confidence}%</span>
+                <span>{t("suggestionFormat", { label: activeSuggestion.label, confidence: activeSuggestion.confidence })}</span>
               ) : (
-                <span>No suggestion selected</span>
+                <span>{t("noSuggestionSelected")}</span>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -933,14 +974,14 @@ export default function LabelingWorkspacePage() {
                 disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold disabled:opacity-40"
               >
-                <Check className="w-3.5 h-3.5" /> OK
+                <Check className="w-3.5 h-3.5" /> {t("okButton")}
               </button>
               <button
                 onClick={handleReject}
                 disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-40"
               >
-                <X className="w-3.5 h-3.5" /> NG
+                <X className="w-3.5 h-3.5" /> {t("ngButton")}
               </button>
             </div>
           </div>
@@ -954,22 +995,22 @@ export default function LabelingWorkspacePage() {
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary-light" />
             <h2 className="text-xs font-bold text-text uppercase tracking-wider">
-              AI Analysis
+              {t("aiAnalysis")}
             </h2>
             <div className="ml-auto flex items-center gap-1.5">
               {pendingCount > 0 && (
                 <span className="text-[9px] font-bold bg-orange-400/20 text-orange-400 px-2 py-0.5 rounded-full">
-                  {pendingCount} pending
+                  {t("pendingCount", { count: pendingCount })}
                 </span>
               )}
               {confirmedCount > 0 && (
                 <span className="text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full">
-                  {confirmedCount} ok
+                  {t("confirmedCount", { count: confirmedCount })}
                 </span>
               )}
               {totalCount - pendingCount - confirmedCount > 0 && (
                 <span className="text-[9px] font-bold bg-danger/20 text-danger px-2 py-0.5 rounded-full">
-                  {totalCount - pendingCount - confirmedCount} fixed
+                  {t("fixedCount", { count: totalCount - pendingCount - confirmedCount })}
                 </span>
               )}
             </div>
@@ -982,11 +1023,11 @@ export default function LabelingWorkspacePage() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="text-sm font-bold text-text">{activeSuggestion.label}</h3>
-                    <p className="text-[10px] text-text-muted mt-0.5">AI Detected Anomaly</p>
+                    <p className="text-[10px] text-text-muted mt-0.5">{t("aiDetectedAnomaly")}</p>
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-black text-primary-light tabular-nums">
-                      {activeSuggestion.confidence}%
+                      {t("confidence", { confidence: activeSuggestion.confidence })}
                     </span>
                   </div>
                 </div>
@@ -1008,7 +1049,7 @@ export default function LabelingWorkspacePage() {
                     className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-panel-light hover:bg-border text-danger text-xs font-semibold transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
-                    Reject
+                    {t("rejectButton")}
                     <kbd className="text-[9px] text-text-muted ml-1 bg-panel px-1 rounded">X</kbd>
                   </button>
                   <button
@@ -1016,7 +1057,7 @@ export default function LabelingWorkspacePage() {
                     className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-accent hover:bg-accent-dark text-white text-xs font-semibold transition-colors"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    Confirm
+                    {t("confirmButton")}
                     <kbd className="text-[9px] text-white/60 ml-1 bg-white/10 px-1 rounded">O</kbd>
                   </button>
                 </div>
@@ -1030,14 +1071,14 @@ export default function LabelingWorkspacePage() {
               <div className="bg-warning/5 border border-warning/20 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Wrench className="w-4 h-4 text-warning" />
-                  <h3 className="text-sm font-bold text-warning">Edit Mode</h3>
+                  <h3 className="text-sm font-bold text-warning">{t("editMode")}</h3>
                 </div>
 
                 <p className="text-[11px] text-text-secondary leading-relaxed mb-2">
-                  Rejected: <span className="text-text font-medium">{rejectedSuggestion.label}</span>
+                  {t("rejectedPrefix")}<span className="text-text font-medium">{rejectedSuggestion.label}</span>
                 </p>
                 <p className="text-[11px] text-text-muted mb-4">
-                  Draw the correct annotation region on the spectrogram, then apply the fix.
+                  {t("editInstruction")}
                 </p>
 
                 <button
@@ -1045,7 +1086,7 @@ export default function LabelingWorkspacePage() {
                   className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-warning hover:bg-warning/90 text-black text-xs font-bold transition-colors"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  Apply Fix (+20 pts)
+                  {t("applyFix")}
                   <kbd className="text-[9px] text-black/50 ml-1 bg-black/10 px-1 rounded">F</kbd>
                 </button>
               </div>
@@ -1057,9 +1098,9 @@ export default function LabelingWorkspacePage() {
             <div className="p-4 border-b border-border">
               <div className="bg-surface rounded-xl p-6 flex flex-col items-center text-center">
                 <Sparkles className="w-6 h-6 text-text-muted mb-2" />
-                <p className="text-xs text-text-muted">All suggestions processed</p>
+                <p className="text-xs text-text-muted">{t("allProcessed")}</p>
                 <p className="text-[10px] text-text-muted mt-1">
-                  {confirmedCount} confirmed, {totalCount - confirmedCount - pendingCount} fixed
+                  {t("processedCounts", { confirmed: confirmedCount, fixed: totalCount - confirmedCount - pendingCount })}
                 </p>
               </div>
             </div>
@@ -1072,11 +1113,11 @@ export default function LabelingWorkspacePage() {
                 <Filter className="w-4 h-4 text-primary-light" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-xs font-semibold text-text">Apply Noise Reduction?</h4>
-                <p className="text-[10px] text-text-muted mt-0.5">Filters background hum (-12dB)</p>
+                <h4 className="text-xs font-semibold text-text">{t("noiseReductionTitle")}</h4>
+                <p className="text-[10px] text-text-muted mt-0.5">{t("noiseReductionDesc")}</p>
               </div>
               <button className="text-[11px] font-bold text-primary-light hover:text-primary transition-colors shrink-0">
-                APPLY
+                {t("noiseReductionApply")}
               </button>
             </div>
           </div>
@@ -1084,33 +1125,33 @@ export default function LabelingWorkspacePage() {
           {/* ---- Properties Section ---- */}
           <div className="px-4 py-3 border-b border-border">
             <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3">
-              Properties
+              {t("properties")}
             </h3>
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Sensor ID</label>
-                <input type="text" defaultValue="TURB-X42-A" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("sensorId")}</label>
+                <input type="text" value="N/A" readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Sample Rate</label>
-                <input type="text" defaultValue="44,100 Hz" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
+                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("sampleRate")}</label>
+                <input type="text" value={activeFile?.sampleRate || "N/A"} readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
               </div>
             </div>
             <div className="mt-2.5">
-              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Duration</label>
-              <input type="text" defaultValue="00:08:22.00" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("duration")}</label>
+              <input type="text" value={activeFile?.duration || "N/A"} readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
             </div>
             <div className="mt-2.5">
-              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Captured At</label>
-              <input type="text" defaultValue="Oct 24, 2023 - 14:30 UTC" className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors" />
+              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("capturedAt")}</label>
+              <input type="text" value="N/A" readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
             </div>
           </div>
 
           {/* ---- Notes Section ---- */}
           <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Notes</h3>
+            <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">{t("notes")}</h3>
             <textarea
-              placeholder="Add annotation notes here..."
+              placeholder={t("notesPlaceholder")}
               rows={3}
               className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors resize-none"
             />
@@ -1122,7 +1163,7 @@ export default function LabelingWorkspacePage() {
               onClick={handleNextFile}
               className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-light text-white text-sm font-semibold py-2.5 rounded-lg transition-colors"
             >
-              Save &amp; Next File
+              {t("saveAndNext")}
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>

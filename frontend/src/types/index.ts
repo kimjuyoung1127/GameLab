@@ -6,3 +6,4 @@ export * from "./labeling";
 export * from "./upload";
 export * from "./overview";
 export * from "./leaderboard";
+export type { Achievement, UserAchievement } from "./achievement";

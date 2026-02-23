@@ -1,6 +1,8 @@
-/** 루트 레이아웃: Inter 폰트, 다크 모드, HTML lang 설정, AuthProvider. */
+/** 루트 레이아웃: Inter 폰트, 다크 모드, i18n Provider, AuthProvider. */
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import AuthProvider from "@/components/providers/AuthProvider";
 import "./globals.css";
 
@@ -14,15 +16,20 @@ export const metadata: Metadata = {
   description: "AI-assisted audio anomaly detection and labeling platform",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en" className="dark">
+    <html lang={locale} className="dark">
       <body className={`${inter.variable} font-sans antialiased`}>
-        <AuthProvider>{children}</AuthProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <AuthProvider>{children}</AuthProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

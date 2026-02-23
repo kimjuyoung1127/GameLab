@@ -6,12 +6,14 @@ interface UIState {
   modalOpen: string | null;
   toastMessage: string | null;
   loading: boolean;
+  hotkeyHelpOpen: boolean;
   toggleSidebar: () => void;
   openModal: (id: string) => void;
   closeModal: () => void;
   showToast: (message: string) => void;
   clearToast: () => void;
   setLoading: (loading: boolean) => void;
+  toggleHotkeyHelp: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -19,6 +21,7 @@ export const useUIStore = create<UIState>((set) => ({
   modalOpen: null,
   toastMessage: null,
   loading: false,
+  hotkeyHelpOpen: false,
 
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   openModal: (id) => set({ modalOpen: id }),
@@ -29,4 +32,5 @@ export const useUIStore = create<UIState>((set) => ({
   },
   clearToast: () => set({ toastMessage: null }),
   setLoading: (loading) => set({ loading }),
+  toggleHotkeyHelp: () => set((s) => ({ hotkeyHelpOpen: !s.hotkeyHelpOpen })),
 }));

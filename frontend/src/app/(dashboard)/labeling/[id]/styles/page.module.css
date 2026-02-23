@@ -1,0 +1,581 @@
+@reference "../../../../globals.css";
+
+.c001 {
+  @apply fixed inset-0 z-50 flex flex-col bg-canvas text-text;
+}
+
+.c002 {
+  @apply h-14 shrink-0 bg-panel border-b border-border flex items-center justify-between px-3 md:px-5 overflow-x-auto;
+}
+
+.c003 {
+  @apply flex items-center gap-2 md:gap-4 shrink-0;
+}
+
+.c004 {
+  @apply flex items-center gap-2.5;
+}
+
+.c005 {
+  @apply w-8 h-8 bg-primary rounded-lg flex items-center justify-center;
+}
+
+.c006 {
+  @apply w-4 h-4 text-white;
+}
+
+.c007 {
+  @apply text-sm font-bold text-text tracking-tight hidden sm:inline;
+}
+
+.c008 {
+  @apply h-5 w-px bg-border-light hidden md:block;
+}
+
+.c009 {
+  @apply text-xs text-text-secondary hidden md:inline;
+}
+
+.c010 {
+  @apply text-text font-medium;
+}
+
+.c011 {
+  @apply text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full hidden lg:inline;
+}
+
+.c012 {
+  @apply flex items-center gap-2 md:gap-5 shrink-0;
+}
+
+.c013 {
+  @apply h-5 w-px bg-border-light hidden sm:block;
+}
+
+.c014 {
+  @apply flex items-center gap-1.5 text-xs font-bold text-warning;
+}
+
+.c015 {
+  @apply text-base;
+}
+
+.c016 {
+  @apply hidden sm:inline;
+}
+
+.c017 {
+  @apply text-text tabular-nums;
+}
+
+.c018 {
+  @apply hidden md:flex items-center gap-1.5 text-xs font-bold text-orange-400;
+}
+
+.c019 {
+  @apply w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white;
+}
+
+.c020 {
+  @apply shrink-0 bg-danger/10 border-b border-danger/30 px-4 py-2 text-xs text-danger;
+}
+
+.c021 {
+  @apply flex flex-col md:flex-row flex-1 min-h-0;
+}
+
+.c022 {
+  @apply hidden md:flex w-[280px] shrink-0 bg-panel border-r border-border flex-col;
+}
+
+.c023 {
+  @apply p-3;
+}
+
+.c024 {
+  @apply relative;
+}
+
+.c025 {
+  @apply absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted;
+}
+
+.c026 {
+  @apply w-full bg-surface border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-text placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors;
+}
+
+.c027 {
+  @apply flex px-3 gap-1 mb-1;
+}
+
+.c028 {
+  @apply flex-1 overflow-y-auto px-2 py-1 space-y-0.5;
+}
+
+.c029 {
+  @apply flex items-center justify-between mb-1;
+}
+
+.c030 {
+  @apply flex items-center gap-2 min-w-0;
+}
+
+.c031 {
+  @apply w-3.5 h-3.5 text-text-muted shrink-0;
+}
+
+.c032 {
+  @apply text-xs font-medium text-text truncate;
+}
+
+.c033 {
+  @apply flex items-center gap-3 pl-5.5;
+}
+
+.c034 {
+  @apply text-[10px] text-text-muted tabular-nums;
+}
+
+.c035 {
+  @apply text-[10px] text-text-muted;
+}
+
+.c036 {
+  @apply px-3 py-10 text-center;
+}
+
+.c037 {
+  @apply text-xs text-text-muted;
+}
+
+.c038 {
+  @apply p-3 border-t border-border;
+}
+
+.c039 {
+  @apply flex items-center justify-between mb-1.5;
+}
+
+.c040 {
+  @apply text-[11px] font-semibold text-text-secondary;
+}
+
+.c041 {
+  @apply text-[11px] font-bold text-primary-light;
+}
+
+.c042 {
+  @apply h-1.5 bg-surface rounded-full overflow-hidden;
+}
+
+.c043 {
+  @apply h-full bg-primary rounded-full transition-all duration-500;
+}
+
+.c044 {
+  @apply flex-1 flex flex-col min-w-0 bg-canvas;
+}
+
+.c045 {
+  @apply h-11 shrink-0 bg-panel border-b border-border flex items-center px-3 gap-1;
+}
+
+.c046 {
+  @apply w-4 h-4;
+}
+
+.c047 {
+  @apply h-5 w-px bg-border-light mx-1;
+}
+
+.c048 {
+  @apply p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors;
+}
+
+.c049 {
+  @apply ml-auto flex items-center gap-3 text-[11px] text-text-muted;
+}
+
+.c050 {
+  @apply text-text-secondary;
+}
+
+.c051 {
+  @apply px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors;
+}
+
+.c052 {
+  @apply flex items-center gap-2;
+}
+
+.c053 {
+  @apply w-3.5 h-3.5;
+}
+
+.c054 {
+  @apply font-medium text-text-secondary;
+}
+
+.c055 {
+  @apply flex-1 relative overflow-hidden flex flex-col;
+}
+
+.c056 {
+  @apply h-20 shrink-0 bg-surface/50 border-b border-border/30 relative;
+}
+
+.c057 {
+  @apply flex-1 relative overflow-hidden;
+}
+
+.c058 {
+  @apply absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm;
+}
+
+.c059 {
+  @apply bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg;
+}
+
+.c060 {
+  @apply w-8 h-8 mx-auto mb-2;
+}
+
+.c061 {
+  @apply text-sm font-bold;
+}
+
+.c062 {
+  @apply text-xs opacity-80 mt-1;
+}
+
+.c063 {
+  @apply absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none;
+}
+
+.c064 {
+  @apply text-[10px] text-text-muted/70 font-mono text-right pr-2;
+}
+
+.c065 {
+  @apply absolute top-0 left-12 right-0 bottom-6 bg-gradient-to-b from-indigo-950 via-purple-900 to-amber-950 opacity-90;
+}
+
+.c066 {
+  @apply absolute inset-0;
+}
+
+.c067 {
+  @apply absolute left-0 right-0 border-t border-white/5;
+}
+
+.c068 {
+  @apply absolute top-0 bottom-0 border-l border-white/5;
+}
+
+.c069 {
+  @apply absolute inset-0 opacity-30 mix-blend-overlay bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)];
+}
+
+.c070 {
+  @apply absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent opacity-60;
+}
+
+.c071 {
+  @apply absolute left-[25%] right-[30%] top-[30%] bottom-[40%] bg-orange-500/8 rounded-full blur-3xl;
+}
+
+.c072 {
+  @apply absolute left-[55%] right-[10%] top-[55%] bottom-[15%] bg-red-500/6 rounded-full blur-3xl;
+}
+
+.c073 {
+  @apply w-2.5 h-2.5;
+}
+
+.c074 {
+  @apply absolute -bottom-5 left-0 text-[9px] font-mono font-bold tabular-nums;
+}
+
+.c075 {
+  @apply absolute top-0 bottom-6 w-px bg-white/60 z-30;
+}
+
+.c076 {
+  @apply absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full;
+}
+
+.c077 {
+  @apply absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none;
+}
+
+.c078 {
+  @apply text-[9px] text-text-muted/60 font-mono tabular-nums;
+}
+
+.c079 {
+  @apply absolute top-2 right-3 z-30 flex gap-2;
+}
+
+.c080 {
+  @apply flex items-center gap-1;
+}
+
+.c081 {
+  @apply text-[9px] text-text-muted capitalize;
+}
+
+.c082 {
+  @apply absolute bottom-8 right-3 z-30 flex gap-1.5;
+}
+
+.c083 {
+  @apply bg-black/60 backdrop-blur-sm text-[9px] text-text-muted px-1.5 py-0.5 rounded font-mono;
+}
+
+.c084 {
+  @apply text-text-secondary font-bold;
+}
+
+.c085 {
+  @apply h-14 shrink-0 bg-panel border-t border-border flex items-center px-4 gap-4;
+}
+
+.c086 {
+  @apply p-2.5 rounded-lg bg-primary text-white hover:bg-primary-light transition-colors;
+}
+
+.c087 {
+  @apply text-xs font-mono text-text-secondary tabular-nums;
+}
+
+.c088 {
+  @apply mx-1 text-text-muted;
+}
+
+.c089 {
+  @apply flex-1;
+}
+
+.c090 {
+  @apply p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors;
+}
+
+.c091 {
+  @apply text-[11px] font-medium text-text-secondary bg-surface px-2 py-1 rounded-md;
+}
+
+.c092 {
+  @apply p-0.5 rounded text-text-muted hover:text-text-secondary transition-colors;
+}
+
+.c093 {
+  @apply w-20 h-1 accent-primary cursor-pointer;
+}
+
+.c094 {
+  @apply flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0;
+}
+
+.c095 {
+  @apply font-bold text-text;
+}
+
+.c096 {
+  @apply flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold disabled:opacity-40;
+}
+
+.c097 {
+  @apply flex items-center gap-1 px-3 py-1.5 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-40;
+}
+
+.c098 {
+  @apply hidden md:flex w-[320px] shrink-0 bg-panel border-l border-border flex-col overflow-y-auto;
+}
+
+.c099 {
+  @apply px-4 py-3 border-b border-border flex items-center gap-2;
+}
+
+.c100 {
+  @apply w-4 h-4 text-primary-light;
+}
+
+.c101 {
+  @apply text-xs font-bold text-text uppercase tracking-wider;
+}
+
+.c102 {
+  @apply ml-auto flex items-center gap-1.5;
+}
+
+.c103 {
+  @apply text-[9px] font-bold bg-orange-400/20 text-orange-400 px-2 py-0.5 rounded-full;
+}
+
+.c104 {
+  @apply text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full;
+}
+
+.c105 {
+  @apply text-[9px] font-bold bg-danger/20 text-danger px-2 py-0.5 rounded-full;
+}
+
+.c106 {
+  @apply p-4 border-b border-border;
+}
+
+.c107 {
+  @apply bg-surface rounded-xl p-4;
+}
+
+.c108 {
+  @apply flex items-start justify-between mb-3;
+}
+
+.c109 {
+  @apply text-sm font-bold text-text;
+}
+
+.c110 {
+  @apply text-[10px] text-text-muted mt-0.5;
+}
+
+.c111 {
+  @apply text-right;
+}
+
+.c112 {
+  @apply text-2xl font-black text-primary-light tabular-nums;
+}
+
+.c113 {
+  @apply h-1.5 bg-panel rounded-full overflow-hidden mb-3;
+}
+
+.c114 {
+  @apply text-[11px] text-text-secondary leading-relaxed mb-4;
+}
+
+.c115 {
+  @apply flex gap-2;
+}
+
+.c116 {
+  @apply flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-panel-light hover:bg-border text-danger text-xs font-semibold transition-colors;
+}
+
+.c117 {
+  @apply text-[9px] text-text-muted ml-1 bg-panel px-1 rounded;
+}
+
+.c118 {
+  @apply flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-accent hover:bg-accent-dark text-white text-xs font-semibold transition-colors;
+}
+
+.c119 {
+  @apply text-[9px] text-white/60 ml-1 bg-white/10 px-1 rounded;
+}
+
+.c120 {
+  @apply bg-warning/5 border border-warning/20 rounded-xl p-4;
+}
+
+.c121 {
+  @apply flex items-center gap-2 mb-3;
+}
+
+.c122 {
+  @apply w-4 h-4 text-warning;
+}
+
+.c123 {
+  @apply text-sm font-bold text-warning;
+}
+
+.c124 {
+  @apply text-[11px] text-text-secondary leading-relaxed mb-2;
+}
+
+.c125 {
+  @apply text-[11px] text-text-muted mb-4;
+}
+
+.c126 {
+  @apply w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-warning hover:bg-warning/90 text-black text-xs font-bold transition-colors;
+}
+
+.c127 {
+  @apply text-[9px] text-black/50 ml-1 bg-black/10 px-1 rounded;
+}
+
+.c128 {
+  @apply bg-surface rounded-xl p-6 flex flex-col items-center text-center;
+}
+
+.c129 {
+  @apply w-6 h-6 text-text-muted mb-2;
+}
+
+.c130 {
+  @apply text-[10px] text-text-muted mt-1;
+}
+
+.c131 {
+  @apply px-4 py-3 border-b border-border;
+}
+
+.c132 {
+  @apply bg-surface rounded-xl p-3 flex items-center gap-3;
+}
+
+.c133 {
+  @apply w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0;
+}
+
+.c134 {
+  @apply flex-1 min-w-0;
+}
+
+.c135 {
+  @apply text-xs font-semibold text-text;
+}
+
+.c136 {
+  @apply text-[11px] font-bold text-primary-light hover:text-primary transition-colors shrink-0;
+}
+
+.c137 {
+  @apply text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3;
+}
+
+.c138 {
+  @apply grid grid-cols-2 gap-2.5;
+}
+
+.c139 {
+  @apply block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1;
+}
+
+.c140 {
+  @apply w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors;
+}
+
+.c141 {
+  @apply mt-2.5;
+}
+
+.c142 {
+  @apply text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2;
+}
+
+.c143 {
+  @apply w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors resize-none;
+}
+
+.c144 {
+  @apply p-4 mt-auto;
+}
+
+.c145 {
+  @apply w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-light text-white text-sm font-semibold py-2.5 rounded-lg transition-colors;
+}

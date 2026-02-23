@@ -1,5 +1,6 @@
-/** 핫키 스팸 방어 큐: 직렬 처리, 중복 병합, 오프라인 localStorage 폴백. */
+/** Action queue: serial status updates, retry, and offline buffering. */
 import { labelingEndpoints } from "./labeling";
+import { authFetch } from "./auth-fetch";
 import type { SuggestionStatus } from "@/types/labeling";
 
 interface QueueItem {
@@ -22,7 +23,6 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Enqueue a status update. Coalesces repeated actions for the same suggestion. */
 export function enqueueStatusUpdate(suggestionId: string, targetStatus: SuggestionStatus): void {
   ensureInitialized();
   const startIdx = flushing ? 1 : 0;
@@ -44,7 +44,6 @@ export function enqueueStatusUpdate(suggestionId: string, targetStatus: Suggesti
   void flush();
 }
 
-/** Serialized flush: process one item at a time to guarantee ordering. */
 async function flush(): Promise<void> {
   if (flushing) return;
   flushing = true;
@@ -52,7 +51,7 @@ async function flush(): Promise<void> {
   while (queue.length > 0) {
     const item = queue[0];
     try {
-      const res = await fetch(labelingEndpoints.updateSuggestionStatus(item.suggestionId), {
+      const res = await authFetch(labelingEndpoints.updateSuggestionStatus(item.suggestionId), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: item.targetStatus }),

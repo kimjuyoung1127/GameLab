@@ -1,9 +1,12 @@
-"""리더보드 API: 사용자 랭킹 및 점수 조회."""
+"""Leaderboard API: ranking and authenticated user's score."""
 import logging
-from fastapi import APIRouter, HTTPException
 from typing import List
-from app.models.leaderboard import LeaderboardEntry
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.auth import CurrentUser, ensure_sst_user_exists, get_current_user
 from app.core.supabase_client import supabase
+from app.models.leaderboard import LeaderboardEntry
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 logger = logging.getLogger(__name__)
@@ -25,6 +28,29 @@ async def get_leaderboard():
     return [_row_to_entry(r) for r in rows]
 
 
+@router.get("/me", response_model=LeaderboardEntry)
+async def get_my_score(current_user: CurrentUser = Depends(get_current_user)):
+    """Get current authenticated user's score."""
+    ensure_sst_user_exists(current_user)
+
+    try:
+        res = (
+            supabase.table("sst_users")
+            .select("*")
+            .eq("id", current_user.id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception as exc:
+        logger.exception("Failed to fetch user score", extra={"user_id": current_user.id})
+        raise HTTPException(status_code=503, detail="Failed to load user score") from exc
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return _row_to_entry(res.data)
+
+
 def _row_to_entry(r: dict) -> LeaderboardEntry:
     return LeaderboardEntry(
         id=r["id"],
@@ -36,27 +62,3 @@ def _row_to_entry(r: dict) -> LeaderboardEntry:
         accuracy=float(r["accuracy"]),
         all_time_score=r["all_time_score"],
     )
-
-
-_DEFAULT_USER_ID = "u-1"
-
-
-@router.get("/me", response_model=LeaderboardEntry)
-async def get_my_score():
-    """Get current user's score (uses demo user until auth is fully integrated)."""
-    try:
-        res = (
-            supabase.table("sst_users")
-            .select("*")
-            .eq("id", _DEFAULT_USER_ID)
-            .maybe_single()
-            .execute()
-        )
-    except Exception as exc:
-        logger.exception("Failed to fetch user score")
-        raise HTTPException(status_code=503, detail="Failed to load user score") from exc
-
-    if not res.data:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return _row_to_entry(res.data)

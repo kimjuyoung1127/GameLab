@@ -16,6 +16,8 @@ import {
 import { useScoreStore } from "@/lib/store/score-store";
 import { endpoints } from "@/lib/api/endpoints";
 import type { OverviewMetrics, Session } from "@/types";
+import { useTranslations } from "next-intl";
+import styles from "./styles/page.module.css";
 
 const EMPTY_METRICS: OverviewMetrics = {
   totalSessions: 0,
@@ -28,6 +30,7 @@ const EMPTY_METRICS: OverviewMetrics = {
 
 export default function OverviewPage() {
   const router = useRouter();
+  const t = useTranslations("overview");
   const { score, totalConfirmed, totalFixed } = useScoreStore();
   const [metrics, setMetrics] = useState<OverviewMetrics>(EMPTY_METRICS);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -78,28 +81,28 @@ export default function OverviewPage() {
 
   const cards = [
     {
-      label: "Total Sessions",
+      label: t("totalSessions"),
       value: metrics.totalSessions,
       icon: FolderOpen,
       color: "text-primary",
       bg: "bg-primary/10",
     },
     {
-      label: "Total Files",
+      label: t("totalFiles"),
       value: metrics.totalFiles,
       icon: FileAudio,
       color: "text-accent",
       bg: "bg-accent/10",
     },
     {
-      label: "Avg. Accuracy",
+      label: t("avgAccuracy"),
       value: `${metrics.avgAccuracy.toFixed(1)}%`,
       icon: Target,
       color: "text-warning",
       bg: "bg-warning/10",
     },
     {
-      label: "Your Score",
+      label: t("yourScore"),
       value: score.toLocaleString(),
       icon: TrendingUp,
       color: "text-purple-400",
@@ -108,56 +111,56 @@ export default function OverviewPage() {
   ];
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="h-16 border-b border-border bg-panel flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-3">
-          <BarChart3 className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-semibold text-text">Overview</h1>
+    <div className={styles.c001}>
+      <header className={styles.c002}>
+        <div className={styles.c003}>
+          <BarChart3 className={styles.c004} />
+          <h1 className={styles.c005}>{t("title")}</h1>
         </div>
         <button
           onClick={() => router.push("/upload")}
-          className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-light text-white text-sm font-medium rounded-lg transition-colors"
+          className={styles.c006}
         >
-          <Upload className="w-4 h-4" />
-          <span className="hidden sm:inline">Upload Files</span>
+          <Upload className={styles.c007} />
+          <span className={styles.c008}>{t("uploadFiles")}</span>
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+      <div className={styles.c009}>
         {apiError && (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div className={styles.c010}>
             {apiError}
           </div>
         )}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={styles.c011}>
           {cards.map((m) => (
-            <div key={m.label} className="bg-panel rounded-2xl border border-border p-5">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-text-muted font-medium uppercase tracking-wider">
+            <div key={m.label} className={styles.c012}>
+              <div className={styles.c013}>
+                <span className={styles.c014}>
                   {m.label}
                 </span>
                 <div className={`w-8 h-8 rounded-lg ${m.bg} flex items-center justify-center`}>
                   <m.icon className={`w-4 h-4 ${m.color}`} />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-text">{m.value}</p>
+              <p className={styles.c015}>{m.value}</p>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-panel rounded-2xl border border-border p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-text">Recent Sessions</h2>
+        <div className={styles.c016}>
+          <div className={styles.c017}>
+            <div className={styles.c018}>
+              <h2 className={styles.c019}>{t("recentSessions")}</h2>
               <button
                 onClick={() => router.push("/sessions")}
-                className="text-xs text-primary hover:text-primary-light transition-colors"
+                className={styles.c020}
               >
-                View All
+                {t("viewAll")}
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className={styles.c021}>
               {sessions.slice(0, 5).map((session) => (
                 <div
                   key={session.id}
@@ -168,16 +171,16 @@ export default function OverviewPage() {
                       router.push("/sessions");
                     }
                   }}
-                  className="flex items-center justify-between p-3 rounded-xl bg-surface hover:bg-panel-light cursor-pointer transition-colors"
+                  className={styles.c022}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <FileAudio className="w-4 h-4 text-primary" />
+                  <div className={styles.c023}>
+                    <div className={styles.c024}>
+                      <FileAudio className={styles.c025} />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text truncate">{session.name}</p>
-                      <p className="text-xs text-text-muted">
-                        {session.id} &middot; {session.fileCount} files
+                    <div className={styles.c026}>
+                      <p className={styles.c027}>{session.name}</p>
+                      <p className={styles.c028}>
+                        {session.id} &middot; {session.fileCount} {t("fileUnit")}
                       </p>
                     </div>
                   </div>
@@ -185,61 +188,61 @@ export default function OverviewPage() {
               ))}
 
               {sessions.length === 0 && (
-                <div className="rounded-xl border border-border bg-surface px-4 py-8 text-center text-sm text-text-muted">
-                  No sessions yet. Upload files to create your first session.
+                <div className={styles.c029}>
+                  {t("emptySessions")}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="bg-panel rounded-2xl border border-border p-6">
-              <h2 className="text-sm font-semibold text-text mb-4">Quick Actions</h2>
-              <div className="space-y-2">
+          <div className={styles.c030}>
+            <div className={styles.c031}>
+              <h2 className={styles.c032}>{t("quickActions")}</h2>
+              <div className={styles.c033}>
                 <button
                   onClick={() => router.push("/upload")}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors"
+                  className={styles.c034}
                 >
-                  <Upload className="w-4 h-4" />
-                  Upload Audio Files
+                  <Upload className={styles.c007} />
+                  {t("uploadAudio")}
                 </button>
                 <button
                   onClick={() => router.push("/sessions")}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface hover:bg-panel-light text-text-secondary text-sm font-medium transition-colors"
+                  className={styles.c035}
                 >
-                  <Plus className="w-4 h-4" />
-                  Go to Sessions
+                  <Plus className={styles.c007} />
+                  {t("goToSessions")}
                 </button>
                 {activeSessions.length > 0 && (
                   <button
                     onClick={() => router.push(`/labeling/${activeSessions[0].id}`)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface hover:bg-panel-light text-text-secondary text-sm font-medium transition-colors"
+                    className={styles.c035}
                   >
-                    <Activity className="w-4 h-4" />
-                    Continue Labeling
+                    <Activity className={styles.c007} />
+                    {t("continueLabeling")}
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="bg-panel rounded-2xl border border-border p-6">
-              <h2 className="text-sm font-semibold text-text mb-4">Your Activity</h2>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-text-muted">Confirmed</span>
-                  <span className="text-sm font-semibold text-accent">{totalConfirmed}</span>
+            <div className={styles.c031}>
+              <h2 className={styles.c032}>{t("yourActivity")}</h2>
+              <div className={styles.c021}>
+                <div className={styles.c036}>
+                  <span className={styles.c028}>{t("confirmed")}</span>
+                  <span className={styles.c037}>{totalConfirmed}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-text-muted">Fixed</span>
-                  <span className="text-sm font-semibold text-warning">{totalFixed}</span>
+                <div className={styles.c036}>
+                  <span className={styles.c028}>{t("fixed")}</span>
+                  <span className={styles.c038}>{totalFixed}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-text-muted">Active Sessions</span>
-                  <span className="text-sm font-semibold text-primary">{activeSessions.length}</span>
+                <div className={styles.c036}>
+                  <span className={styles.c028}>{t("activeSessions")}</span>
+                  <span className={styles.c039}>{activeSessions.length}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-text-muted">Completed</span>
-                  <span className="text-sm font-semibold text-text">{completedSessions.length}</span>
+                <div className={styles.c036}>
+                  <span className={styles.c028}>{t("completed")}</span>
+                  <span className={styles.c019}>{completedSessions.length}</span>
                 </div>
               </div>
             </div>

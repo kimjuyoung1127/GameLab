@@ -1,14 +1,17 @@
-"""라벨링 API: AI 제안 조회, 상태 변경(PATCH), CSV/JSON 내보내기."""
+"""Labeling API: suggestion list, status updates, and CSV/JSON export."""
 import csv
 import io
 import json as json_module
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
 from typing import List
-from app.models.labeling import SuggestionResponse, SuggestionStatusValue, UpdateSuggestionRequest
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+
+from app.core.auth import CurrentUser, ensure_sst_user_exists, get_current_user
 from app.core.supabase_client import supabase
+from app.models.labeling import SuggestionResponse, SuggestionStatusValue, UpdateSuggestionRequest
 
 router = APIRouter(prefix="/api/labeling", tags=["labeling"])
 logger = logging.getLogger(__name__)
@@ -16,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 @router.get("/{session_id}/suggestions", response_model=List[SuggestionResponse])
 async def get_suggestions(session_id: str):
-    # 세션에 속한 오디오 파일 ID 목록 조회
     try:
         file_res = (
             supabase.table("sst_audio_files")
@@ -32,7 +34,6 @@ async def get_suggestions(session_id: str):
     if not file_ids:
         return []
 
-    # 해당 파일들의 제안 조회
     try:
         sug_res = (
             supabase.table("sst_suggestions")
@@ -49,29 +50,14 @@ async def get_suggestions(session_id: str):
     return [_row_to_response(s) for s in rows]
 
 
-def _row_to_response(s: dict) -> SuggestionResponse:
-    raw_status = s.get("status", SuggestionStatusValue.pending.value)
-    try:
-        status = SuggestionStatusValue(raw_status)
-    except ValueError:
-        status = SuggestionStatusValue.pending
-
-    return SuggestionResponse(
-        id=s.get("id", ""),
-        audio_id=s.get("audio_id", ""),
-        label=s.get("label", "Suggestion"),
-        confidence=int(s.get("confidence", 0)),
-        description=s.get("description", ""),
-        start_time=float(s.get("start_time", 0)),
-        end_time=float(s.get("end_time", 0)),
-        freq_low=float(s.get("freq_low", 0)),
-        freq_high=float(s.get("freq_high", 0)),
-        status=status,
-    )
-
-
 @router.patch("/suggestions/{suggestion_id}", response_model=SuggestionResponse)
-async def update_suggestion_status(suggestion_id: str, body: UpdateSuggestionRequest):
+async def update_suggestion_status(
+    suggestion_id: str,
+    body: UpdateSuggestionRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_sst_user_exists(current_user)
+
     now_iso = datetime.now(timezone.utc).isoformat()
     try:
         res = (
@@ -88,51 +74,9 @@ async def update_suggestion_status(suggestion_id: str, body: UpdateSuggestionReq
     if not rows:
         raise HTTPException(status_code=404, detail="Suggestion not found")
 
-    _update_user_score(body.status)
+    _update_user_score(body.status, current_user.id)
 
     return _row_to_response(rows[0])
-
-
-# --- Score update logic ---
-_POINTS_CONFIRM = 10
-_POINTS_CORRECT = 20
-_DEFAULT_USER_ID = "u-1"
-
-
-def _update_user_score(status: SuggestionStatusValue) -> None:
-    """Update sst_users score when a suggestion status changes (non-fatal)."""
-    if status not in (SuggestionStatusValue.confirmed, SuggestionStatusValue.corrected):
-        return
-
-    points = _POINTS_CONFIRM if status == SuggestionStatusValue.confirmed else _POINTS_CORRECT
-
-    try:
-        user_res = (
-            supabase.table("sst_users")
-            .select("today_score, all_time_score")
-            .eq("id", _DEFAULT_USER_ID)
-            .maybe_single()
-            .execute()
-        )
-        if not user_res.data:
-            logger.warning("Score update: user %s not found", _DEFAULT_USER_ID)
-            return
-
-        current = user_res.data
-        new_today = current["today_score"] + points
-        new_all_time = current["all_time_score"] + points
-
-        supabase.table("sst_users").update({
-            "today_score": new_today,
-            "all_time_score": new_all_time,
-        }).eq("id", _DEFAULT_USER_ID).execute()
-
-        logger.info(
-            "score_update user=%s status=%s points=+%d today=%d all_time=%d",
-            _DEFAULT_USER_ID, status.value, points, new_today, new_all_time,
-        )
-    except Exception:
-        logger.exception("Failed to update user score (non-fatal)")
 
 
 @router.get("/{session_id}/export")
@@ -141,7 +85,6 @@ async def export_suggestions(session_id: str, format: str = "csv"):
     if format not in ("csv", "json"):
         raise HTTPException(status_code=400, detail="Format must be 'csv' or 'json'")
 
-    # Get audio files for session
     try:
         file_res = (
             supabase.table("sst_audio_files")
@@ -159,7 +102,6 @@ async def export_suggestions(session_id: str, format: str = "csv"):
     if not file_ids:
         raise HTTPException(status_code=404, detail="No files found for session")
 
-    # Get suggestions
     try:
         sug_res = (
             supabase.table("sst_suggestions")
@@ -198,30 +140,109 @@ async def export_suggestions(session_id: str, format: str = "csv"):
             headers={"Content-Disposition": f'attachment; filename="labels-{session_id}.json"'},
         )
 
-    # CSV format
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "session_id", "audio_id", "filename", "label", "confidence",
-        "start_time", "end_time", "freq_low", "freq_high", "status", "description",
-    ])
+    writer.writerow(
+        [
+            "session_id",
+            "audio_id",
+            "filename",
+            "label",
+            "confidence",
+            "start_time",
+            "end_time",
+            "freq_low",
+            "freq_high",
+            "status",
+            "description",
+        ]
+    )
     for r in rows:
-        writer.writerow([
-            session_id,
-            r.get("audio_id", ""),
-            filename_map.get(r.get("audio_id", ""), ""),
-            r.get("label", ""),
-            r.get("confidence", 0),
-            r.get("start_time", 0),
-            r.get("end_time", 0),
-            r.get("freq_low", 0),
-            r.get("freq_high", 0),
-            r.get("status", ""),
-            r.get("description", ""),
-        ])
+        writer.writerow(
+            [
+                session_id,
+                r.get("audio_id", ""),
+                filename_map.get(r.get("audio_id", ""), ""),
+                r.get("label", ""),
+                r.get("confidence", 0),
+                r.get("start_time", 0),
+                r.get("end_time", 0),
+                r.get("freq_low", 0),
+                r.get("freq_high", 0),
+                r.get("status", ""),
+                r.get("description", ""),
+            ]
+        )
 
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8")),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="labels-{session_id}.csv"'},
     )
+
+
+def _row_to_response(s: dict) -> SuggestionResponse:
+    raw_status = s.get("status", SuggestionStatusValue.pending.value)
+    try:
+        status = SuggestionStatusValue(raw_status)
+    except ValueError:
+        status = SuggestionStatusValue.pending
+
+    return SuggestionResponse(
+        id=s.get("id", ""),
+        audio_id=s.get("audio_id", ""),
+        label=s.get("label", "Suggestion"),
+        confidence=int(s.get("confidence", 0)),
+        description=s.get("description", ""),
+        start_time=float(s.get("start_time", 0)),
+        end_time=float(s.get("end_time", 0)),
+        freq_low=float(s.get("freq_low", 0)),
+        freq_high=float(s.get("freq_high", 0)),
+        status=status,
+    )
+
+
+_POINTS_CONFIRM = 10
+_POINTS_CORRECT = 20
+
+
+def _update_user_score(status: SuggestionStatusValue, user_id: str) -> None:
+    """Update sst_users score when a suggestion status changes (non-fatal)."""
+    if status not in (SuggestionStatusValue.confirmed, SuggestionStatusValue.corrected):
+        return
+
+    points = _POINTS_CONFIRM if status == SuggestionStatusValue.confirmed else _POINTS_CORRECT
+
+    try:
+        user_res = (
+            supabase.table("sst_users")
+            .select("today_score, all_time_score")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if not user_res.data:
+            logger.warning("Score update: user %s not found", user_id)
+            return
+
+        current = user_res.data
+        new_today = current["today_score"] + points
+        new_all_time = current["all_time_score"] + points
+
+        (
+            supabase.table("sst_users")
+            .update({"today_score": new_today, "all_time_score": new_all_time})
+            .eq("id", user_id)
+            .execute()
+        )
+
+        logger.info(
+            "score_update user=%s status=%s points=+%d today=%d all_time=%d",
+            user_id,
+            status.value,
+            points,
+            new_today,
+            new_all_time,
+        )
+    except Exception:
+        logger.exception("Failed to update user score (non-fatal)")

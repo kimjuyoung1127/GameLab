@@ -3,6 +3,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   AlertCircle,
   ArrowLeft,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import type { UploadJobStatus } from "@/types";
 import { endpoints } from "@/lib/api/endpoints";
+import styles from "./styles/page.module.css";
 
 const ACCEPTED_FORMATS = [".wav", ".m4a", ".mp3"];
 const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
@@ -62,19 +64,23 @@ function getExtension(name: string): string {
   return idx >= 0 ? name.slice(idx).toLowerCase() : "";
 }
 
-function validateFile(file: File): string | null {
+function validateFile(
+  file: File,
+  t: (key: string, params?: Record<string, string>) => string,
+): string | null {
   const ext = getExtension(file.name);
   if (!ACCEPTED_FORMATS.includes(ext)) {
-    return `Unsupported format (${ext}). Only .wav, .m4a, .mp3 are allowed.`;
+    return t("errorUnsupported", { ext });
   }
   if (file.size > MAX_FILE_SIZE) {
-    return `File is larger than 1GB (${formatBytes(file.size)}).`;
+    return t("errorTooLarge", { size: formatBytes(file.size) });
   }
   return null;
 }
 
 export default function UploadPage() {
   const router = useRouter();
+  const t = useTranslations("upload");
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -82,7 +88,7 @@ export default function UploadPage() {
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const entries: FileEntry[] = Array.from(newFiles).map((file) => {
-      const error = validateFile(file);
+      const error = validateFile(file, t);
       return {
         id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         file,
@@ -92,7 +98,7 @@ export default function UploadPage() {
       };
     });
     setFiles((prev) => [...prev, ...entries]);
-  }, []);
+  }, [t]);
 
   const removeFile = useCallback((id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
@@ -193,7 +199,7 @@ export default function UploadPage() {
           idx += 1;
 
           if (!result) {
-            return { ...f, status: "failed", progress: 0, error: "No response returned for this file." };
+            return { ...f, status: "failed", progress: 0, error: t("errorNoResponse") };
           }
 
           return {
@@ -231,55 +237,56 @@ export default function UploadPage() {
                 ...f,
                 status: "failed",
                 progress: 0,
-                error: "Cannot reach upload API. Check backend server and NEXT_PUBLIC_API_URL.",
+                error: t("errorApiFailed"),
               }
         )
       );
     } finally {
       setUploading(false);
     }
-  }, [files, pollJobStatus, router]);
+  }, [files, pollJobStatus, router, t]);
 
   const validCount = files.filter((f) => f.status !== "failed").length;
   const doneCount = files.filter((f) => f.status === "done").length;
   const allDone = validCount > 0 && doneCount === validCount && !uploading;
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="h-16 border-b border-border bg-panel flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-3">
+    <div className={styles.c001}>
+      <header className={styles.c002}>
+        <div className={styles.c003}>
           <button
             onClick={() => router.push("/overview")}
-            className="p-1.5 rounded-lg hover:bg-panel-light transition-colors"
+            className={styles.c004}
+            aria-label={t("backAria")}
           >
-            <ArrowLeft className="w-5 h-5 text-text-muted" />
+            <ArrowLeft className={styles.c005} />
           </button>
-          <Upload className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-semibold text-text">Upload Files</h1>
+          <Upload className={styles.c006} />
+          <h1 className={styles.c007}>{t("title")}</h1>
         </div>
         {files.length > 0 && !uploading && (
           <button
             onClick={clearAll}
-            className="text-xs text-text-muted hover:text-danger transition-colors"
+            className={styles.c008}
           >
-            Clear All
+            {t("clearAll")}
           </button>
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
-        <div className="bg-panel rounded-2xl border border-border p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-          <div className="text-sm text-text-secondary space-y-1">
-            <p className="font-medium text-text">Supported formats</p>
+      <div className={styles.c009}>
+        <div className={styles.c010}>
+          <AlertCircle className={styles.c011} />
+          <div className={styles.c012}>
+            <p className={styles.c013}>{t("supportedFormats")}</p>
             <p>
-              <span className="text-accent font-medium">.wav</span> (recommended),{" "}
-              <span className="text-accent font-medium">.m4a</span> (iPhone),{" "}
-              <span className="text-accent font-medium">.mp3</span> (Android/messenger)
-              {" "}&middot; max 1GB
+              <span className={styles.c014}>.wav</span> ({t("recommended")}),{" "}
+              <span className={styles.c014}>.m4a</span> ({t("iphone")}),{" "}
+              <span className={styles.c014}>.mp3</span> ({t("androidMessenger")})
+              {" "}&middot; {t("maxSize")}
             </p>
-            <p className="text-text-muted text-xs">
-              Files are converted on the server to wav/mono/16kHz before analysis.
+            <p className={styles.c015}>
+              {t("conversionNote")}
             </p>
           </div>
         </div>
@@ -300,23 +307,23 @@ export default function UploadPage() {
             type="file"
             accept={ACCEPTED_FORMATS.join(",")}
             multiple
-            className="hidden"
+            className={styles.c016}
             onChange={(e) => {
               if (e.target.files) addFiles(e.target.files);
               e.target.value = "";
             }}
           />
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-            <Upload className="w-7 h-7 text-primary" />
+          <div className={styles.c017}>
+            <Upload className={styles.c018} />
           </div>
-          <p className="text-sm font-medium text-text mb-1">Drag files here or click to select</p>
-          <p className="text-xs text-text-muted">.wav, .m4a, .mp3 &middot; max 1GB &middot; multi-select supported</p>
+          <p className={styles.c019}>{t("dropzoneHint")}</p>
+          <p className={styles.c020}>{t("dropzoneSubtext")}</p>
         </div>
 
         {files.length > 0 && (
-          <div className="bg-panel rounded-2xl border border-border divide-y divide-border">
+          <div className={styles.c021}>
             {files.map((entry) => (
-              <div key={entry.id} className="flex items-center gap-3 px-4 py-3 md:px-6">
+              <div key={entry.id} className={styles.c022}>
                 <div
                   className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                     entry.status === "failed"
@@ -327,54 +334,54 @@ export default function UploadPage() {
                   }`}
                 >
                   {entry.status === "failed" ? (
-                    <AlertCircle className="w-4 h-4 text-danger" />
+                    <AlertCircle className={styles.c023} />
                   ) : entry.status === "done" ? (
-                    <CheckCircle2 className="w-4 h-4 text-accent" />
+                    <CheckCircle2 className={styles.c024} />
                   ) : (
-                    <FileAudio className="w-4 h-4 text-primary" />
+                    <FileAudio className={styles.c025} />
                   )}
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text truncate">{entry.file.name}</p>
+                <div className={styles.c026}>
+                  <p className={styles.c027}>{entry.file.name}</p>
                   {entry.error ? (
-                    <p className="text-xs text-danger">{entry.error}</p>
+                    <p className={styles.c028}>{entry.error}</p>
                   ) : (
-                    <p className="text-xs text-text-muted">
+                    <p className={styles.c020}>
                       {formatBytes(entry.file.size)} &middot; {getExtension(entry.file.name).replace(".", "").toUpperCase()}
-                      {entry.status === "uploading" && ` · Uploading ${entry.progress}%`}
-                      {entry.status === "processing" && " · Processing..."}
-                      {entry.status === "queued" && " · Queued"}
-                      {entry.status === "done" && " · Complete"}
+                      {entry.status === "uploading" && ` · ${t("statusUploading", { progress: String(entry.progress) })}`}
+                      {entry.status === "processing" && ` · ${t("statusProcessing")}`}
+                      {entry.status === "queued" && ` · ${t("statusQueued")}`}
+                      {entry.status === "done" && ` · ${t("statusComplete")}`}
                     </p>
                   )}
 
                   {(entry.status === "uploading" || entry.status === "processing") && (
-                    <div className="mt-1.5 h-1 bg-surface rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${entry.progress}%` }} />
+                    <div className={styles.c029}>
+                      <div className={styles.c030} style={{ width: `${entry.progress}%` }} />
                     </div>
                   )}
                 </div>
 
-                <div className="shrink-0">
+                <div className={styles.c031}>
                   {entry.status === "uploading" || entry.status === "processing" ? (
-                    <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                    <Loader2 className={styles.c032} />
                   ) : entry.status === "done" ? (
-                    <span className="text-xs text-accent font-semibold">Done</span>
+                    <span className={styles.c033}>{t("statusDone")}</span>
                   ) : entry.status === "queued" ? (
-                    <span className="text-xs text-warning font-semibold">Queued</span>
+                    <span className={styles.c034}>{t("statusQueued")}</span>
                   ) : (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         removeFile(entry.id);
                       }}
-                      className="p-1.5 rounded-lg hover:bg-panel-light transition-colors"
+                      className={styles.c004}
                     >
                       {entry.status === "failed" ? (
-                        <X className="w-4 h-4 text-danger" />
+                        <X className={styles.c023} />
                       ) : (
-                        <Trash2 className="w-4 h-4 text-text-muted" />
+                        <Trash2 className={styles.c035} />
                       )}
                     </button>
                   )}
@@ -385,48 +392,46 @@ export default function UploadPage() {
         )}
 
         {files.some((f) => f.status === "failed") && (
-          <div className="bg-danger/5 border border-danger/20 rounded-2xl p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
-            <div className="text-sm space-y-1">
-              <p className="font-medium text-danger">Some files failed to upload</p>
-              <p className="text-text-secondary">
-                Check file format/size, then retry.
-                <br />
-                If all files fail, verify backend is running and `NEXT_PUBLIC_API_URL` is set correctly.
+          <div className={styles.c036}>
+            <AlertCircle className={styles.c037} />
+            <div className={styles.c038}>
+              <p className={styles.c039}>{t("errorSectionTitle")}</p>
+              <p className={styles.c040}>
+                {t("errorSectionHint")}
               </p>
             </div>
           </div>
         )}
 
         {files.length > 0 && (
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-text-muted">
-              {validCount} ready
-              {doneCount > 0 && ` · ${doneCount} completed`}
+          <div className={styles.c041}>
+            <p className={styles.c020}>
+              {validCount} {t("readyCount")}
+              {doneCount > 0 && ` · ${doneCount} ${t("completedCount")}`}
             </p>
             {allDone ? (
               <button
                 onClick={() => router.push("/sessions")}
-                className="flex items-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-colors"
+                className={styles.c042}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                Go to Sessions
+                <CheckCircle2 className={styles.c043} />
+                {t("goToSessions")}
               </button>
             ) : (
               <button
                 onClick={handleUpload}
                 disabled={uploading || validCount === 0}
-                className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-light text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className={styles.c044}
               >
                 {uploading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Uploading...
+                    <Loader2 className={styles.c045} />
+                    {t("uploading")}
                   </>
                 ) : (
                   <>
-                    <Upload className="w-4 h-4" />
-                    Start Upload ({validCount})
+                    <Upload className={styles.c043} />
+                    {t("startUpload", { count: String(validCount) })}
                   </>
                 )}
               </button>

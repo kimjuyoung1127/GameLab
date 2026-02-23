@@ -1,0 +1,181 @@
+@reference "../../../globals.css";
+
+.c001 {
+  @apply flex flex-col h-screen;
+}
+
+.c002 {
+  @apply h-16 border-b border-border bg-panel flex items-center justify-between px-6 shrink-0;
+}
+
+.c003 {
+  @apply flex items-center gap-3;
+}
+
+.c004 {
+  @apply p-1.5 rounded-lg hover:bg-panel-light transition-colors;
+}
+
+.c005 {
+  @apply w-5 h-5 text-text-muted;
+}
+
+.c006 {
+  @apply w-5 h-5 text-primary;
+}
+
+.c007 {
+  @apply text-lg font-semibold text-text;
+}
+
+.c008 {
+  @apply text-xs text-text-muted hover:text-danger transition-colors;
+}
+
+.c009 {
+  @apply flex-1 overflow-y-auto p-6 md:p-8 space-y-6;
+}
+
+.c010 {
+  @apply bg-panel rounded-2xl border border-border p-4 flex items-start gap-3;
+}
+
+.c011 {
+  @apply w-5 h-5 text-primary shrink-0 mt-0.5;
+}
+
+.c012 {
+  @apply text-sm text-text-secondary space-y-1;
+}
+
+.c013 {
+  @apply font-medium text-text;
+}
+
+.c014 {
+  @apply text-accent font-medium;
+}
+
+.c015 {
+  @apply text-text-muted text-xs;
+}
+
+.c016 {
+  @apply hidden;
+}
+
+.c017 {
+  @apply w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4;
+}
+
+.c018 {
+  @apply w-7 h-7 text-primary;
+}
+
+.c019 {
+  @apply text-sm font-medium text-text mb-1;
+}
+
+.c020 {
+  @apply text-xs text-text-muted;
+}
+
+.c021 {
+  @apply bg-panel rounded-2xl border border-border divide-y divide-border;
+}
+
+.c022 {
+  @apply flex items-center gap-3 px-4 py-3 md:px-6;
+}
+
+.c023 {
+  @apply w-4 h-4 text-danger;
+}
+
+.c024 {
+  @apply w-4 h-4 text-accent;
+}
+
+.c025 {
+  @apply w-4 h-4 text-primary;
+}
+
+.c026 {
+  @apply flex-1 min-w-0;
+}
+
+.c027 {
+  @apply text-sm font-medium text-text truncate;
+}
+
+.c028 {
+  @apply text-xs text-danger;
+}
+
+.c029 {
+  @apply mt-1.5 h-1 bg-surface rounded-full overflow-hidden;
+}
+
+.c030 {
+  @apply h-full bg-primary rounded-full transition-all duration-300;
+}
+
+.c031 {
+  @apply shrink-0;
+}
+
+.c032 {
+  @apply w-4 h-4 text-primary animate-spin;
+}
+
+.c033 {
+  @apply text-xs text-accent font-semibold;
+}
+
+.c034 {
+  @apply text-xs text-warning font-semibold;
+}
+
+.c035 {
+  @apply w-4 h-4 text-text-muted;
+}
+
+.c036 {
+  @apply bg-danger/5 border border-danger/20 rounded-2xl p-4 flex items-start gap-3;
+}
+
+.c037 {
+  @apply w-5 h-5 text-danger shrink-0 mt-0.5;
+}
+
+.c038 {
+  @apply text-sm space-y-1;
+}
+
+.c039 {
+  @apply font-medium text-danger;
+}
+
+.c040 {
+  @apply text-text-secondary;
+}
+
+.c041 {
+  @apply flex items-center justify-between;
+}
+
+.c042 {
+  @apply flex items-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg transition-colors;
+}
+
+.c043 {
+  @apply w-4 h-4;
+}
+
+.c044 {
+  @apply flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-light text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed;
+}
+
+.c045 {
+  @apply w-4 h-4 animate-spin;
+}

@@ -1,0 +1,157 @@
+@reference "../../../globals.css";
+
+.c001 {
+  @apply flex flex-col h-screen;
+}
+
+.c002 {
+  @apply h-16 border-b border-border bg-panel flex items-center justify-between px-6 shrink-0;
+}
+
+.c003 {
+  @apply flex items-center gap-3;
+}
+
+.c004 {
+  @apply w-5 h-5 text-primary;
+}
+
+.c005 {
+  @apply text-lg font-semibold text-text;
+}
+
+.c006 {
+  @apply flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-light text-white text-sm font-medium rounded-lg transition-colors;
+}
+
+.c007 {
+  @apply w-4 h-4;
+}
+
+.c008 {
+  @apply hidden sm:inline;
+}
+
+.c009 {
+  @apply flex-1 overflow-y-auto p-6 md:p-8 space-y-6;
+}
+
+.c010 {
+  @apply rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger;
+}
+
+.c011 {
+  @apply grid grid-cols-2 lg:grid-cols-4 gap-4;
+}
+
+.c012 {
+  @apply bg-panel rounded-2xl border border-border p-5;
+}
+
+.c013 {
+  @apply flex items-center justify-between mb-3;
+}
+
+.c014 {
+  @apply text-xs text-text-muted font-medium uppercase tracking-wider;
+}
+
+.c015 {
+  @apply text-2xl font-bold text-text;
+}
+
+.c016 {
+  @apply grid grid-cols-1 lg:grid-cols-3 gap-6;
+}
+
+.c017 {
+  @apply lg:col-span-2 bg-panel rounded-2xl border border-border p-6;
+}
+
+.c018 {
+  @apply flex items-center justify-between mb-4;
+}
+
+.c019 {
+  @apply text-sm font-semibold text-text;
+}
+
+.c020 {
+  @apply text-xs text-primary hover:text-primary-light transition-colors;
+}
+
+.c021 {
+  @apply space-y-3;
+}
+
+.c022 {
+  @apply flex items-center justify-between p-3 rounded-xl bg-surface hover:bg-panel-light cursor-pointer transition-colors;
+}
+
+.c023 {
+  @apply flex items-center gap-3 min-w-0;
+}
+
+.c024 {
+  @apply w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0;
+}
+
+.c025 {
+  @apply w-4 h-4 text-primary;
+}
+
+.c026 {
+  @apply min-w-0;
+}
+
+.c027 {
+  @apply text-sm font-medium text-text truncate;
+}
+
+.c028 {
+  @apply text-xs text-text-muted;
+}
+
+.c029 {
+  @apply rounded-xl border border-border bg-surface px-4 py-8 text-center text-sm text-text-muted;
+}
+
+.c030 {
+  @apply space-y-6;
+}
+
+.c031 {
+  @apply bg-panel rounded-2xl border border-border p-6;
+}
+
+.c032 {
+  @apply text-sm font-semibold text-text mb-4;
+}
+
+.c033 {
+  @apply space-y-2;
+}
+
+.c034 {
+  @apply w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium transition-colors;
+}
+
+.c035 {
+  @apply w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-surface hover:bg-panel-light text-text-secondary text-sm font-medium transition-colors;
+}
+
+.c036 {
+  @apply flex items-center justify-between;
+}
+
+.c037 {
+  @apply text-sm font-semibold text-accent;
+}
+
+.c038 {
+  @apply text-sm font-semibold text-warning;
+}
+
+.c039 {
+  @apply text-sm font-semibold text-primary;
+}

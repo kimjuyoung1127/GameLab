@@ -3,6 +3,7 @@
 
 import { useEffect } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
+import styles from "./styles/error.module.css";
 
 export default function DashboardError({
   error,
@@ -16,22 +17,22 @@ export default function DashboardError({
   }, [error]);
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center max-w-md">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 border border-red-500/30">
-          <AlertTriangle className="h-7 w-7 text-red-400" />
+    <div className={styles.c001}>
+      <div className={styles.c002}>
+        <div className={styles.c003}>
+          <AlertTriangle className={styles.c004} />
         </div>
-        <h2 className="text-xl font-bold text-text mb-2">
+        <h2 className={styles.c005}>
           Something went wrong
         </h2>
-        <p className="text-sm text-text-secondary mb-6">
+        <p className={styles.c006}>
           {error.message || "An unexpected error occurred in this page."}
         </p>
         <button
           onClick={reset}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-light transition-colors"
+          className={styles.c007}
         >
-          <RotateCcw className="h-4 w-4" />
+          <RotateCcw className={styles.c008} />
           Try again
         </button>
       </div>

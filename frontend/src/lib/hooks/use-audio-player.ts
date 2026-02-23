@@ -1,4 +1,4 @@
-/** 오디오 재생 훅: play/pause/seek, 구간 재생, 볼륨 컨트롤, URL 없으면 시뮬레이션 모드. */
+/** Audio player hook: real HTMLAudioElement only, with explicit error state. */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,37 +8,47 @@ export interface AudioPlayerState {
   currentTime: number;
   duration: number;
   volume: number;
+  playbackRate: number;
+  canPlay: boolean;
+  error: string | null;
   play: () => void;
   pause: () => void;
   toggle: () => void;
   seek: (time: number) => void;
   playRegion: (start: number, end: number) => void;
   setVolume: (v: number) => void;
+  setPlaybackRate: (r: number) => void;
 }
 
-/**
- * Audio player with real HTMLAudioElement when URL available,
- * simulated rAF playback when URL is null (mock mode).
- */
 export function useAudioPlayer(
   audioUrl: string | null | undefined,
   fallbackDuration?: number,
+  retryKey = 0,
 ): AudioPlayerState {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number>(0);
   const regionEndRef = useRef<number | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(fallbackDuration ?? 0);
+  const [error, setError] = useState<string | null>(null);
+  const [canPlay, setCanPlay] = useState(false);
   const [volume, setVolumeState] = useState(() => {
     if (typeof window === "undefined") return 0.75;
     const saved = localStorage.getItem("sst-volume");
     return saved !== null ? parseFloat(saved) : 0.75;
   });
+  const [playbackRate, setPlaybackRateState] = useState(1.0);
 
-  /* ----- Volume setter ----- */
+  const resetPlayerState = useCallback(() => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(fallbackDuration ?? 0);
+    setError(null);
+    setCanPlay(false);
+  }, [fallbackDuration]);
+
   const setVolume = useCallback((v: number) => {
     const clamped = Math.max(0, Math.min(1, v));
     setVolumeState(clamped);
@@ -50,30 +60,42 @@ export function useAudioPlayer(
     }
   }, []);
 
-  /* ----- Reset on source change ----- */
+  const setPlaybackRate = useCallback((r: number) => {
+    const clamped = Math.max(0.5, Math.min(2.0, r));
+    setPlaybackRateState(clamped);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = clamped;
+    }
+  }, []);
+
   useEffect(() => {
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(fallbackDuration ?? 0);
+    // Source change must clear stale playback state before attaching a new element.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    resetPlayerState();
 
     if (!audioUrl) {
       audioRef.current = null;
+      setError("Audio URL is missing");
       return;
     }
 
     const audio = new Audio(audioUrl);
     audio.volume = volume;
+    audio.playbackRate = playbackRate;
     audioRef.current = audio;
 
-    const onLoaded = () => setDuration(audio.duration);
+    const onLoaded = () => {
+      setDuration(audio.duration);
+      setCanPlay(true);
+      setError(null);
+    };
     const onEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
     };
     const onError = () => {
-      // Audio failed to load — fall back to simulated mode
-      audioRef.current = null;
-      setDuration(fallbackDuration ?? 600);
+      setCanPlay(false);
+      setError("Audio failed to load");
     };
 
     audio.addEventListener("loadedmetadata", onLoaded);
@@ -87,69 +109,41 @@ export function useAudioPlayer(
       audio.removeEventListener("error", onError);
       audio.src = "";
     };
-  }, [audioUrl, fallbackDuration]);
+  }, [audioUrl, playbackRate, resetPlayerState, retryKey, volume]);
 
-  /* ----- Tick loop (real or simulated) ----- */
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying || !audioRef.current) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       return;
     }
 
-    // Real audio element available → sync from it
-    if (audioRef.current) {
-      const tick = () => {
-        if (audioRef.current) {
-          const t = audioRef.current.currentTime;
-          if (regionEndRef.current !== null && t >= regionEndRef.current) {
-            audioRef.current.pause();
-            setIsPlaying(false);
-            regionEndRef.current = null;
-            return;
-          }
-          setCurrentTime(t);
+    const tick = () => {
+      if (audioRef.current) {
+        const t = audioRef.current.currentTime;
+        if (regionEndRef.current !== null && t >= regionEndRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+          regionEndRef.current = null;
+          return;
         }
-        rafRef.current = requestAnimationFrame(tick);
-      };
+        setCurrentTime(t);
+      }
       rafRef.current = requestAnimationFrame(tick);
-    } else {
-      // Simulated playback via rAF
-      lastTimeRef.current = performance.now();
-      const tick = (now: number) => {
-        const dt = (now - lastTimeRef.current) / 1000;
-        lastTimeRef.current = now;
-        setCurrentTime((prev) => {
-          const next = prev + dt;
-          if (regionEndRef.current !== null && next >= regionEndRef.current) {
-            setIsPlaying(false);
-            regionEndRef.current = null;
-            return regionEndRef.current ?? next;
-          }
-          if (next >= duration) {
-            setIsPlaying(false);
-            return 0;
-          }
-          return next;
-        });
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [isPlaying, duration]);
+  }, [isPlaying]);
 
-  /* ----- Controls ----- */
   const play = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-    } else {
-      // Simulated mode
-      setIsPlaying(true);
-    }
-  }, []);
+    if (!audioRef.current || !canPlay) return;
+    audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {
+      setError("Audio playback failed");
+    });
+  }, [canPlay]);
 
   const pause = useCallback(() => {
     if (audioRef.current) {
@@ -161,27 +155,44 @@ export function useAudioPlayer(
   const toggle = useCallback(() => {
     if (isPlaying) pause();
     else play();
-  }, [isPlaying, play, pause]);
+  }, [isPlaying, pause, play]);
 
   const seek = useCallback(
     (time: number) => {
+      if (!canPlay) return;
       const clamped = Math.max(0, Math.min(time, duration));
       if (audioRef.current) {
         audioRef.current.currentTime = clamped;
       }
       setCurrentTime(clamped);
     },
-    [duration],
+    [canPlay, duration],
   );
 
   const playRegion = useCallback(
     (start: number, end: number) => {
+      if (!canPlay) return;
       regionEndRef.current = end;
       seek(start);
       play();
     },
-    [seek, play],
+    [canPlay, play, seek],
   );
 
-  return { isPlaying, currentTime, duration, volume, play, pause, toggle, seek, playRegion, setVolume };
+  return {
+    isPlaying,
+    currentTime,
+    duration,
+    volume,
+    playbackRate,
+    canPlay,
+    error,
+    play,
+    pause,
+    toggle,
+    seek,
+    playRegion,
+    setVolume,
+    setPlaybackRate,
+  };
 }

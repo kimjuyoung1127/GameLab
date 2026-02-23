@@ -13,28 +13,30 @@ import {
   ChevronRight,
   Settings,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useSessionStore } from "@/lib/store/session-store";
 import { endpoints } from "@/lib/api/endpoints";
 import { useScoreStore } from "@/lib/store/score-store";
 import type { Session, SessionStatus } from "@/types";
+import styles from "./styles/page.module.css";
 
 type FilterTab = "all" | "processing" | "completed";
 
-const TAB_LABELS: { key: FilterTab; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "processing", label: "In Progress" },
-  { key: "completed", label: "Completed" },
+const TAB_LABELS: { key: FilterTab; tKey: string }[] = [
+  { key: "all", tKey: "tabAll" },
+  { key: "processing", tKey: "tabProcessing" },
+  { key: "completed", tKey: "tabCompleted" },
 ];
 
 function statusColor(status: SessionStatus) {
   switch (status) {
     case "processing":
-      return { dot: "bg-primary", text: "text-primary", label: "Processing" };
+      return { dot: "bg-primary", text: "text-primary", tKey: "statusProcessing" };
     case "completed":
-      return { dot: "bg-accent", text: "text-accent", label: "Completed" };
+      return { dot: "bg-accent", text: "text-accent", tKey: "statusCompleted" };
     case "pending":
     default:
-      return { dot: "bg-text-muted", text: "text-text-muted", label: "Pending" };
+      return { dot: "bg-text-muted", text: "text-text-muted", tKey: "statusPending" };
   }
 }
 
@@ -50,19 +52,19 @@ function scoreBadge(score: number | null) {
   );
 }
 
-function progressBar(progress: number, status: SessionStatus) {
+function progressBar(progress: number, status: SessionStatus, t: (key: string, values?: Record<string, string | number | Date>) => string) {
   const barColor = status === "completed" ? "bg-accent" : "bg-primary";
   const label =
     status === "processing"
-      ? `Processing... ${progress}%`
+      ? t("progressProcessing", { progress })
       : status === "completed"
-        ? `Complete ${progress}%`
-        : `Waiting ${progress}%`;
+        ? t("progressCompleted", { progress })
+        : t("progressPending", { progress });
 
   return (
-    <div className="flex flex-col gap-1.5 min-w-[140px]">
-      <span className="text-xs text-text-secondary">{label}</span>
-      <div className="w-full h-1.5 rounded-full bg-panel-light overflow-hidden">
+    <div className={styles.c001}>
+      <span className={styles.c002}>{label}</span>
+      <div className={styles.c003}>
         <div
           className={`h-full rounded-full transition-all duration-500 ${barColor}`}
           style={{ width: `${progress}%` }}
@@ -78,6 +80,7 @@ function formatDate(iso: string) {
 }
 
 export default function SessionsPage() {
+  const t = useTranslations("sessions");
   const router = useRouter();
   const { sessions, setSessions, setCurrentSession } = useSessionStore();
   const { score } = useScoreStore();
@@ -188,70 +191,70 @@ export default function SessionsPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="h-16 shrink-0 border-b border-border bg-panel flex items-center justify-between px-6">
+    <div className={styles.c004}>
+      <header className={styles.c005}>
         <div>
-          <h1 className="text-lg font-bold text-text">Sessions Management</h1>
-          <p className="text-xs text-text-muted">Smart Spectro-Tagging &amp; Anomaly Detection</p>
+          <h1 className={styles.c006}>{t("title")}</h1>
+          <p className={styles.c007}>{t("subtitle")}</p>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className={styles.c008}>
         {apiError && (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div className={styles.c009}>
             {apiError}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="bg-panel rounded-xl border border-border p-5 flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Today Score</p>
-              <div className="flex items-end gap-2">
-                <span className="text-3xl font-bold text-text">{todayScore}%</span>
+        <div className={styles.c010}>
+          <div className={styles.c011}>
+            <div className={styles.c012}>
+              <p className={styles.c013}>{t("todayScore")}</p>
+              <div className={styles.c014}>
+                <span className={styles.c015}>{todayScore}%</span>
               </div>
-              <p className="text-xs text-text-muted">Average completed-session score</p>
+              <p className={styles.c007}>{t("todayScoreHint")}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-              <Shield className="w-5 h-5 text-primary" />
+            <div className={styles.c016}>
+              <Shield className={styles.c017} />
             </div>
           </div>
 
-          <div className="bg-panel rounded-xl border border-border p-5 flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Processed Files</p>
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-text">{processedFiles.toLocaleString()}</span>
-                <span className="text-sm text-text-muted">files</span>
+          <div className={styles.c011}>
+            <div className={styles.c012}>
+              <p className={styles.c013}>{t("processedFiles")}</p>
+              <div className={styles.c018}>
+                <span className={styles.c015}>{processedFiles.toLocaleString()}</span>
+                <span className={styles.c019}>{t("filesUnit")}</span>
               </div>
-              <div className="w-32 h-1.5 rounded-full bg-panel-light overflow-hidden mt-1">
-                <div className="h-full rounded-full bg-accent w-full" />
+              <div className={styles.c020}>
+                <div className={styles.c021} />
               </div>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 text-primary" />
+            <div className={styles.c016}>
+              <FileText className={styles.c017} />
             </div>
           </div>
 
-          <div className="bg-panel rounded-xl border border-border p-5 flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">Active Sessions</p>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold text-text">{activeCount}</span>
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent" />
+          <div className={styles.c011}>
+            <div className={styles.c012}>
+              <p className={styles.c013}>{t("activeSessions")}</p>
+              <div className={styles.c022}>
+                <span className={styles.c015}>{activeCount}</span>
+                <span className={styles.c023}>
+                  <span className={styles.c024} />
+                  <span className={styles.c025} />
                 </span>
               </div>
-              <p className="text-xs text-text-muted">Current score: {score.toLocaleString()}</p>
+              <p className={styles.c007}>{t("activeSessionsHint", { score: score.toLocaleString() })}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-              <Settings className="w-5 h-5 text-primary" />
+            <div className={styles.c016}>
+              <Settings className={styles.c017} />
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-1 bg-panel rounded-lg p-1 border border-border">
+        <div className={styles.c026}>
+          <div className={styles.c027}>
             {TAB_LABELS.map((tab) => (
               <button
                 key={tab.key}
@@ -262,123 +265,123 @@ export default function SessionsPage() {
                     : "text-text-secondary hover:text-text hover:bg-panel-light"
                 }`}
               >
-                {tab.label}
+                {t(tab.tKey)}
               </button>
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+          <div className={styles.c028}>
+            <div className={styles.c029}>
+              <Search className={styles.c030} />
               <input
                 type="text"
-                placeholder="Search Session ID..."
+                placeholder={t("searchPlaceholder")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full sm:w-64 pl-9 pr-4 py-2 rounded-lg bg-panel border border-border text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+                className={styles.c031}
               />
             </div>
 
             <button
               onClick={handleCreateSession}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-light text-white text-sm font-medium transition-colors"
+              className={styles.c032}
             >
-              <Plus className="w-4 h-4" />
-              Upload Files
+              <Plus className={styles.c033} />
+              {t("uploadFiles")}
             </button>
           </div>
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 bg-danger/5 border border-danger/20 rounded-lg px-4 py-2">
-            <span className="text-sm text-text-secondary font-medium">
-              {selectedIds.size} selected
+          <div className={styles.c034}>
+            <span className={styles.c035}>
+              {t("selectedCount", { count: selectedIds.size })}
             </span>
             <button
               onClick={() => setDeleteSessionId("__bulk__")}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-danger text-white text-xs font-bold"
+              className={styles.c036}
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete Selected
+              <Trash2 className={styles.c037} />
+              {t("deleteSelected")}
             </button>
             <button
               onClick={() => setSelectedIds(new Set())}
-              className="text-xs text-text-muted hover:text-text-secondary"
+              className={styles.c038}
             >
-              Clear
+              {t("clear")}
             </button>
           </div>
         )}
 
-        <div className="bg-panel rounded-xl border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div className={styles.c039}>
+          <div className={styles.c040}>
+            <table className={styles.c041}>
               <thead>
-                <tr className="border-b border-border">
-                  <th className="w-10 px-3 py-3.5">
+                <tr className={styles.c042}>
+                  <th className={styles.c043}>
                     <input
                       type="checkbox"
                       checked={selectedIds.size === filtered.length && filtered.length > 0}
                       onChange={toggleSelectAll}
-                      className="rounded border-border"
+                      className={styles.c044}
                     />
                   </th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Session ID</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Files</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Progress</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Score</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Status</th>
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Created Date</th>
-                  <th className="text-right px-5 py-3.5 text-xs font-semibold text-text-muted uppercase tracking-wider">Actions</th>
+                  <th className={styles.c045}>{t("sessionId")}</th>
+                  <th className={styles.c045}>{t("filesHeader")}</th>
+                  <th className={styles.c045}>{t("progress")}</th>
+                  <th className={styles.c045}>{t("score")}</th>
+                  <th className={styles.c045}>{t("status")}</th>
+                  <th className={styles.c045}>{t("createdDate")}</th>
+                  <th className={styles.c046}>{t("actions")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className={styles.c047}>
                 {filtered.map((session) => {
                   const sc = statusColor(session.status);
                   return (
                     <tr
                       key={session.id}
                       onClick={() => handleRowClick(session)}
-                      className="hover:bg-panel-light/50 cursor-pointer transition-colors"
+                      className={styles.c048}
                     >
-                      <td className="w-10 px-3 py-4" onClick={(e) => e.stopPropagation()}>
+                      <td className={styles.c049} onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedIds.has(session.id)}
                           onChange={() => toggleSelect(session.id)}
-                          className="rounded border-border"
+                          className={styles.c044}
                         />
                       </td>
-                      <td className="px-5 py-4">
+                      <td className={styles.c050}>
                         <div>
-                          <p className="font-semibold text-text">{session.id}</p>
-                          <p className="text-xs text-text-muted">{session.name}</p>
+                          <p className={styles.c051}>{session.id}</p>
+                          <p className={styles.c007}>{session.name}</p>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-text-secondary">{session.fileCount} Files</td>
-                      <td className="px-5 py-4">{progressBar(session.progress, session.status)}</td>
-                      <td className="px-5 py-4">
+                      <td className={styles.c052}>{session.fileCount} {t("filesSuffix")}</td>
+                      <td className={styles.c050}>{progressBar(session.progress, session.status, t)}</td>
+                      <td className={styles.c050}>
                         {session.score !== null ? scoreBadge(session.score) : (
-                          <span className="text-text-muted">&ndash;</span>
+                          <span className={styles.c053}>&ndash;</span>
                         )}
                       </td>
-                      <td className="px-5 py-4">
+                      <td className={styles.c050}>
                         <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${sc.text}`}>
                           <span className={`w-2 h-2 rounded-full ${sc.dot}`} />
-                          {sc.label}
+                          {t(sc.tKey)}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-text-secondary text-xs">{formatDate(session.createdAt)}</td>
-                      <td className="px-5 py-4 text-right">
+                      <td className={styles.c054}>{formatDate(session.createdAt)}</td>
+                      <td className={styles.c055}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeleteSessionId(session.id);
                           }}
-                          className="p-1.5 rounded-md hover:bg-danger/10 hover:text-danger transition-colors"
-                          title="Delete session"
+                          className={styles.c056}
+                          title={t("deleteTitle")}
                         >
-                          <Trash2 className="w-4 h-4 text-text-muted" />
+                          <Trash2 className={styles.c057} />
                         </button>
                       </td>
                     </tr>
@@ -387,8 +390,8 @@ export default function SessionsPage() {
 
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-5 py-12 text-center text-text-muted">
-                      No real sessions found yet. Upload files first.
+                    <td colSpan={8} className={styles.c058}>
+                      {t("emptyState")}
                     </td>
                   </tr>
                 )}
@@ -396,16 +399,16 @@ export default function SessionsPage() {
             </table>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-5 py-3.5 border-t border-border">
-            <p className="text-xs text-text-muted">Showing {filtered.length} results</p>
-            <div className="flex items-center gap-2">
-              <button className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-border text-xs text-text-secondary hover:bg-panel-light transition-colors">
-                <ChevronLeft className="w-3.5 h-3.5" />
-                Previous
+          <div className={styles.c059}>
+            <p className={styles.c007}>{t("showingResults", { count: filtered.length })}</p>
+            <div className={styles.c022}>
+              <button className={styles.c060}>
+                <ChevronLeft className={styles.c037} />
+                {t("previous")}
               </button>
-              <button className="flex items-center gap-1 px-3 py-1.5 rounded-md border border-border text-xs text-text-secondary hover:bg-panel-light transition-colors">
-                Next
-                <ChevronRight className="w-3.5 h-3.5" />
+              <button className={styles.c060}>
+                {t("next")}
+                <ChevronRight className={styles.c037} />
               </button>
             </div>
           </div>
@@ -414,22 +417,22 @@ export default function SessionsPage() {
 
       {/* Delete confirmation modal */}
       {deleteSessionId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-panel border border-border rounded-xl p-6 w-96 shadow-xl">
-            <h3 className="text-sm font-bold text-text mb-2">
-              {deleteSessionId === "__bulk__" ? `Delete ${selectedIds.size} Sessions?` : "Delete Session?"}
+        <div className={styles.c061}>
+          <div className={styles.c062}>
+            <h3 className={styles.c063}>
+              {deleteSessionId === "__bulk__" ? t("deleteModalBulk", { count: selectedIds.size }) : t("deleteModalSingle")}
             </h3>
-            <p className="text-xs text-text-muted mb-4">
+            <p className={styles.c064}>
               {deleteSessionId === "__bulk__"
-                ? "This will permanently delete the selected sessions, all audio files, and all suggestions. This action cannot be undone."
-                : "This will permanently delete the session, all audio files, and all suggestions. This action cannot be undone."}
+                ? t("deleteConfirmBulk")
+                : t("deleteConfirmSingle")}
             </p>
-            <div className="flex gap-2 justify-end">
+            <div className={styles.c065}>
               <button
                 onClick={() => setDeleteSessionId(null)}
-                className="px-4 py-2 rounded-lg text-xs text-text-secondary hover:bg-panel-light"
+                className={styles.c066}
               >
-                Cancel
+                {t("deleteCancel")}
               </button>
               <button
                 onClick={() => {
@@ -440,9 +443,9 @@ export default function SessionsPage() {
                   }
                 }}
                 disabled={deleting}
-                className="px-4 py-2 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-50"
+                className={styles.c067}
               >
-                {deleting ? "Deleting..." : "Delete"}
+                {deleting ? t("deleting") : t("deleteConfirm")}
               </button>
             </div>
           </div>

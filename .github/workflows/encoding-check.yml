@@ -1,0 +1,21 @@
+name: Encoding Check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  utf8:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check UTF-8
+        run: node scripts/check-utf8.mjs

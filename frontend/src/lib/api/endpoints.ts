@@ -1,11 +1,12 @@
-/** API 엔드포인트 barrel re-export — 모든 도메인 API를 endpoints 객체로 통합. */
-// Backward-compatible re-exports. New code should import from domain modules.
+/** API endpoints barrel re-export. */
 import { uploadEndpoints } from "./upload";
 import { jobsEndpoints } from "./jobs";
 import { sessionsEndpoints } from "./sessions";
 import { overviewEndpoints } from "./overview";
 import { labelingEndpoints } from "./labeling";
 import { leaderboardEndpoints, fetchMyScore } from "./leaderboard";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export const endpoints = {
   upload: uploadEndpoints,
@@ -14,6 +15,19 @@ export const endpoints = {
   sessions: sessionsEndpoints,
   labeling: labelingEndpoints,
   leaderboard: leaderboardEndpoints.list,
+  achievements: {
+    list: `${API_BASE}/achievements`,
+    me: `${API_BASE}/achievements/me`,
+    unlock: `${API_BASE}/achievements/unlock`,
+  },
 } as const;
 
-export { uploadEndpoints, jobsEndpoints, sessionsEndpoints, overviewEndpoints, labelingEndpoints, leaderboardEndpoints, fetchMyScore };
+export {
+  uploadEndpoints,
+  jobsEndpoints,
+  sessionsEndpoints,
+  overviewEndpoints,
+  labelingEndpoints,
+  leaderboardEndpoints,
+  fetchMyScore,
+};
