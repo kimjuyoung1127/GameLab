@@ -2,56 +2,65 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-Run commands inside `smart-spectro-tagging`:
+Run commands inside `frontend`:
 
 ```bash
-cd smart-spectro-tagging
+cd frontend
 npm install
-```
-
-Then run the development server:
-
-```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Debug Login Bypass
+## Auth (Google + Kakao OAuth)
 
-For faster debugging, login can be bypassed with an environment variable.
+This project uses Supabase Auth with OAuth providers.
 
-- Default behavior in this repo: bypass enabled unless explicitly disabled.
-- To require login page:
+### Required env vars (`frontend/.env.local`)
 
 ```bash
-# .env.local
-NEXT_PUBLIC_BYPASS_LOGIN=false
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-When bypass is enabled, `/` and `/login` both route directly to `/sessions`.
+For production (Vercel):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+NEXT_PUBLIC_APP_URL=https://gamelab-zeta.vercel.app
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Supabase Console Settings
 
-## Learn More
+1. `Authentication -> URL Configuration`
+- Site URL: `https://gamelab-zeta.vercel.app`
+- Redirect URLs:
+  - `http://localhost:3000/auth/callback`
+  - `https://gamelab-zeta.vercel.app/auth/callback`
 
-To learn more about Next.js, take a look at the following resources:
+2. `Authentication -> Providers`
+- Enable `Google`
+- Enable `Kakao`
+- Fill provider credentials from each cloud console.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Google Cloud Console
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Create OAuth client (Web)
+- Authorized origins:
+  - `http://localhost:3000`
+  - `https://gamelab-zeta.vercel.app`
+- Redirect URI: use the exact callback URI shown in Supabase Google provider.
 
-## Deploy on Vercel
+### Kakao Developers
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Register Web platform domains:
+  - `http://localhost:3000`
+  - `https://gamelab-zeta.vercel.app`
+- Set Redirect URI: use the exact callback URI shown in Supabase Kakao provider.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Runtime Notes
+
+- Login page now supports OAuth only (Google/Kakao).
+- `/auth/callback` exchanges auth code for session and redirects to `/sessions`.
+- Keep backend running locally if dashboard data is needed after login.

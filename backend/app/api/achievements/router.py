@@ -18,7 +18,8 @@ async def list_achievements():
 @router.get("/me", response_model=list[UserAchievement])
 async def get_my_achievements(current_user: CurrentUser = Depends(get_current_user)):
     """Return achievements unlocked by the authenticated user."""
-    ensure_sst_user_exists(current_user)
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
     res = (
         supabase.table("sst_user_achievements")
         .select("*")
@@ -34,18 +35,36 @@ async def unlock_achievement(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Unlock an achievement for the authenticated user (idempotent upsert)."""
-    ensure_sst_user_exists(current_user)
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
 
     ach = supabase.table("sst_achievements").select("id").eq("id", body.achievement_id).execute()
     if not ach.data:
         raise HTTPException(status_code=404, detail=f"Achievement '{body.achievement_id}' not found")
 
-    res = (
-        supabase.table("sst_user_achievements")
-        .upsert(
-            {"user_id": current_user.id, "achievement_id": body.achievement_id},
-            on_conflict="user_id,achievement_id",
+    try:
+        res = (
+            supabase.table("sst_user_achievements")
+            .upsert(
+                {"user_id": current_user.id, "achievement_id": body.achievement_id},
+                on_conflict="user_id,achievement_id",
+            )
+            .execute()
         )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Failed to unlock achievement") from exc
+
+    if res.data:
+        return res.data[0]
+
+    existing = (
+        supabase.table("sst_user_achievements")
+        .select("*")
+        .eq("user_id", current_user.id)
+        .eq("achievement_id", body.achievement_id)
+        .limit(1)
         .execute()
     )
-    return res.data[0]
+    if existing.data:
+        return existing.data[0]
+    raise HTTPException(status_code=503, detail="Failed to read unlocked achievement")

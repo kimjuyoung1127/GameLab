@@ -168,6 +168,7 @@ export default function LabelingWorkspacePage() {
   const [fileCompleteToast, setFileCompleteToast] = useState(false);
   const [audioRetryKey, setAudioRetryKey] = useState(0);
   const hasInteracted = useRef(false);
+  const completionHandled = useRef(false);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -368,7 +369,9 @@ export default function LabelingWorkspacePage() {
   /* ----- File completion detection + auto-next -------------------- */
   useEffect(() => {
     if (!hasInteracted.current) return;
+    if (completionHandled.current) return;
     if (pendingCount === 0 && totalCount > 0 && !fileCompleteToast) {
+      completionHandled.current = true;
       setFileCompleteToast(true);
       const timer = setTimeout(() => {
         setFileCompleteToast(false);
@@ -382,6 +385,7 @@ export default function LabelingWorkspacePage() {
   useEffect(() => {
     setFileCompleteToast(false);
     hasInteracted.current = false;
+    completionHandled.current = false;
   }, [activeFileId]);
 
   /* ----- Hotkeys -------------------------------------------------- */
@@ -748,7 +752,11 @@ export default function LabelingWorkspacePage() {
             <div className="flex-1 relative overflow-hidden">
             {/* File complete toast */}
             {fileCompleteToast && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+              <div
+                onClick={() => setFileCompleteToast(false)}
+                className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer"
+                title="Click to dismiss"
+              >
                 <div className="bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg">
                   <Check className="w-8 h-8 mx-auto mb-2" />
                   <p className="text-sm font-bold">{isLastFile ? t("allFilesComplete") : t("fileComplete")}</p>

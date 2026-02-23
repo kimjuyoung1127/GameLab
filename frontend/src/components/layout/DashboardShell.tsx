@@ -1,6 +1,6 @@
 /** 대시보드 셸: 사이드바 + TopBar + 메인 콘텐츠 3패널 레이아웃, 모바일 햄버거, 레벨업 토스트. */
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { Menu, X } from "lucide-react";
@@ -22,6 +22,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const t = useTranslations("layout");
   const tSidebar = useTranslations("sidebar");
   const locale = useLocale();
@@ -79,7 +84,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         }`}
       >
         <div className="relative">
-          <Sidebar activePath={pathname} />
+          <Sidebar activePath={mounted ? pathname : ""} />
           <button
             onClick={() => setSidebarOpen(false)}
             className="absolute top-3 right-3 p-1 rounded-md hover:bg-panel-light md:hidden"

@@ -16,8 +16,13 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
   const headers = new Headers(init?.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
-  return fetch(input, {
-    ...init,
-    headers,
-  });
+  try {
+    return await fetch(input, {
+      ...init,
+      headers,
+    });
+  } catch (err) {
+    const target = typeof input === "string" ? input : input.toString();
+    throw new Error(`Network request failed: ${target} (${(err as Error).message})`);
+  }
 }

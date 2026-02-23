@@ -31,7 +31,19 @@ def register_job(
     try:
         supabase.table("sst_jobs").insert(row).execute()
     except Exception:
+        # Common during upload bootstrap: session row may not exist yet.
+        # Retry once without session_id so polling can still find the job row.
         logger.exception("Failed to register job %s", job_id)
+        if "session_id" in row:
+            try:
+                fallback_row = {k: v for k, v in row.items() if k != "session_id"}
+                supabase.table("sst_jobs").insert(fallback_row).execute()
+                logger.warning(
+                    "Registered job %s without session_id due to FK timing; session_id will be patched later",
+                    job_id,
+                )
+            except Exception:
+                logger.exception("Fallback register without session_id also failed for job %s", job_id)
 
 
 def set_job_status(
@@ -64,10 +76,18 @@ def set_job_status(
 
 def get_job(job_id: str) -> JobStatusResponse | None:
     try:
-        res = supabase.table("sst_jobs").select("*").eq("id", job_id).maybe_single().execute()
-        if not res.data:
+        # Avoid maybe_single() 406/None edge-cases by querying as list.
+        res = (
+            supabase.table("sst_jobs")
+            .select("*")
+            .eq("id", job_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not rows:
             return None
-        d = res.data
+        d = rows[0]
         return JobStatusResponse(
             job_id=d["id"],
             status=UploadJobStatus(d["status"]),

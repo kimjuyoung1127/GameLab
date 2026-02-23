@@ -293,7 +293,8 @@ async def upload_files(files: list[UploadFile] = File(...)):
         duration, sample_rate = _extract_audio_metadata(save_path, ext)
 
         job_id = str(uuid.uuid4())
-        register_job(job_id, UploadJobStatus.queued, session_id=session_id, file_count=1)
+        # Job row must exist before session row is guaranteed; set session_id later.
+        register_job(job_id, UploadJobStatus.queued, file_count=1)
 
         uploaded_records.append(
             {

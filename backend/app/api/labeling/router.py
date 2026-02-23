@@ -56,7 +56,8 @@ async def update_suggestion_status(
     body: UpdateSuggestionRequest,
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    ensure_sst_user_exists(current_user)
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
 
     now_iso = datetime.now(timezone.utc).isoformat()
     try:

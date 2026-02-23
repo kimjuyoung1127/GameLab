@@ -1,8 +1,8 @@
 # GameLab (Smart Spectro-Tagging) 전체 개발 아카이브
 
 기준일: 2026-02-23 (KST)
-범위: Sprint 12.2 ~ Sprint 13.8
-현재 Phase: 2C 완료 (Sprint 13.8)
+범위: Sprint 12.2 ~ Sprint 13.9
+현재 Phase: 2D 진행 중 (Sprint 13.9)
 
 ---
 
@@ -197,13 +197,13 @@ GET /api/overview/metrics → OverviewMetrics
 ### 3.6 Leaderboard (`/api/leaderboard`)
 ```
 GET /api/leaderboard     → List[LeaderboardEntry] (today_score DESC)
-GET /api/leaderboard/me  → LeaderboardEntry (Sprint 13.5: 데모 유저 u-1)
+GET /api/leaderboard/me  → LeaderboardEntry (인증 사용자 기준)
 ```
 
 ### 3.7 Achievements (`/api/achievements`, Sprint 13.8)
 ```
 GET /api/achievements              → List[Achievement] (전체 업적 정의)
-GET /api/achievements/user/{id}    → List[UserAchievement] (유저 달성 업적)
+GET /api/achievements/me           → List[UserAchievement] (현재 인증 사용자 달성 업적)
 POST /api/achievements/unlock      → UserAchievement (idempotent upsert)
 ```
 
@@ -230,7 +230,7 @@ POST /api/achievements/unlock      → UserAchievement (idempotent upsert)
 | `annotation-store` | 라벨링 상태 | suggestions, selectedId, undo/redo |
 | `score-store` | 점수+레벨+일일목표 | score, streak, allTimeScore, dailyGoal, dailyProgress (Sprint 13.7) |
 | `ui-store` | UI 상태 | unsavedChanges, toastMessage, hotkeyHelpOpen (Sprint 13.6) |
-| `auth-store` | 인증 상태 | user, loading, isBypass (Sprint 13.3) |
+| `auth-store` | 인증 상태 | user, loading (Sprint 13.9: bypass 제거) |
 | `achievement-store` | 업적 관리 | all, unlocked, recentUnlock, checkAndUnlock (Sprint 13.8) |
 
 ### 4.3 커스텀 훅 (3개)
@@ -517,6 +517,25 @@ Upload → ffprobe 메타데이터 → 비동기 분석 → DB 저장 → FE 폴
 
 ---
 
+### Sprint 13.9 (2026-02-23) — Auth 단일화 + 안정화 핫픽스
+
+| 항목 | 상태 |
+|------|------|
+| 프론트: `dev-user`/`BYPASS_LOGIN` 제거, Supabase Auth 단일 기준 전환 | ✅ |
+| 프론트: `authFetch` 도입(Authorization Bearer 자동 주입) | ✅ |
+| 프론트: 업적 API 네트워크 실패 안전 처리(`achievement.ts`, `achievement-store.ts`) | ✅ |
+| 프론트: 로그인 페이지 OAuth 전용(구글/카카오) 정리 | ✅ |
+| 프론트: hydration mismatch 수정(`DashboardShell`, `use-audio-player`) | ✅ |
+| 프론트: 라벨링 완료 오버레이(“세션 목록으로 돌아가는 중…”) 클릭 dismiss 처리 | ✅ |
+| 백엔드: `SUPABASE_SERVICE_ROLE_KEY` 우선 사용으로 서버 쓰기 안정화 | ✅ |
+| 백엔드: `job_manager.get_job` 406/None 응답 방어 처리 + 404 안정 응답 | ✅ |
+| 백엔드: 업적 unlock 전 `sst_users` 보장(bootstrap/upsert) 처리 | ✅ |
+| 백엔드: `leaderboard/me`, `achievements/me` 등 현재 인증 사용자 기준으로 정렬 | ✅ |
+
+배포 메모: 프론트는 `https://gamelab-zeta.vercel.app/` 배포 완료, 백엔드는 로컬 `uvicorn` 기반 운영/검증 중.
+
+---
+
 ## 7. 파일 구조 (전체)
 
 ```
@@ -560,7 +579,7 @@ GameLab/
 │       │   ├── labeling/router.py  (GET /suggestions, PATCH, GET /export)
 │       │   ├── overview/router.py  (GET /metrics)
 │       │   ├── leaderboard/router.py (GET, GET /me)
-│       │   └── achievements/router.py (GET, GET /user, POST /unlock, Sprint 13.8)
+│       │   └── achievements/router.py (GET, GET /me, POST /unlock, Sprint 13.9)
 │       └── services/
 │           ├── job_manager.py (Supabase CRUD, Sprint 13.4 전환)
 │           └── analysis/
@@ -651,7 +670,7 @@ ANALYSIS_CONFIG_DIR=./config
 NEXT_PUBLIC_API_URL=http://localhost:8000
 NEXT_PUBLIC_SUPABASE_URL=https://zlcnanvidrjgpuugbcou.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-NEXT_PUBLIC_BYPASS_LOGIN=true
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ### 8.3 실행 명령
@@ -701,7 +720,6 @@ CamelModel(BE)이 snake_case → camelCase 자동 변환
 | IoT | IoT 기기 → JSON 특징값 수신 → 분석 → UI 렌더링 | 별도 Sprint 예정 |
 
 ### 남은 Sprint 후보
-- Sprint 13.9: 배포 (Vercel + Railway)
 - Sprint 14: 모니터링 + E2E 테스트
 - Sprint 15+: IoT JSON 파이프라인
 
@@ -737,7 +755,7 @@ CamelModel(BE)이 snake_case → camelCase 자동 변환
 - 문서 경로: 절대경로 금지, 레포 루트 상대경로만
 - `setCurrentSessionById`가 files를 리셋하므로 `setFiles`를 뒤에 호출
 - `.env`가 Pydantic BaseSettings 기본값을 override하므로 양쪽 모두 변경 필요
-- 데모 유저 ID: `u-1` (bypass 모드에서 점수 업데이트 대상)
+- 사용자 식별 기준: Supabase Auth `auth.uid()` 단일 사용 (데모 유저 제거)
 
 ### 알려진 기술 부채
 1. SoundLab V5.7 일부 실 WAV에서 타임아웃/폴백 발생
@@ -764,5 +782,5 @@ CamelModel(BE)이 snake_case → camelCase 자동 변환
 
 ---
 
-*이 문서는 GameLab 프로젝트의 Sprint 12.2~13.8까지의 전체 개발 내역을 기록합니다.*
+*이 문서는 GameLab 프로젝트의 Sprint 12.2~13.9까지의 전체 개발 내역을 기록합니다.*
 *온보딩, 프로젝트 핸드오프, 기술 부채 추적, 배포 절차 참조용으로 사용하세요.*

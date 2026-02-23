@@ -1,83 +1,56 @@
-/** 로그인 페이지: Supabase Auth 이메일/비밀번호 + 회원가입, bypass 모드 지원. */
 "use client";
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Mail, Lock, LogIn, AudioLines, UserPlus } from "lucide-react";
+import { AudioLines } from "lucide-react";
+
 import { createClient } from "@/lib/supabase/client";
 import styles from "./styles/page.module.css";
 
-/* ------------------------------------------------------------------ */
-/*  Mock waveform bar heights for the left-side visualization          */
-/* ------------------------------------------------------------------ */
 const WAVEFORM_BARS = [
   12, 28, 18, 36, 24, 42, 30, 20, 38, 14, 32, 26, 44, 16, 34, 22, 40, 10,
   28, 36, 18, 46, 24, 32, 20, 38, 14, 30, 42, 22, 34, 26, 48, 16, 28, 40,
   12, 36, 20, 44, 18, 30, 24, 38, 14, 32, 46, 22, 26, 34,
 ];
 
-type AuthMode = "signin" | "signup";
+type OAuthProvider = "google" | "kakao";
 
 export default function LoginPage() {
-  const router = useRouter();
   const t = useTranslations("login");
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<AuthMode>("signin");
+  const [isLoading, setIsLoading] = useState<OAuthProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [signupSuccess, setSignupSuccess] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSignupSuccess(false);
+  async function handleOAuthLogin(provider: OAuthProvider) {
+    try {
+      setError(null);
+      setIsLoading(provider);
 
-    const supabase = createClient();
+      const supabase = createClient();
+      const origin =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (typeof window !== "undefined" ? window.location.origin : "");
 
-    if (mode === "signin") {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const redirectTo = `${origin}/auth/callback`;
+
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
       });
 
-      if (signInError) {
-        setError(signInError.message);
-        setIsLoading(false);
-        return;
+      if (oauthError) {
+        setError(oauthError.message);
+        setIsLoading(null);
       }
-
-      router.push("/sessions");
-    } else {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (signUpError) {
-        setError(signUpError.message);
-        setIsLoading(false);
-        return;
-      }
-
-      setSignupSuccess(true);
-      setIsLoading(false);
+    } catch {
+      setError(t("oauthFailed"));
+      setIsLoading(null);
     }
-  };
+  }
 
   return (
     <div className={styles.c003}>
-      {/* ============================================================ */}
-      {/*  LEFT COLUMN - Branding & Visualization                      */}
-      {/* ============================================================ */}
       <div className={styles.c004}>
-        {/* Top section */}
         <div className={styles.c005}>
-          {/* System operational badge */}
           <div className={styles.c006}>
             <span className={styles.c007}>
               <span className={styles.c008}>
@@ -88,7 +61,6 @@ export default function LoginPage() {
             </span>
           </div>
 
-          {/* Hero heading */}
           <div className={styles.c011}>
             <h1 className={styles.c012}>
               <span className={styles.c013}>{t("heroLine1")}</span>
@@ -96,28 +68,19 @@ export default function LoginPage() {
               <span className={styles.c014}>{t("heroLine2")}</span>
             </h1>
 
-            <p className={styles.c015}>
-              {t("heroDescription")}
-            </p>
+            <p className={styles.c015}>{t("heroDescription")}</p>
           </div>
         </div>
 
-        {/* Waveform visualization card */}
         <div className={styles.c016}>
-          {/* Header row */}
           <div className={styles.c017}>
             <div className={styles.c018}>
               <AudioLines className={styles.c019} />
-              <span className={styles.c020}>
-                {t("liveStream")}
-              </span>
+              <span className={styles.c020}>{t("liveStream")}</span>
             </div>
-            <span className={styles.c021}>
-              {t("sectorInfo")}
-            </span>
+            <span className={styles.c021}>{t("sectorInfo")}</span>
           </div>
 
-          {/* Waveform bars */}
           <div className={styles.c022}>
             {WAVEFORM_BARS.map((h, i) => (
               <div
@@ -135,7 +98,6 @@ export default function LoginPage() {
             ))}
           </div>
 
-          {/* Bottom metadata */}
           <div className={styles.c024}>
             <span>{t("elapsed")}</span>
             <span className={styles.c025}>
@@ -146,172 +108,28 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ============================================================ */}
-      {/*  RIGHT COLUMN - Login Form                                   */}
-      {/* ============================================================ */}
       <div className={styles.c027}>
         <div className={styles.c028}>
-          {/* Card */}
           <div className={styles.c029}>
-            {/* Waveform icon circle */}
             <div className={styles.c030}>
               <div className={styles.c031}>
                 <AudioLines className={styles.c032} />
               </div>
             </div>
 
-            {/* Heading */}
             <div className={styles.c033}>
-              <h2 className={styles.c034}>
-                {mode === "signin" ? t("welcomeBack") : t("createAccount")}
-              </h2>
-              <p className={styles.c035}>
-                {mode === "signin"
-                  ? t("signInSubtitle")
-                  : t("signUpSubtitle")}
-              </p>
+              <h2 className={styles.c034}>{t("welcomeBack")}</h2>
+              <p className={styles.c035}>{t("oauthOnlySubtitle")}</p>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className={styles.c036}>
-              {/* Error message */}
-              {error && (
-                <div className={styles.c037}>
-                  {error}
-                </div>
-              )}
+            {error && <div className={styles.c037}>{error}</div>}
 
-              {/* Signup success message */}
-              {signupSuccess && (
-                <div className={styles.c038}>
-                  {t("signUpSuccess")}
-                </div>
-              )}
-
-              {/* Email field */}
-              <div className={styles.c039}>
-                <label
-                  htmlFor="email"
-                  className={styles.c040}
-                >
-                  {t("workEmail")}
-                </label>
-                <div className={styles.c041}>
-                  <Mail className={styles.c042} />
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={t("emailPlaceholder")}
-                    className={styles.c043}
-                  />
-                </div>
-              </div>
-
-              {/* Password field */}
-              <div className={styles.c039}>
-                <div className={styles.c044}>
-                  <label
-                    htmlFor="password"
-                    className={styles.c040}
-                  >
-                    {t("password")}
-                  </label>
-                  {mode === "signin" && (
-                    <button
-                      type="button"
-                      className={styles.c045}
-                    >
-                      {t("forgotPassword")}
-                    </button>
-                  )}
-                </div>
-                <div className={styles.c041}>
-                  <Lock className={styles.c042} />
-                  <input
-                    id="password"
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={t("passwordPlaceholder")}
-                    className={styles.c043}
-                  />
-                </div>
-              </div>
-
-              {/* Remember checkbox (signin only) */}
-              {mode === "signin" && (
-                <label className={styles.c046}>
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    className={styles.c047}
-                  />
-                  <span className={styles.c002}>
-                    {t("rememberDevice")}
-                  </span>
-                </label>
-              )}
-
-              {/* Submit button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className={styles.c048}
-              >
-                {isLoading ? (
-                  <span className={styles.c018}>
-                    <svg
-                      className={styles.c049}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle
-                        className={styles.c050}
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className={styles.c051}
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      />
-                    </svg>
-                    {mode === "signin" ? t("signingIn") : t("creatingAccount")}
-                  </span>
-                ) : (
-                  <>
-                    {mode === "signin" ? (
-                      <LogIn className={styles.c052} />
-                    ) : (
-                      <UserPlus className={styles.c052} />
-                    )}
-                    {mode === "signin" ? t("signIn") : t("signUp")}
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Divider */}
-            <div className={styles.c053}>
-              <div className={styles.c054} />
-              <span className={styles.c055}>{t("orContinueWith")}</span>
-              <div className={styles.c054} />
-            </div>
-
-            {/* SSO buttons */}
             <div className={styles.c056}>
-              {/* Google */}
               <button
                 type="button"
                 className={styles.c057}
+                disabled={isLoading !== null}
+                onClick={() => void handleOAuthLogin("google")}
               >
                 <svg className={styles.c058} viewBox="0 0 24 24" fill="none">
                   <path
@@ -331,63 +149,36 @@ export default function LoginPage() {
                     fill="#EA4335"
                   />
                 </svg>
-                {t("google")}
+                {isLoading === "google" ? t("redirecting") : t("google")}
               </button>
 
-              {/* Microsoft */}
               <button
                 type="button"
                 className={styles.c057}
+                disabled={isLoading !== null}
+                onClick={() => void handleOAuthLogin("kakao")}
               >
                 <svg className={styles.c058} viewBox="0 0 24 24" fill="none">
-                  <rect x="1" y="1" width="10" height="10" fill="#F25022" />
-                  <rect x="13" y="1" width="10" height="10" fill="#7FBA00" />
-                  <rect x="1" y="13" width="10" height="10" fill="#00A4EF" />
-                  <rect x="13" y="13" width="10" height="10" fill="#FFB900" />
+                  <path d="M12 3C6.477 3 2 6.58 2 11c0 2.77 1.76 5.2 4.43 6.63L5.6 21l3.77-2.06c.84.15 1.72.23 2.63.23 5.523 0 10-3.58 10-8.17S17.523 3 12 3z" fill="#FEE500"/>
+                  <path d="M9.2 9.1h1.5v5.4H9.2V9.1zm4.1 0h1.5v2h2v1.3h-2v2.1h-1.5V9.1z" fill="#191919"/>
                 </svg>
-                {t("microsoft")}
+                {isLoading === "kakao" ? t("redirecting") : t("kakao")}
               </button>
             </div>
 
-            {/* Footer text — Sign In / Sign Up toggle */}
-            <p className={styles.c059}>
-              {mode === "signin"
-                ? t("noAccount")
-                : t("hasAccount")}{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode(mode === "signin" ? "signup" : "signin");
-                  setError(null);
-                  setSignupSuccess(false);
-                }}
-                className={styles.c060}
-              >
-                {mode === "signin" ? t("signUp") : t("signIn")}
+            <div className={styles.c061}>
+              <button type="button" className={styles.c062}>
+                {t("privacyPolicy")}
               </button>
-            </p>
-          </div>
-
-          {/* Legal links */}
-          <div className={styles.c061}>
-            <button
-              type="button"
-              className={styles.c062}
-            >
-              {t("privacyPolicy")}
-            </button>
-            <span>&middot;</span>
-            <button
-              type="button"
-              className={styles.c062}
-            >
-              {t("termsOfService")}
-            </button>
+              <span>&middot;</span>
+              <button type="button" className={styles.c062}>
+                {t("termsOfService")}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Keyframe animation for waveform bars */}
       <style jsx global>{`
         @keyframes waveformPulse {
           0% {

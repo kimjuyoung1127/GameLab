@@ -68,8 +68,8 @@ async def get_current_user(
     return CurrentUser(id=str(user_id), email=email, name=name)
 
 
-def ensure_sst_user_exists(user: CurrentUser) -> None:
-    """Best-effort sst_users bootstrap for newly authenticated users."""
+def ensure_sst_user_exists(user: CurrentUser) -> bool:
+    """Ensure sst_users row exists for authenticated user."""
     try:
         existing = (
             supabase.table("sst_users")
@@ -79,12 +79,12 @@ def ensure_sst_user_exists(user: CurrentUser) -> None:
             .execute()
         )
         if existing.data:
-            return
+            return True
 
         email = user.email or f"{user.id}@unknown.local"
         name = user.name or email.split("@")[0]
 
-        supabase.table("sst_users").insert(
+        supabase.table("sst_users").upsert(
             {
                 "id": user.id,
                 "name": name,
@@ -93,7 +93,10 @@ def ensure_sst_user_exists(user: CurrentUser) -> None:
                 "today_score": 0,
                 "accuracy": 0,
                 "all_time_score": 0,
-            }
+            },
+            on_conflict="id",
         ).execute()
+        return True
     except Exception:
         logger.exception("Failed to ensure sst_users row", extra={"user_id": user.id})
+        return False

@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     supabase_url: str
     supabase_anon_key: str
+    supabase_service_role_key: str | None = None
     allowed_origins: str = "http://localhost:3000"
     public_file_base_url: str = "http://localhost:8000"
     max_file_size_mb: int = 1024

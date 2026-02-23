@@ -21,12 +21,16 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
   loaded: false,
 
   load: async () => {
-    const [allAch, userAch] = await Promise.all([fetchAchievements(), fetchMyAchievements()]);
-    set({
-      achievements: allAch,
-      unlocked: new Set(userAch.map((ua) => ua.achievement_id)),
-      loaded: true,
-    });
+    try {
+      const [allAch, userAch] = await Promise.all([fetchAchievements(), fetchMyAchievements()]);
+      set({
+        achievements: allAch,
+        unlocked: new Set(userAch.map((ua) => ua.achievement_id)),
+        loaded: true,
+      });
+    } catch {
+      set({ loaded: true });
+    }
   },
 
   checkAndUnlock: async () => {
@@ -49,17 +53,21 @@ export const useAchievementStore = create<AchievementState>((set, get) => ({
       "daily-goal": dailyProgress >= dailyGoal,
     };
 
-    for (const ach of achievements) {
-      if (unlocked.has(ach.id)) continue;
-      if (rules[ach.id]) {
-        const result = await unlockAchievement(ach.id);
-        if (result) {
-          set((s) => ({
-            unlocked: new Set([...s.unlocked, ach.id]),
-            recentUnlock: ach,
-          }));
+    try {
+      for (const ach of achievements) {
+        if (unlocked.has(ach.id)) continue;
+        if (rules[ach.id]) {
+          const result = await unlockAchievement(ach.id);
+          if (result) {
+            set((s) => ({
+              unlocked: new Set([...s.unlocked, ach.id]),
+              recentUnlock: ach,
+            }));
+          }
         }
       }
+    } catch {
+      // Non-fatal: network/auth misconfiguration should not break labeling flow.
     }
   },
 

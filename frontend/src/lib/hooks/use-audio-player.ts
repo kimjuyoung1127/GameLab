@@ -34,11 +34,7 @@ export function useAudioPlayer(
   const [duration, setDuration] = useState(fallbackDuration ?? 0);
   const [error, setError] = useState<string | null>(null);
   const [canPlay, setCanPlay] = useState(false);
-  const [volume, setVolumeState] = useState(() => {
-    if (typeof window === "undefined") return 0.75;
-    const saved = localStorage.getItem("sst-volume");
-    return saved !== null ? parseFloat(saved) : 0.75;
-  });
+  const [volume, setVolumeState] = useState(0.75);
   const [playbackRate, setPlaybackRateState] = useState(1.0);
 
   const resetPlayerState = useCallback(() => {
@@ -65,6 +61,21 @@ export function useAudioPlayer(
     setPlaybackRateState(clamped);
     if (audioRef.current) {
       audioRef.current.playbackRate = clamped;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem("sst-volume");
+    if (!saved) return;
+    const parsed = parseFloat(saved);
+    if (Number.isNaN(parsed)) return;
+    const clamped = Math.max(0, Math.min(1, parsed));
+    // Client-only preference hydration after initial render to avoid SSR mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVolumeState(clamped);
+    if (audioRef.current) {
+      audioRef.current.volume = clamped;
     }
   }, []);
 

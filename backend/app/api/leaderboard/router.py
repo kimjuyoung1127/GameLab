@@ -31,7 +31,8 @@ async def get_leaderboard():
 @router.get("/me", response_model=LeaderboardEntry)
 async def get_my_score(current_user: CurrentUser = Depends(get_current_user)):
     """Get current authenticated user's score."""
-    ensure_sst_user_exists(current_user)
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
 
     try:
         res = (
