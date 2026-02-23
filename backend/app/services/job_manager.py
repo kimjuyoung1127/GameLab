@@ -1,8 +1,12 @@
+"""잡 스토어: Supabase DB 기반 잡 등록, 상태 변경, 조회."""
+import logging
+from datetime import datetime, timezone
+
+from app.core.supabase_client import supabase
 from app.models.jobs import JobStatusResponse
 from app.models.upload import UploadJobStatus
 
-# In-memory job store (replace with DB in production)
-_jobs: dict[str, JobStatusResponse] = {}
+logger = logging.getLogger(__name__)
 
 
 def register_job(
@@ -11,12 +15,23 @@ def register_job(
     session_id: str | None = None,
     file_count: int | None = None,
 ):
-    _jobs[job_id] = JobStatusResponse(
-        job_id=job_id,
-        status=status,
-        session_id=session_id,
-        file_count=file_count,
-    )
+    now_iso = datetime.now(timezone.utc).isoformat()
+    row: dict = {
+        "id": job_id,
+        "status": status.value,
+        "progress": 0,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    if session_id is not None:
+        row["session_id"] = session_id
+    if file_count is not None:
+        row["file_count"] = file_count
+
+    try:
+        supabase.table("sst_jobs").insert(row).execute()
+    except Exception:
+        logger.exception("Failed to register job %s", job_id)
 
 
 def set_job_status(
@@ -28,19 +43,39 @@ def set_job_status(
     session_id: str | None = None,
     file_count: int | None = None,
 ):
-    current = _jobs.get(job_id)
-    if not current:
-        return
+    update: dict = {
+        "status": status.value,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if progress is not None:
+        update["progress"] = progress
+    if error is not None:
+        update["error"] = error
+    if session_id is not None:
+        update["session_id"] = session_id
+    if file_count is not None:
+        update["file_count"] = file_count
 
-    _jobs[job_id] = JobStatusResponse(
-        job_id=job_id,
-        status=status,
-        progress=current.progress if progress is None else progress,
-        session_id=current.session_id if session_id is None else session_id,
-        file_count=current.file_count if file_count is None else file_count,
-        error=error,
-    )
+    try:
+        supabase.table("sst_jobs").update(update).eq("id", job_id).execute()
+    except Exception:
+        logger.exception("Failed to update job %s", job_id)
 
 
 def get_job(job_id: str) -> JobStatusResponse | None:
-    return _jobs.get(job_id)
+    try:
+        res = supabase.table("sst_jobs").select("*").eq("id", job_id).maybe_single().execute()
+        if not res.data:
+            return None
+        d = res.data
+        return JobStatusResponse(
+            job_id=d["id"],
+            status=UploadJobStatus(d["status"]),
+            progress=d.get("progress", 0),
+            session_id=d.get("session_id"),
+            file_count=d.get("file_count"),
+            error=d.get("error"),
+        )
+    except Exception:
+        logger.exception("Failed to get job %s", job_id)
+        return None

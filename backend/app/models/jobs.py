@@ -1,3 +1,4 @@
+"""잡 상태 도메인 모델: JobStatusResponse (폴링 응답)."""
 from typing import Optional
 from app.models.common import CamelModel
 from app.models.upload import UploadJobStatus

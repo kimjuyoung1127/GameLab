@@ -1,3 +1,4 @@
+/** 파형 캔버스: Canvas 기반 스펙트로그램 렌더링, 주파수/시간 축, 격자선. */
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";

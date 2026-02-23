@@ -1,3 +1,4 @@
+"""대시보드 개요 API: 세션/파일/정확도 집계 메트릭스."""
 import logging
 from fastapi import APIRouter, HTTPException
 from app.models.overview import OverviewMetrics

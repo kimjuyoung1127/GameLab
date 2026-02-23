@@ -1,3 +1,4 @@
+/** UI 상태 관리: 사이드바 접기, 모달, 토스트 메시지, 로딩 상태. */
 import { create } from "zustand";
 
 interface UIState {

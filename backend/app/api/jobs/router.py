@@ -1,3 +1,4 @@
+"""잡 상태 API: 업로드/분석 진행 상태 폴링 엔드포인트."""
 from fastapi import APIRouter, HTTPException
 from app.models.jobs import JobStatusResponse
 from app.services.job_manager import get_job

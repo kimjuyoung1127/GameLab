@@ -1,3 +1,4 @@
+/** 대시보드 개요 페이지: 4카드 메트릭스, 최근 세션, 빠른 액션, 활동 요약. */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";

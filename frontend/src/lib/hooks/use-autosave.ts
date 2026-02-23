@@ -1,3 +1,4 @@
+/** 자동 저장 훅: 30초 간격 localStorage 백업, 파일별 키 분리, 오프라인 큐. */
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";

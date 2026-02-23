@@ -1,3 +1,4 @@
+/** 파형 데이터 훅: AudioContext 디코딩, 1024포인트 다운샘플, 합성 폴백. */
 "use client";
 
 import { useEffect, useRef, useState } from "react";

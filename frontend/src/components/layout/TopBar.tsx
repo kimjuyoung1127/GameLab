@@ -1,3 +1,4 @@
+/** 상단 네비게이션 바: 점수, 스트릭 표시, 버전 배지. */
 "use client";
 import { Bell, HelpCircle } from "lucide-react";
 

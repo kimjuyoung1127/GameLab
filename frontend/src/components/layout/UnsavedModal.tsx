@@ -1,4 +1,5 @@
-﻿"use client";
+﻿/** 미저장 변경 경고 모달: 페이지 이탈 시 확인 다이얼로그. */
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";

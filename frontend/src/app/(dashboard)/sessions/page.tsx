@@ -1,3 +1,4 @@
+/** 세션 목록 페이지: 필터(전체/처리중/완료), 검색, 삭제, 일괄 삭제. */
 "use client";
 
 import { useEffect, useState } from "react";

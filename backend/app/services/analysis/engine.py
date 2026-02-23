@@ -1,3 +1,4 @@
+"""분석 엔진 ABC 인터페이스 및 SuggestionDraft 출력 타입 정의."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 

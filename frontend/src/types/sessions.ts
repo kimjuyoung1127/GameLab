@@ -1,3 +1,4 @@
+/** 세션 도메인 타입: Session, AudioFile 인터페이스. */
 export type SessionStatus = "pending" | "processing" | "completed";
 
 export interface Session {

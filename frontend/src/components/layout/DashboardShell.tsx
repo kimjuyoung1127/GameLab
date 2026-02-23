@@ -1,3 +1,4 @@
+/** 대시보드 셸: 사이드바 + TopBar + 메인 콘텐츠 3패널 레이아웃, 모바일 햄버거. */
 "use client";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
@@ -5,6 +6,7 @@ import { Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import HotkeyHelp from "./HotkeyHelp";
 import UnsavedModal from "./UnsavedModal";
+import Toast from "../ui/Toast";
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -49,6 +51,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
       <HotkeyHelp />
       <UnsavedModal />
+      <Toast />
     </div>
   );
 }

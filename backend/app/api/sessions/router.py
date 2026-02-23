@@ -1,3 +1,4 @@
+"""세션 API: 세션 목록 조회, 파일 조회, 세션 삭제 (cascade)."""
 import logging
 import os
 from fastapi import APIRouter, HTTPException

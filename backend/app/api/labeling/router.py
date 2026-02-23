@@ -1,3 +1,4 @@
+"""라벨링 API: AI 제안 조회, 상태 변경(PATCH), CSV/JSON 내보내기."""
 import csv
 import io
 import json as json_module
@@ -87,7 +88,51 @@ async def update_suggestion_status(suggestion_id: str, body: UpdateSuggestionReq
     if not rows:
         raise HTTPException(status_code=404, detail="Suggestion not found")
 
+    _update_user_score(body.status)
+
     return _row_to_response(rows[0])
+
+
+# --- Score update logic ---
+_POINTS_CONFIRM = 10
+_POINTS_CORRECT = 20
+_DEFAULT_USER_ID = "u-1"
+
+
+def _update_user_score(status: SuggestionStatusValue) -> None:
+    """Update sst_users score when a suggestion status changes (non-fatal)."""
+    if status not in (SuggestionStatusValue.confirmed, SuggestionStatusValue.corrected):
+        return
+
+    points = _POINTS_CONFIRM if status == SuggestionStatusValue.confirmed else _POINTS_CORRECT
+
+    try:
+        user_res = (
+            supabase.table("sst_users")
+            .select("today_score, all_time_score")
+            .eq("id", _DEFAULT_USER_ID)
+            .maybe_single()
+            .execute()
+        )
+        if not user_res.data:
+            logger.warning("Score update: user %s not found", _DEFAULT_USER_ID)
+            return
+
+        current = user_res.data
+        new_today = current["today_score"] + points
+        new_all_time = current["all_time_score"] + points
+
+        supabase.table("sst_users").update({
+            "today_score": new_today,
+            "all_time_score": new_all_time,
+        }).eq("id", _DEFAULT_USER_ID).execute()
+
+        logger.info(
+            "score_update user=%s status=%s points=+%d today=%d all_time=%d",
+            _DEFAULT_USER_ID, status.value, points, new_today, new_all_time,
+        )
+    except Exception:
+        logger.exception("Failed to update user score (non-fatal)")
 
 
 @router.get("/{session_id}/export")

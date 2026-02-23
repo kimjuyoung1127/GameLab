@@ -1,3 +1,4 @@
+"""규칙 기반 폴백 엔진: 주 엔진 실패 시 기본 제안을 생성."""
 from app.services.analysis.engine import AnalysisEngine, SuggestionDraft
 
 

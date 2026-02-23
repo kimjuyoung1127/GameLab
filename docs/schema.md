@@ -28,6 +28,7 @@ Source: Supabase MCP DDL extraction
 | sst_audio_files | enabled | 2 |
 | sst_suggestions | enabled | 2 |
 | sst_users | enabled | 5 |
+| sst_jobs | enabled | 0 |
 | goertzel_test_monitor | enabled | 0 |
 
 ---
@@ -119,7 +120,30 @@ Source: Supabase MCP DDL extraction
 
 ---
 
-### 5) RPC/Functions
+### 5) `sst_jobs`
+
+| column | type | nullable | default |
+|--------|------|----------|---------|
+| `id` | text | NO | — |
+| `status` | text | NO | `'queued'` |
+| `progress` | float8 | NO | `0` |
+| `session_id` | text | YES | — |
+| `file_count` | integer | YES | — |
+| `error` | text | YES | — |
+| `created_at` | timestamptz | NO | `now()` |
+| `updated_at` | timestamptz | NO | `now()` |
+
+**PK:** `id`
+
+**FK:** `session_id -> sst_sessions.id (ON DELETE CASCADE)`
+
+**Indexes:** `idx_sst_jobs_session(session_id)`, `idx_sst_jobs_status(status)`
+
+**Status values:** `idle`, `uploading`, `queued`, `processing`, `done`, `failed`
+
+---
+
+### 6) RPC/Functions
 
 #### `create_upload_session_with_files(p_session, p_files, p_suggestions)`
 - Atomically inserts into `sst_sessions`, `sst_audio_files`, `sst_suggestions`

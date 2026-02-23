@@ -1,3 +1,4 @@
+"""세션 도메인 모델: SessionResponse, AudioFileResponse."""
 from typing import Optional
 from app.models.common import CamelModel
 

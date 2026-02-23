@@ -1,3 +1,4 @@
+/** 라벨링 도메인 타입: AISuggestion, Annotation, SuggestionStatus, HistorySnapshot. */
 import type { LabelingMode } from "./common";
 
 export type SuggestionStatus = "pending" | "confirmed" | "rejected" | "corrected";

@@ -1,3 +1,4 @@
+"""리더보드 도메인 모델: LeaderboardEntry."""
 from typing import Optional
 from app.models.common import CamelModel
 

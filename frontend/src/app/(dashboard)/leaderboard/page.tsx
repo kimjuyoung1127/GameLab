@@ -1,3 +1,4 @@
+/** 리더보드 페이지: 사용자 랭킹 테이블 (오늘/정확도/누적 점수). */
 "use client";
 
 import { useEffect, useState } from "react";

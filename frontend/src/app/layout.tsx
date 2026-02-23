@@ -1,5 +1,7 @@
+/** 루트 레이아웃: Inter 폰트, 다크 모드, HTML lang 설정, AuthProvider. */
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import AuthProvider from "@/components/providers/AuthProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -20,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

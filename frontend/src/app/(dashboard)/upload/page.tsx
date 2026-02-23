@@ -1,4 +1,5 @@
-﻿"use client";
+﻿/** 업로드 페이지: 드래그&드롭 멀티파일 업로드, 잡 폴링, 진행 상태 표시. */
+"use client";
 
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";

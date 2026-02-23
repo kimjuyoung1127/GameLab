@@ -1,3 +1,4 @@
+/** 라벨링 API 클라이언트: AI 제안 조회, 상태 PATCH, 내보내기. */
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export const labelingEndpoints = {

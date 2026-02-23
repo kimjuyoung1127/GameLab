@@ -1,3 +1,4 @@
+/** 오디오 재생 훅: play/pause/seek, 구간 재생, 볼륨 컨트롤, URL 없으면 시뮬레이션 모드. */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -6,11 +7,13 @@ export interface AudioPlayerState {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
+  volume: number;
   play: () => void;
   pause: () => void;
   toggle: () => void;
   seek: (time: number) => void;
   playRegion: (start: number, end: number) => void;
+  setVolume: (v: number) => void;
 }
 
 /**
@@ -29,6 +32,23 @@ export function useAudioPlayer(
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(fallbackDuration ?? 0);
+  const [volume, setVolumeState] = useState(() => {
+    if (typeof window === "undefined") return 0.75;
+    const saved = localStorage.getItem("sst-volume");
+    return saved !== null ? parseFloat(saved) : 0.75;
+  });
+
+  /* ----- Volume setter ----- */
+  const setVolume = useCallback((v: number) => {
+    const clamped = Math.max(0, Math.min(1, v));
+    setVolumeState(clamped);
+    if (audioRef.current) {
+      audioRef.current.volume = clamped;
+    }
+    if (typeof window !== "undefined") {
+      localStorage.setItem("sst-volume", String(clamped));
+    }
+  }, []);
 
   /* ----- Reset on source change ----- */
   useEffect(() => {
@@ -42,6 +62,7 @@ export function useAudioPlayer(
     }
 
     const audio = new Audio(audioUrl);
+    audio.volume = volume;
     audioRef.current = audio;
 
     const onLoaded = () => setDuration(audio.duration);
@@ -162,5 +183,5 @@ export function useAudioPlayer(
     [seek, play],
   );
 
-  return { isPlaying, currentTime, duration, play, pause, toggle, seek, playRegion };
+  return { isPlaying, currentTime, duration, volume, play, pause, toggle, seek, playRegion, setVolume };
 }

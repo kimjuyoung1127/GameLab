@@ -1,3 +1,4 @@
+/** 라벨링 작업 페이지: 3패널 레이아웃 (파일목록 + 스펙트로그램 + AI제안 패널). 핵심 기능. */
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -17,6 +18,7 @@ import {
   SkipForward,
   Lock,
   Volume2,
+  VolumeX,
   Sparkles,
   X,
   Check,
@@ -135,7 +137,7 @@ export default function LabelingWorkspacePage() {
     selectSuggestion,
   } = useAnnotationStore();
 
-  const { score, streak, addScore, addConfirm, addFix, incrementStreak } =
+  const { score, streak, addScore, addConfirm, addFix, incrementStreak, fetchFromServer } =
     useScoreStore();
 
   const {
@@ -195,6 +197,11 @@ export default function LabelingWorkspacePage() {
   const pendingCount = suggestions.filter((s) => s.status === "pending").length;
   const confirmedCount = suggestions.filter((s) => s.status === "confirmed").length;
   const totalCount = suggestions.length;
+
+  /* ----- Score sync from server ------------------------------------ */
+  useEffect(() => {
+    void fetchFromServer();
+  }, [fetchFromServer]);
 
   /* ----- Session init --------------------------------------------- */
   useEffect(() => {
@@ -887,10 +894,27 @@ export default function LabelingWorkspacePage() {
             </span>
 
             <div className="flex items-center gap-2">
-              <Volume2 className="w-4 h-4 text-text-muted" />
-              <div className="w-20 h-1 bg-surface rounded-full overflow-hidden">
-                <div className="h-full w-3/4 bg-primary rounded-full" />
-              </div>
+              <button
+                onClick={() => player.setVolume(player.volume > 0 ? 0 : 0.75)}
+                className="p-0.5 rounded text-text-muted hover:text-text-secondary transition-colors"
+                title={player.volume > 0 ? "Mute" : "Unmute"}
+              >
+                {player.volume === 0 ? (
+                  <VolumeX className="w-4 h-4" />
+                ) : (
+                  <Volume2 className="w-4 h-4" />
+                )}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={player.volume}
+                onChange={(e) => player.setVolume(parseFloat(e.target.value))}
+                className="w-20 h-1 accent-primary cursor-pointer"
+                title={`Volume: ${Math.round(player.volume * 100)}%`}
+              />
             </div>
           </div>
 

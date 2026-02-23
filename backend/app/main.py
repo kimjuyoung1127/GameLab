@@ -1,3 +1,4 @@
+"""FastAPI 앱 초기화, CORS 설정, 라우터 등록, 정적 파일 마운트."""
 import logging
 import os
 

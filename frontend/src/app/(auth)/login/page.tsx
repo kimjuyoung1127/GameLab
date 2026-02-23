@@ -1,8 +1,10 @@
-﻿"use client";
+/** 로그인 페이지: Supabase Auth 이메일/비밀번호 + 회원가입, bypass 모드 지원. */
+"use client";
 
 import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, LogIn, AudioLines } from "lucide-react";
+import { Mail, Lock, LogIn, AudioLines, UserPlus } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 /* ------------------------------------------------------------------ */
 /*  Mock waveform bar heights for the left-side visualization          */
@@ -13,6 +15,8 @@ const WAVEFORM_BARS = [
   12, 36, 20, 44, 18, 30, 24, 38, 14, 32, 46, 22, 26, 34,
 ];
 
+type AuthMode = "signin" | "signup";
+
 export default function LoginPage() {
   const router = useRouter();
   const bypassLogin = process.env.NEXT_PUBLIC_BYPASS_LOGIN !== "false";
@@ -21,6 +25,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<AuthMode>("signin");
+  const [error, setError] = useState<string | null>(null);
+  const [signupSuccess, setSignupSuccess] = useState(false);
 
   useEffect(() => {
     if (bypassLogin) {
@@ -39,10 +46,39 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
+    setSignupSuccess(false);
 
-    // Simulate a brief network delay then redirect
-    await new Promise((r) => setTimeout(r, 800));
-    router.push("/sessions");
+    const supabase = createClient();
+
+    if (mode === "signin") {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      router.push("/sessions");
+    } else {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (signUpError) {
+        setError(signUpError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      setSignupSuccess(true);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -140,14 +176,32 @@ export default function LoginPage() {
 
             {/* Heading */}
             <div className="mb-8 text-center">
-              <h2 className="text-2xl font-bold text-text">Welcome Back</h2>
+              <h2 className="text-2xl font-bold text-text">
+                {mode === "signin" ? "Welcome Back" : "Create Account"}
+              </h2>
               <p className="mt-1 text-sm text-text-secondary">
-                Sign in to your enterprise account
+                {mode === "signin"
+                  ? "Sign in to your enterprise account"
+                  : "Sign up for a new account"}
               </p>
             </div>
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              {/* Error message */}
+              {error && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+                  {error}
+                </div>
+              )}
+
+              {/* Signup success message */}
+              {signupSuccess && (
+                <div className="rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-sm text-accent">
+                  Check your email for a confirmation link.
+                </div>
+              )}
+
               {/* Email field */}
               <div className="flex flex-col gap-1.5">
                 <label
@@ -164,7 +218,7 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your password"
+                    placeholder="you@company.com"
                     className="h-11 w-full rounded-lg border border-border bg-surface pl-10 pr-4 text-sm text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                   />
                 </div>
@@ -179,12 +233,14 @@ export default function LoginPage() {
                   >
                     Password
                   </label>
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-primary hover:text-primary-light transition-colors"
-                  >
-                    Forgot password?
-                  </button>
+                  {mode === "signin" && (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary hover:text-primary-light transition-colors"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
                 </div>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
@@ -200,20 +256,22 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Remember checkbox */}
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-border-light bg-surface text-primary accent-primary focus:ring-primary focus:ring-offset-0"
-                />
-                <span className="text-sm text-text-secondary">
-                  Remember this device
-                </span>
-              </label>
+              {/* Remember checkbox (signin only) */}
+              {mode === "signin" && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                    className="h-4 w-4 rounded border-border-light bg-surface text-primary accent-primary focus:ring-primary focus:ring-offset-0"
+                  />
+                  <span className="text-sm text-text-secondary">
+                    Remember this device
+                  </span>
+                </label>
+              )}
 
-              {/* Sign in button */}
+              {/* Submit button */}
               <button
                 type="submit"
                 disabled={isLoading}
@@ -240,12 +298,16 @@ export default function LoginPage() {
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                       />
                     </svg>
-                    Signing in...
+                    {mode === "signin" ? "Signing in..." : "Creating account..."}
                   </span>
                 ) : (
                   <>
-                    <LogIn className="h-4 w-4" />
-                    Sign In
+                    {mode === "signin" ? (
+                      <LogIn className="h-4 w-4" />
+                    ) : (
+                      <UserPlus className="h-4 w-4" />
+                    )}
+                    {mode === "signin" ? "Sign In" : "Sign Up"}
                   </>
                 )}
               </button>
@@ -301,14 +363,21 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* Footer text */}
+            {/* Footer text — Sign In / Sign Up toggle */}
             <p className="mt-6 text-center text-sm text-text-secondary">
-              Don&apos;t have an account?{" "}
+              {mode === "signin"
+                ? "Don't have an account?"
+                : "Already have an account?"}{" "}
               <button
                 type="button"
+                onClick={() => {
+                  setMode(mode === "signin" ? "signup" : "signin");
+                  setError(null);
+                  setSignupSuccess(false);
+                }}
                 className="font-medium text-primary hover:text-primary-light transition-colors"
               >
-                Contact Sales
+                {mode === "signin" ? "Sign Up" : "Sign In"}
               </button>
             </p>
           </div>
@@ -348,4 +417,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

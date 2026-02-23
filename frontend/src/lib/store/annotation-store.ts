@@ -1,3 +1,4 @@
+/** 라벨링 상태 관리: 모드(review/edit), 도구, AI 제안, undo/redo 스택. */
 import { create } from "zustand";
 import type {
   AISuggestion,

@@ -1,3 +1,4 @@
+"""Pydantic BaseSettings 기반 환경변수 설정 관리."""
 from pydantic_settings import BaseSettings
 
 

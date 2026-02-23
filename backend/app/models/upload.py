@@ -1,3 +1,4 @@
+"""업로드 도메인 모델: UploadJobStatus 열거형, UploadResult 응답."""
 from typing import Optional
 from enum import Enum
 from app.models.common import CamelModel

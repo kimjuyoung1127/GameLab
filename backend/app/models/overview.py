@@ -1,3 +1,4 @@
+"""대시보드 개요 도메인 모델: OverviewMetrics."""
 from app.models.common import CamelModel
 
 

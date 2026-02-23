@@ -1,3 +1,4 @@
+/** 단축키 도움말 오버레이: O/X/F/Space/Tab/Arrow 등 핫키 안내. */
 "use client";
 
 import { useCallback, useEffect, useState } from "react";

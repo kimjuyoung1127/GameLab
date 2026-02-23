@@ -1,3 +1,4 @@
+/** 세션 상태 관리: 현재 세션, 파일 목록, 파일 선택 추적. */
 import { create } from "zustand";
 import type { Session, AudioFile } from "@/types";
 

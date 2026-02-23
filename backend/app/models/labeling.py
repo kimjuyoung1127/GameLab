@@ -1,3 +1,4 @@
+"""라벨링 도메인 모델: SuggestionResponse, UpdateSuggestionRequest, 상태 열거형."""
 from enum import Enum
 from app.models.common import CamelModel
 

@@ -1,3 +1,4 @@
+"""CamelModel 베이스 클래스 — JSON 직렬화 시 camelCase 자동 변환."""
 from pydantic import BaseModel, ConfigDict
 
 

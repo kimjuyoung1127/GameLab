@@ -1,3 +1,4 @@
+/** 핫키 스팸 방어 큐: 직렬 처리, 중복 병합, 오프라인 localStorage 폴백. */
 import { labelingEndpoints } from "./labeling";
 import type { SuggestionStatus } from "@/types/labeling";
 
