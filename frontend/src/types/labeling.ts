@@ -82,6 +82,16 @@ export interface LabelingBookmark {
   createdAt: string;
 }
 
+export interface UpdateSuggestionPayload {
+  status?: SuggestionStatus;
+  label?: string;
+  description?: string;
+  startTime?: number;
+  endTime?: number;
+  freqLow?: number;
+  freqHigh?: number;
+}
+
 export type ActionType =
   | "confirm"
   | "ai_confirm"
@@ -91,6 +101,8 @@ export type ActionType =
   | "manual_delete"
   | "manual_move"
   | "manual_resize"
+  | "suggestion_edit"
+  | "suggestion_delete"
   | "seek"
   | "loop_set"
   | "bookmark"

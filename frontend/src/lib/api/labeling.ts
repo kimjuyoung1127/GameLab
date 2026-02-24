@@ -5,6 +5,8 @@ export const labelingEndpoints = {
   suggestions: (sessionId: string) => `${API_BASE}/labeling/${sessionId}/suggestions`,
   createSuggestions: (sessionId: string) => `${API_BASE}/labeling/${sessionId}/suggestions`,
   updateSuggestionStatus: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
+  updateSuggestion: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
+  deleteSuggestion: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
   export: (sessionId: string, format: "csv" | "json" = "csv") =>
     `${API_BASE}/labeling/${sessionId}/export?format=${format}`,
 } as const;

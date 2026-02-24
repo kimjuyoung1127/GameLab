@@ -22,6 +22,7 @@ type UseLabelingHotkeysParams = {
   onSetLoopEnd: () => void;
   onToggleLoop: () => void;
   onMarkNeedsAnalysis?: () => void;
+  handleDeleteSelectedSuggestion?: () => void;
   player: AudioPlayerState;
   suggestions: Suggestion[];
   manualDrafts: ManualDraft[];
@@ -48,6 +49,7 @@ export function useLabelingHotkeys({
   onSetLoopEnd,
   onToggleLoop,
   onMarkNeedsAnalysis,
+  handleDeleteSelectedSuggestion,
   player,
   suggestions,
   manualDrafts,
@@ -180,6 +182,9 @@ export function useLabelingHotkeys({
           if (selectedDraftId) {
             e.preventDefault();
             handleDeleteSelectedDraft();
+          } else if (selectedSuggestionId) {
+            e.preventDefault();
+            handleDeleteSelectedSuggestion?.();
           }
           break;
         case "arrowdown": {
@@ -218,6 +223,7 @@ export function useLabelingHotkeys({
     onSetLoopEnd,
     onToggleLoop,
     onMarkNeedsAnalysis,
+    handleDeleteSelectedSuggestion,
     player,
     suggestions,
     manualDrafts,

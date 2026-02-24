@@ -56,7 +56,7 @@ async def get_suggestions(session_id: str):
 
 
 @router.patch("/suggestions/{suggestion_id}", response_model=SuggestionResponse)
-async def update_suggestion_status(
+async def update_suggestion(
     suggestion_id: str,
     body: UpdateSuggestionRequest,
     current_user: CurrentUser = Depends(get_current_user),
@@ -65,10 +65,28 @@ async def update_suggestion_status(
         raise HTTPException(status_code=503, detail="Failed to initialize user profile")
 
     now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Build dynamic update payload (only non-None fields)
+    update_payload: dict = {"updated_at": now_iso}
+    if body.status is not None:
+        update_payload["status"] = body.status.value
+    if body.label is not None:
+        update_payload["label"] = body.label
+    if body.description is not None:
+        update_payload["description"] = body.description
+    if body.start_time is not None:
+        update_payload["start_time"] = body.start_time
+    if body.end_time is not None:
+        update_payload["end_time"] = body.end_time
+    if body.freq_low is not None:
+        update_payload["freq_low"] = body.freq_low
+    if body.freq_high is not None:
+        update_payload["freq_high"] = body.freq_high
+
     try:
         res = (
             supabase.table("sst_suggestions")
-            .update({"status": body.status.value, "updated_at": now_iso})
+            .update(update_payload)
             .eq("id", suggestion_id)
             .execute()
         )
@@ -80,9 +98,48 @@ async def update_suggestion_status(
     if not rows:
         raise HTTPException(status_code=404, detail="Suggestion not found")
 
-    _update_user_score(body.status, current_user.id)
+    if body.status is not None:
+        _update_user_score(body.status, current_user.id)
 
     return _row_to_response(rows[0])
+
+
+@router.delete("/suggestions/{suggestion_id}", status_code=204)
+async def delete_suggestion(
+    suggestion_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Delete a user-created suggestion. AI suggestions cannot be deleted."""
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
+
+    try:
+        fetch_res = (
+            supabase.table("sst_suggestions")
+            .select("id, source, created_by")
+            .eq("id", suggestion_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(fetch_res, "data", None) or []
+    except Exception as exc:
+        logger.exception("Failed to fetch suggestion for delete", extra={"suggestion_id": suggestion_id})
+        raise HTTPException(status_code=503, detail="Failed to delete suggestion") from exc
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+
+    row = rows[0]
+    if row.get("source") != "user":
+        raise HTTPException(status_code=403, detail="AI suggestions cannot be deleted")
+    if row.get("created_by") != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the creator can delete this suggestion")
+
+    try:
+        supabase.table("sst_suggestions").delete().eq("id", suggestion_id).execute()
+    except Exception as exc:
+        logger.exception("Failed to delete suggestion", extra={"suggestion_id": suggestion_id})
+        raise HTTPException(status_code=503, detail="Failed to delete suggestion") from exc
 
 
 @router.post("/{session_id}/suggestions", response_model=List[SuggestionResponse])

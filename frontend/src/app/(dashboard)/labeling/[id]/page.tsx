@@ -183,6 +183,8 @@ export default function LabelingWorkspacePage() {
     loadSuggestions,
     restoreSuggestions,
     selectSuggestion,
+    updateSuggestion,
+    deleteSuggestion,
   } = useAnnotationStore();
 
   const { score, streak, addScore, addConfirm, addFix, incrementStreak, incrementDailyProgress, dailyGoal, dailyProgress, fetchFromServer } =
@@ -252,6 +254,37 @@ export default function LabelingWorkspacePage() {
   const resizeRafRef = useRef<number | null>(null);
   const pendingResizePatchRef = useRef<{ id: string; patch: Partial<ManualDraft> } | null>(null);
   const hasResizedDraftRef = useRef(false);
+
+  /* Suggestion drag/resize state (for user-created suggestions) */
+  const [isDraggingSuggestion, setIsDraggingSuggestion] = useState(false);
+  const dragSugRef = useRef<{
+    suggestionId: string;
+    pointerId: number;
+    pointerStartX: number;
+    pointerStartY: number;
+    startTime: number;
+    endTime: number;
+    freqLow: number;
+    freqHigh: number;
+  } | null>(null);
+  const dragSugRafRef = useRef<number | null>(null);
+  const pendingSugDragPatchRef = useRef<{ id: string; patch: Partial<Suggestion> } | null>(null);
+  const hasMovedSuggestionRef = useRef(false);
+  const [isResizingSuggestion, setIsResizingSuggestion] = useState(false);
+  const resizeSugRef = useRef<{
+    suggestionId: string;
+    pointerId: number;
+    handle: ResizeHandle;
+    pointerStartX: number;
+    pointerStartY: number;
+    startTime: number;
+    endTime: number;
+    freqLow: number;
+    freqHigh: number;
+  } | null>(null);
+  const resizeSugRafRef = useRef<number | null>(null);
+  const pendingSugResizePatchRef = useRef<{ id: string; patch: Partial<Suggestion> } | null>(null);
+  const hasResizedSuggestionRef = useRef(false);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -526,7 +559,7 @@ export default function LabelingWorkspacePage() {
 
   const handleDraftPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!activeFileId) return;
-    if (isDraggingDraft || isResizingDraft) return;
+    if (isDraggingDraft || isResizingDraft || isDraggingSuggestion || isResizingSuggestion) return;
     if (tool !== "box") {
       handleScrubFromSpectrogram(e.clientX);
       return;
@@ -917,6 +950,234 @@ export default function LabelingWorkspacePage() {
     showToast(t("bookmarkNeedsAnalysisAdded"));
   }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
 
+  /* ----- Suggestion edit/delete handlers (user-created only) ------- */
+  const scheduleSugMove = useCallback((id: string, patch: Partial<Suggestion>) => {
+    hasMovedSuggestionRef.current = true;
+    pendingSugDragPatchRef.current = { id, patch };
+    if (dragSugRafRef.current !== null) return;
+    dragSugRafRef.current = requestAnimationFrame(() => {
+      dragSugRafRef.current = null;
+      if (!pendingSugDragPatchRef.current) return;
+      const { id: sId, patch: nextPatch } = pendingSugDragPatchRef.current;
+      updateSuggestion(sId, nextPatch);
+      pendingSugDragPatchRef.current = null;
+    });
+  }, [updateSuggestion]);
+
+  const handleSugDragPointerDown = useCallback((
+    e: React.PointerEvent<HTMLButtonElement>,
+    sug: Suggestion,
+  ) => {
+    if (tool !== "select" || isResizingSuggestion || sug.source !== "user") return;
+    e.preventDefault();
+    e.stopPropagation();
+    selectSuggestion(sug.id);
+    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+    updateSuggestion(sug.id, {}, { trackHistory: true });
+    hasMovedSuggestionRef.current = false;
+    dragSugRef.current = {
+      suggestionId: sug.id,
+      pointerId: e.pointerId,
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      startTime: sug.startTime,
+      endTime: sug.endTime,
+      freqLow: sug.freqLow,
+      freqHigh: sug.freqHigh,
+    };
+    setIsDraggingSuggestion(true);
+  }, [isResizingSuggestion, selectSuggestion, tool, updateSuggestion]);
+
+  const handleSugDragPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragSugRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const area = spectrogramRef.current;
+    if (!area || totalDuration <= 0) return;
+    const rect = area.getBoundingClientRect();
+    const dx = e.clientX - drag.pointerStartX;
+    const dy = e.clientY - drag.pointerStartY;
+    const boxDuration = Math.max(0.01, drag.endTime - drag.startTime);
+    const boxFreqRange = Math.max(1, drag.freqHigh - drag.freqLow);
+    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
+    const mf = effectiveMaxFreqRef.current;
+    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
+    const maxStart = Math.max(0, totalDuration - boxDuration);
+    let startTime = Math.max(0, Math.min(drag.startTime + timeDelta, maxStart));
+    let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, mf - boxFreqRange));
+    if (snapEnabled) {
+      startTime = Math.round(startTime * 10) / 10;
+      freqLow = Math.round(freqLow / 100) * 100;
+      startTime = Math.max(0, Math.min(startTime, maxStart));
+      freqLow = Math.max(0, Math.min(freqLow, mf - boxFreqRange));
+    }
+    const endTime = Math.min(totalDuration, startTime + boxDuration);
+    const freqHigh = Math.min(mf, freqLow + boxFreqRange);
+    scheduleSugMove(drag.suggestionId, { startTime, endTime, freqLow, freqHigh });
+  }, [scheduleSugMove, snapEnabled, totalDuration]);
+
+  const handleSugDragPointerUp = useCallback(async (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragSugRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    e.preventDefault();
+    if (hasMovedSuggestionRef.current) {
+      pushHistory("suggestion_edit", "Moved saved suggestion");
+      const sug = suggestions.find((s) => s.id === drag.suggestionId);
+      if (sug) {
+        try {
+          const res = await authFetch(endpoints.labeling.updateSuggestion(sug.id), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ startTime: sug.startTime, endTime: sug.endTime, freqLow: sug.freqLow, freqHigh: sug.freqHigh }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        } catch {
+          showToast(t("suggestionEditFailed"));
+          undo();
+        }
+      }
+    }
+    pendingSugDragPatchRef.current = null;
+    hasMovedSuggestionRef.current = false;
+    dragSugRef.current = null;
+    setIsDraggingSuggestion(false);
+  }, [pushHistory, suggestions, showToast, t, undo]);
+
+  const scheduleSugResize = useCallback((id: string, patch: Partial<Suggestion>) => {
+    hasResizedSuggestionRef.current = true;
+    pendingSugResizePatchRef.current = { id, patch };
+    if (resizeSugRafRef.current !== null) return;
+    resizeSugRafRef.current = requestAnimationFrame(() => {
+      resizeSugRafRef.current = null;
+      if (!pendingSugResizePatchRef.current) return;
+      const { id: sId, patch: nextPatch } = pendingSugResizePatchRef.current;
+      updateSuggestion(sId, nextPatch);
+      pendingSugResizePatchRef.current = null;
+    });
+  }, [updateSuggestion]);
+
+  const handleSugResizePointerDown = useCallback((
+    e: React.PointerEvent<HTMLDivElement>,
+    sug: Suggestion,
+    handle: ResizeHandle,
+  ) => {
+    if (tool !== "select" || sug.source !== "user") return;
+    e.preventDefault();
+    e.stopPropagation();
+    selectSuggestion(sug.id);
+    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+    updateSuggestion(sug.id, {}, { trackHistory: true });
+    hasResizedSuggestionRef.current = false;
+    resizeSugRef.current = {
+      suggestionId: sug.id,
+      pointerId: e.pointerId,
+      handle,
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      startTime: sug.startTime,
+      endTime: sug.endTime,
+      freqLow: sug.freqLow,
+      freqHigh: sug.freqHigh,
+    };
+    setIsResizingSuggestion(true);
+  }, [selectSuggestion, tool, updateSuggestion]);
+
+  const handleSugResizePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const resize = resizeSugRef.current;
+    if (!resize || resize.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const area = spectrogramRef.current;
+    if (!area || totalDuration <= 0) return;
+    const rect = area.getBoundingClientRect();
+    const dx = e.clientX - resize.pointerStartX;
+    const dy = e.clientY - resize.pointerStartY;
+    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
+    const mf = effectiveMaxFreqRef.current;
+    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
+    let nextStart = resize.startTime;
+    let nextEnd = resize.endTime;
+    let nextLow = resize.freqLow;
+    let nextHigh = resize.freqHigh;
+    if (resize.handle === "nw" || resize.handle === "sw") nextStart = resize.startTime + timeDelta;
+    if (resize.handle === "ne" || resize.handle === "se") nextEnd = resize.endTime + timeDelta;
+    if (resize.handle === "nw" || resize.handle === "ne") nextHigh = resize.freqHigh + freqDelta;
+    if (resize.handle === "sw" || resize.handle === "se") nextLow = resize.freqLow + freqDelta;
+    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
+    nextEnd = Math.max(MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
+    if (nextEnd - nextStart < MIN_DRAFT_DURATION) {
+      if (resize.handle === "nw" || resize.handle === "sw") nextStart = nextEnd - MIN_DRAFT_DURATION;
+      else nextEnd = nextStart + MIN_DRAFT_DURATION;
+    }
+    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
+    nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
+    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
+    nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
+    if (nextHigh - nextLow < MIN_DRAFT_FREQ_RANGE) {
+      if (resize.handle === "nw" || resize.handle === "ne") nextHigh = nextLow + MIN_DRAFT_FREQ_RANGE;
+      else nextLow = nextHigh - MIN_DRAFT_FREQ_RANGE;
+    }
+    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
+    nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
+    if (snapEnabled) {
+      nextStart = Math.round(nextStart * 10) / 10;
+      nextEnd = Math.round(nextEnd * 10) / 10;
+      nextLow = Math.round(nextLow / 100) * 100;
+      nextHigh = Math.round(nextHigh / 100) * 100;
+      nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
+      nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
+      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
+      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
+    }
+    scheduleSugResize(resize.suggestionId, { startTime: nextStart, endTime: nextEnd, freqLow: nextLow, freqHigh: nextHigh });
+  }, [scheduleSugResize, snapEnabled, totalDuration]);
+
+  const handleSugResizePointerUp = useCallback(async (e: React.PointerEvent<HTMLDivElement>) => {
+    const resize = resizeSugRef.current;
+    if (!resize || resize.pointerId !== e.pointerId) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    e.preventDefault();
+    if (hasResizedSuggestionRef.current) {
+      pushHistory("suggestion_edit", "Resized saved suggestion");
+      const sug = suggestions.find((s) => s.id === resize.suggestionId);
+      if (sug) {
+        try {
+          const res = await authFetch(endpoints.labeling.updateSuggestion(sug.id), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ startTime: sug.startTime, endTime: sug.endTime, freqLow: sug.freqLow, freqHigh: sug.freqHigh }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        } catch {
+          showToast(t("suggestionEditFailed"));
+          undo();
+        }
+      }
+    }
+    pendingSugResizePatchRef.current = null;
+    hasResizedSuggestionRef.current = false;
+    resizeSugRef.current = null;
+    setIsResizingSuggestion(false);
+  }, [pushHistory, suggestions, showToast, t, undo]);
+
+  const handleDeleteSelectedSuggestion = useCallback(async () => {
+    if (!selectedSuggestionId) return;
+    const sug = suggestions.find((s) => s.id === selectedSuggestionId);
+    if (!sug || sug.source !== "user") {
+      showToast(t("suggestionDeleteBlockedAI"));
+      return;
+    }
+    deleteSuggestion(selectedSuggestionId);
+    try {
+      const res = await authFetch(endpoints.labeling.deleteSuggestion(selectedSuggestionId), { method: "DELETE" });
+      if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+      showToast(t("suggestionDeleted"));
+    } catch {
+      showToast(t("suggestionDeleteFailed"));
+      undo();
+    }
+  }, [selectedSuggestionId, suggestions, deleteSuggestion, showToast, t, undo]);
+
   const handleReplayHistory = useCallback((item: ActionHistoryItem) => {
     if (typeof item.payload?.time === "number") {
       seekTo(item.payload.time, false);
@@ -971,15 +1232,11 @@ export default function LabelingWorkspacePage() {
   }, [loopState, player]);
 
   useEffect(() => () => {
-    if (draftUpdateRafRef.current !== null) {
-      cancelAnimationFrame(draftUpdateRafRef.current);
-    }
-    if (dragRafRef.current !== null) {
-      cancelAnimationFrame(dragRafRef.current);
-    }
-    if (resizeRafRef.current !== null) {
-      cancelAnimationFrame(resizeRafRef.current);
-    }
+    if (draftUpdateRafRef.current !== null) cancelAnimationFrame(draftUpdateRafRef.current);
+    if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
+    if (resizeRafRef.current !== null) cancelAnimationFrame(resizeRafRef.current);
+    if (dragSugRafRef.current !== null) cancelAnimationFrame(dragSugRafRef.current);
+    if (resizeSugRafRef.current !== null) cancelAnimationFrame(resizeSugRafRef.current);
   }, []);
 
   useLabelingHotkeys({
@@ -999,6 +1256,7 @@ export default function LabelingWorkspacePage() {
     onSetLoopEnd: handleSetLoopEnd,
     onToggleLoop: handleToggleLoop,
     onMarkNeedsAnalysis: handleMarkNeedsAnalysis,
+    handleDeleteSelectedSuggestion,
     player,
     suggestions,
     manualDrafts,
@@ -1406,14 +1664,21 @@ export default function LabelingWorkspacePage() {
             {suggestions.map((s) => {
               const sc = statusColors[s.status];
               const isSelected = s.id === selectedSuggestionId;
+              const isEditable = s.source === "user";
               const boxPos = suggestionBoxStyle(s, totalDuration, effectiveMaxFreq);
               return (
                 <button
                   key={s.id}
                   onClick={() => handleSelectSuggestion(s.id)}
+                  onPointerDown={isEditable ? (e) => handleSugDragPointerDown(e, s) : undefined}
+                  onPointerMove={isEditable ? handleSugDragPointerMove : undefined}
+                  onPointerUp={isEditable ? handleSugDragPointerUp : undefined}
+                  onPointerCancel={isEditable ? handleSugDragPointerUp : undefined}
                   className={`absolute border-2 rounded-sm z-20 transition-all duration-200 ${
                     sc.border
                   } ${sc.dashed ? "border-dashed" : ""} ${
+                    isEditable ? "cursor-move" : ""
+                  } ${
                     isSelected
                       ? "ring-2 ring-white/30 shadow-lg shadow-white/10"
                       : "hover:ring-1 hover:ring-white/20"
@@ -1434,14 +1699,47 @@ export default function LabelingWorkspacePage() {
                     {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
                     {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
                     <span title={s.label}>{s.label.slice(0, 18)}</span>
+                    {isEditable && <span className="text-[7px] opacity-70">{t("userSuggestionTag")}</span>}
                   </div>
-                  {/* Corner handles */}
-                  {isSelected && (
+                  {/* Corner handles — decorative for AI, interactive resize for user */}
+                  {isSelected && !isEditable && (
                     <>
                       <div className={`absolute -top-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
                       <div className={`absolute -top-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
                       <div className={`absolute -bottom-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
                       <div className={`absolute -bottom-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                    </>
+                  )}
+                  {isSelected && isEditable && tool === "select" && (
+                    <>
+                      <div
+                        className={`absolute -top-1.5 -left-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nwse-resize`}
+                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "nw")}
+                        onPointerMove={handleSugResizePointerMove}
+                        onPointerUp={handleSugResizePointerUp}
+                        onPointerCancel={handleSugResizePointerUp}
+                      />
+                      <div
+                        className={`absolute -top-1.5 -right-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nesw-resize`}
+                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "ne")}
+                        onPointerMove={handleSugResizePointerMove}
+                        onPointerUp={handleSugResizePointerUp}
+                        onPointerCancel={handleSugResizePointerUp}
+                      />
+                      <div
+                        className={`absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nesw-resize`}
+                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "sw")}
+                        onPointerMove={handleSugResizePointerMove}
+                        onPointerUp={handleSugResizePointerUp}
+                        onPointerCancel={handleSugResizePointerUp}
+                      />
+                      <div
+                        className={`absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nwse-resize`}
+                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "se")}
+                        onPointerMove={handleSugResizePointerMove}
+                        onPointerUp={handleSugResizePointerUp}
+                        onPointerCancel={handleSugResizePointerUp}
+                      />
                     </>
                   )}
                   {/* Confidence badge */}

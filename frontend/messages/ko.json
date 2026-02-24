@@ -350,6 +350,13 @@
     "manualConfirmBlocked": "O는 AI 제안 확정 전용입니다. 수동 드래프트는 Ctrl+Enter로 저장하세요.",
     "allShortcuts": "전체 단축키",
     "dailyGoalProgress": "{done} / {goal}",
-    "dailyGoalComplete": "목표 달성!"
+    "dailyGoalComplete": "목표 달성!",
+    "suggestionEdited": "제안이 수정되었습니다",
+    "suggestionEditFailed": "제안 수정에 실패했습니다",
+    "suggestionDeleted": "제안이 삭제되었습니다",
+    "suggestionDeleteFailed": "제안 삭제에 실패했습니다",
+    "suggestionDeleteBlockedAI": "AI 제안은 삭제할 수 없습니다. 대신 거절을 사용하세요.",
+    "suggestionDeleteConfirm": "이 제안을 삭제하시겠습니까?",
+    "userSuggestionTag": "사용자"
   }
 }

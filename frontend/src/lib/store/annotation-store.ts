@@ -43,6 +43,12 @@ interface AnnotationState {
   removeDraft: (id: string) => void;
   clearDrafts: () => void;
   saveDraftsSuccess: (created: Suggestion[], removedDraftIds: string[]) => void;
+  updateSuggestion: (
+    id: string,
+    patch: Partial<Suggestion>,
+    options?: { trackHistory?: boolean },
+  ) => void;
+  deleteSuggestion: (id: string) => void;
   confirmSuggestion: () => { points: number } | null;
   rejectSuggestion: () => void;
   applyFix: () => { points: number } | null;
@@ -163,6 +169,34 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       redoStack: [],
     });
     get().pushHistory("manual_create", `Saved ${created.length} manual suggestion(s)`);
+  },
+
+  updateSuggestion: (id, patch, options) => {
+    if (options?.trackHistory) {
+      const state = get();
+      const prev = makeSnapshot(state);
+      set({
+        suggestions: state.suggestions.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+        undoStack: [...state.undoStack, prev],
+        redoStack: [],
+      });
+      return;
+    }
+    set((state) => ({
+      suggestions: state.suggestions.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    }));
+  },
+
+  deleteSuggestion: (id) => {
+    const state = get();
+    const prev = makeSnapshot(state);
+    set({
+      suggestions: state.suggestions.filter((s) => s.id !== id),
+      selectedSuggestionId: state.selectedSuggestionId === id ? null : state.selectedSuggestionId,
+      undoStack: [...state.undoStack, prev],
+      redoStack: [],
+    });
+    get().pushHistory("suggestion_delete", "Deleted saved suggestion");
   },
 
   confirmSuggestion: () => {

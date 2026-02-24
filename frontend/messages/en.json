@@ -350,6 +350,13 @@
                      "manualConfirmBlocked": "O confirms AI suggestions only. Use Ctrl+Enter for manual drafts.",
                      "allShortcuts":  "All shortcuts",
                      "dailyGoalProgress":  "{done} / {goal}",
-                     "dailyGoalComplete":  "Goal reached!"
+                     "dailyGoalComplete":  "Goal reached!",
+                     "suggestionEdited":  "Suggestion updated",
+                     "suggestionEditFailed":  "Failed to update suggestion",
+                     "suggestionDeleted":  "Suggestion deleted",
+                     "suggestionDeleteFailed":  "Failed to delete suggestion",
+                     "suggestionDeleteBlockedAI":  "AI suggestions cannot be deleted. Use reject instead.",
+                     "suggestionDeleteConfirm":  "Delete this suggestion?",
+                     "userSuggestionTag":  "USER"
                  }
 }
