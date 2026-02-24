@@ -1,37 +1,45 @@
 ﻿# Claude Coding Guideline (GameLab)
 
+기준일: 2026-02-24 (KST)
 기준 폴더: `ai-context`
 
-## 1) 시작 순서
-1. `master-plan.md`
-2. `project-context.md`
-3. `ai-context/archive/2026-02-23/full-project-archive.md`
-4. 최신 세션 로그 (`ai-context/logs/*.md`)
-5. 제품 기준 문서 확인: `docs/Prd.md`, `docs/react.md`, `docs/bone.md`
+## 1) 시작 순서 (고정)
+1. `ai-context/START-HERE.md`
+2. `ai-context/master-plan.md`
+3. `ai-context/project-context.md`
+4. `ai-context/claude-implementation-brief-2026-02-12.md`
+5. `ai-context/claude-coding-guideline.md`
+6. 필요 시 `ai-context/codex-review-guideline.md`
+7. 구조 확인 필요 시 `docs/architecture-diagrams.md`
+8. 최신 상세 이력 확인 시 `ai-context/archive/2026-02-24/session-log-2026-02-24.md`
 
-실행 표준(시작 순서 바로 적용):
+실행 표준(프론트 기준):
 1. `cd frontend`
 2. `npm install`
 3. `npm run dev`
 
 ## 2) 역할
-- Claude는 구현 담당
-- 문서 기준 우선순위에 따라 기능을 끝까지 구현
-- Codex는 리뷰/리스크 검증 담당
+- Claude: 구현 담당 (요구사항을 코드로 끝까지 반영)
+- Codex: 리뷰/리스크 검증 담당
 
 ## 3) 구현 원칙
 - Next.js App Router 구조 유지
 - 공용 컴포넌트/스토어/타입 재사용 우선
-- 상태 이름/이벤트 이름은 도메인 의미가 분명해야 함
-- Mock 데이터 구조를 Phase 2 API 스펙과 맞춰 유지
-- 하드코딩 문자열은 i18n 또는 상수로 분리
+- 도메인 의미가 분명한 상태/이벤트 이름 사용
+- 문자열은 i18n/상수로 분리
+- FE/BE 1:1 미러 규칙 유지
 
-## 4) 라벨링 기능 필수 규칙
+## 4) 라벨링 기능 필수 규칙 (최신)
 - 모드 전이: `review -> edit -> review`
-- O Confirm: 상태 변경 + 점수 증가 + 다음 제안 포커스
-- X Reject: edit 모드 전환 + 수정 안내
-- Apply Fix: annotation 반영 + 점수 증가
-- undo/redo 스택 무결성 유지
+- 단축키 의미 고정:
+  - `O` = AI 제안 확정 전용
+  - `Ctrl+Enter` = 수동 draft 저장
+  - `A` = Select, `G` = Snap Toggle, `R` = Box
+- 편집 규칙:
+  - 수동 박스 이동/리사이즈 가능
+  - 이동/리사이즈 1회 동작은 undo 1회로 복구 가능
+- 변경 동기화:
+  - HotkeyHelp/툴바/HUD/i18n 문구 불일치 0건 유지
 
 ## 5) 완료 보고 형식
 - 변경 요약
@@ -39,47 +47,29 @@
   2. 핵심 로직
   3. 영향 범위
 - 검증
-  1. 실행 명령 (`npm run build`, 필요 시 `npm run dev`)
+  1. 실행 명령 (`npm run lint`, `npm run build`)
   2. 결과
-  3. 실패 시 로그 위치 (`C:\Users\<user>\AppData\Local\npm-cache\_logs\*.log`)
+  3. 실패 시 로그 위치
 - 리스크/후속 작업
 
-## 6) 기록 규칙 (토큰 절약 운영)
-- 작업 중에는 `sprint-handoff-*.md` + `ai-context/logs/*.md`만 갱신
-- `master-plan.md`는 마일스톤 종료 시 1회 일괄 갱신
-- 커밋 ID와 작업 항목은 session log에 먼저 매핑하고, 마감 시 공용 문서로 반영
+## 6) 기록 규칙
+- 작업 중: `ai-context/logs/*.md` append
+- 핵심 변경/마감 시: `ai-context/archive/YYYY-MM-DD/` 반영
+- 문서 최신화 시: START-HERE / master-plan / project-context / implementation-brief 동시 갱신
 
-권장 흐름:
-1. 작업 중: `sprint-handoff-*.md` 최신화
-2. 작업 중: `ai-context/logs/YYYY-MM-DD-session-log.md` append
-3. 마감 시: `master-plan.md` + `archive` 문서 일괄 정리
-
-## 7) 로그인 우회 정책
-- 기본값: 우회 ON
-- 로그인 강제 디버깅: `.env.local`에 `NEXT_PUBLIC_BYPASS_LOGIN=false`
-
-## 8) 필수 코딩 규칙 (Sprint 13.1 추가)
-
-### 파일 직접 읽기
-- 파일 수정 전 **반드시 Read 도구로 파일 내용을 직접 읽을 것**
-- 절대 파일 내용을 추측하지 말 것
-- 기존 함수/유틸/패턴을 먼저 검색(Grep/Glob)하고 재사용할 것
+## 7) 필수 코딩 규칙
+- 수정 전 파일 직접 읽기 (추측 금지)
+- 기존 패턴 검색 후 재사용
 - 중복 구현 금지
+- 폴더별 `CLAUDE.md` 우선 확인
+- 새 코드 파일 상단 한국어 기능 주석 유지
 
-### CLAUDE.md 참조
-- 코딩 시작 전 해당 폴더의 `CLAUDE.md`를 먼저 읽을 것
-- 각 폴더의 규칙과 패턴을 확인한 후 코딩
+## 8) 분석 엔진 규칙
+- `soundlab_v57` baseline은 보존
+- 새 엔진은 별도 파일 + `registry.py` 등록
+- 출력 포맷: `SuggestionDraft` 통일
+- 엔진 설정: 버전별 JSON 파일 분리
 
-### 1:1 미러 구조
-- BE 모델 변경 시 FE 타입 반드시 동시 변경
-- 새 도메인 추가 시 양쪽 barrel re-export 업데이트
-
-### 파일 헤더 주석
-- 모든 새 코드 파일 상단에 1-3줄 한국어 기능 설명 주석 필수
-- Python: `"""설명."""`, TypeScript: `/** 설명. */`
-
-### 분석 엔진 규칙
-- V5.7은 **baseline** — 삭제/수정 금지
-- 새 엔진은 별도 파일로 생성 후 `registry.py`에 등록
-- 모든 엔진은 `SuggestionDraft` 포맷으로 출력 통일
-- JSON config 파일은 엔진별로 분리 (`analysis_v{버전}.json`)
+## 9) 로그인/개발 모드
+- 기본: 로그인 우회 ON (개발 편의)
+- 강제 로그인 디버깅: `.env.local`에 `NEXT_PUBLIC_BYPASS_LOGIN=false`

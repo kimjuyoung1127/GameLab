@@ -1,8 +1,8 @@
-# GameLab (Smart Spectro-Tagging) 전체 개발 아카이브
+﻿# GameLab (Smart Spectro-Tagging) 전체 개발 아카이브
 
-기준일: 2026-02-23 (KST)
-범위: Sprint 12.2 ~ Sprint 13.9
-현재 Phase: 2D 진행 중 (Sprint 13.9)
+기준일: 2026-02-24 (KST)
+범위: Sprint 12.2 ~ Sprint 14.0
+현재 Phase: 2D 진행 중 (Sprint 14.0)
 
 ---
 
@@ -716,7 +716,7 @@ CamelModel(BE)이 snake_case → camelCase 자동 변환
 | 2A | 문서화 (CLAUDE.md, 파일 헤더) | ✅ 완료 |
 | 2B | 프로덕션 준비 (Auth, Job Store DB, Error Boundary) | ✅ 완료 |
 | 2C | UX 개선 (Non-WAV, 볼륨, 리더보드, i18n, 단축키, 레벨, 업적) | ✅ 완료 |
-| 2D | 배포 (Vercel FE + Railway BE, Sentry, Supabase Storage) | 대기 |
+| 2D | 배포 (Vercel FE + Railway BE, Sentry, Supabase Storage) | 진행 중 (Sprint 14.0) |
 | IoT | IoT 기기 → JSON 특징값 수신 → 분석 → UI 렌더링 | 별도 Sprint 예정 |
 
 ### 남은 Sprint 후보
@@ -784,3 +784,68 @@ CamelModel(BE)이 snake_case → camelCase 자동 변환
 
 *이 문서는 GameLab 프로젝트의 Sprint 12.2~13.9까지의 전체 개발 내역을 기록합니다.*
 *온보딩, 프로젝트 핸드오프, 기술 부채 추적, 배포 절차 참조용으로 사용하세요.*
+
+---
+
+## 14. Archive 통합 반영 (2026-02-24)
+
+본 섹션은 `ai-context/archive/2026-02-24/session-log-2026-02-24.md` 내용을
+`full-project-archive.md`에 통합한 최신 업데이트다.
+
+### 14.1 Sprint 14.0 (2026-02-24) — Phase 2D 배포 + 라벨링 UX 고도화
+
+| 항목 | 상태 |
+|------|------|
+| Railway 백엔드 배포 구성/검증 (`/health` 200) | ✅ |
+| FE `NEXT_PUBLIC_API_URL` 운영 URL 갱신 | ✅ |
+| 수동 라벨 생성 API (`POST /api/labeling/{session_id}/suggestions`) | ✅ |
+| Suggestion 모델 확장 (`source`, `created_by`) | ✅ |
+| Labeling export 확장 (CSV/JSON: source, created_by 포함) | ✅ |
+| 라벨링 단축키 재정렬 (`A=Select`, `G=Snap`, `Ctrl+Enter=수동저장`) | ✅ |
+| 수동 박스 이동/리사이즈 + Undo 정합성 | ✅ |
+| FE lint/build 검증 | ✅ |
+| main 푸시 (`5d0cd6b`) | ✅ |
+
+### 14.2 Labeling 워크플로우 기준 (2026-02-24 이후)
+- `O`: AI 제안 확정 전용
+- `Ctrl+Enter`: 수동 draft 저장
+- `A`: Select, `R`: Box, `G`: Snap Toggle
+- 선택 모드에서 수동 박스:
+  - drag move 가능
+  - corner handle resize 가능
+  - move/resize 1회 동작은 `Ctrl+Z` 1회로 복구
+
+### 14.3 API 기준 추가/변경
+- 추가:
+  - `POST /api/labeling/{session_id}/suggestions`
+- 유지:
+  - `GET /api/labeling/{session_id}/suggestions`
+  - `PATCH /api/labeling/suggestions/{id}`
+  - `GET /api/labeling/{session_id}/export`
+- 변경:
+  - export payload에 `source`, `created_by` 포함
+
+### 14.4 타입/스토어 기준 업데이트
+- FE `Suggestion` 일반화: `source`, `createdBy`
+- `ManualDraft`, `LoopState` 도입
+- `annotation-store` 확장:
+  - `manualDrafts`, `selectedDraftId`, `loopState`
+  - undo/redo snapshot 범위 확장
+- history 타입 확장:
+  - `ai_confirm`, `manual_create`, `manual_delete`, `manual_move`, `manual_resize`
+
+### 14.5 배포/운영 메모
+- FE: Vercel (`gamelab-zeta.vercel.app`)
+- BE: Railway (`gamelab-production.up.railway.app`)
+- 현재 2D 상태: 배포는 반영되었고 운영 안정화(E2E/Storage/RLS hardening)는 후속 진행
+
+### 14.6 후속 과제 (Archive 기준)
+1. FE↔BE E2E 자동화 (핫키/저장/파일 전환/루프/undo 회귀)
+2. `sst_suggestions.source`, `created_by` DB 마이그레이션 정식화
+3. RLS open policy를 `auth.uid()` 기반으로 강화
+4. Supabase Storage 영속화 및 모니터링(Sentry) 정착
+
+### 14.7 참조
+- `ai-context/archive/2026-02-24/session-log-2026-02-24.md`
+- `ai-context/archive/2026-02-23/session-log-2026-02-12.md`
+- `docs/architecture-diagrams.md`
