@@ -8,6 +8,7 @@ interface WaveformCanvasProps {
   currentTime: number;
   duration: number;
   onSeek: (time: number) => void;
+  onScrub?: (time: number) => void;
 }
 
 const BAR_COLOR = "rgba(99, 102, 241, 0.7)"; // indigo-ish
@@ -21,9 +22,17 @@ export default function WaveformCanvas({
   currentTime,
   duration,
   onSeek,
+  onScrub,
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const rafSeekRef = useRef<number | null>(null);
+  const pendingSeekTimeRef = useRef<number | null>(null);
+
+  const emitSeek = useCallback((time: number) => {
+    onSeek(time);
+    onScrub?.(time);
+  }, [onScrub, onSeek]);
 
   // Draw waveform
   const draw = useCallback(() => {
@@ -110,23 +119,59 @@ export default function WaveformCanvas({
   }, [draw]);
 
   // Handle click-to-seek
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas || duration === 0) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const pct = x / rect.width;
-      onSeek(pct * duration);
-    },
-    [duration, onSeek],
-  );
+  const scheduleSeek = useCallback((time: number) => {
+    pendingSeekTimeRef.current = time;
+    if (rafSeekRef.current !== null) return;
+    rafSeekRef.current = requestAnimationFrame(() => {
+      rafSeekRef.current = null;
+      const nextTime = pendingSeekTimeRef.current;
+      if (nextTime !== null) emitSeek(nextTime);
+      pendingSeekTimeRef.current = null;
+    });
+  }, [emitSeek]);
+
+  const positionToTime = useCallback((clientX: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas || duration === 0) return 0;
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const pct = rect.width > 0 ? x / rect.width : 0;
+    return pct * duration;
+  }, [duration]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || duration === 0) return;
+    canvas.setPointerCapture(e.pointerId);
+    scheduleSeek(positionToTime(e.clientX));
+  }, [duration, positionToTime, scheduleSeek]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !canvas.hasPointerCapture(e.pointerId) || duration === 0) return;
+    scheduleSeek(positionToTime(e.clientX));
+  }, [duration, positionToTime, scheduleSeek]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (canvas.hasPointerCapture(e.pointerId)) {
+      canvas.releasePointerCapture(e.pointerId);
+    }
+  }, []);
+
+  useEffect(() => () => {
+    if (rafSeekRef.current !== null) cancelAnimationFrame(rafSeekRef.current);
+  }, []);
 
   return (
     <div ref={containerRef} className="w-full h-full relative">
       <canvas
         ref={canvasRef}
-        onClick={handleClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         className="w-full h-full cursor-crosshair"
         style={{ display: "block" }}
       />

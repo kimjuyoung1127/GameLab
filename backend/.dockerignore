@@ -1,0 +1,33 @@
+# 테스트 픽스처 (36MB+ WAV 파일) 제외
+tests/
+
+# Python 캐시
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 가상 환경
+.venv/
+venv/
+env/
+
+# 환경변수 (시크릿 — 이미지에 절대 포함하지 않음)
+.env
+.env.*
+
+# 업로드 파일 (런타임 데이터)
+uploads/
+
+# pytest 캐시
+.pytest_cache/
+
+# 문서
+CLAUDE.md
+*.md
+
+# pip 출력 아티팩트
+=0.12.0
+
+# OS 파일
+.DS_Store
+Thumbs.db

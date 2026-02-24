@@ -15,6 +15,9 @@ type UseLabelingHotkeysParams = {
   handlePrevFile: () => void;
   undo: () => void;
   redo: () => void;
+  onSetLoopStart: () => void;
+  onSetLoopEnd: () => void;
+  onToggleLoop: () => void;
   player: AudioPlayerState;
   suggestions: AISuggestion[];
   selectedSuggestionId: string | null;
@@ -32,6 +35,9 @@ export function useLabelingHotkeys({
   handlePrevFile,
   undo,
   redo,
+  onSetLoopStart,
+  onSetLoopEnd,
+  onToggleLoop,
   player,
   suggestions,
   selectedSuggestionId,
@@ -41,7 +47,11 @@ export function useLabelingHotkeys({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) return;
 
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "z") {
@@ -122,6 +132,18 @@ export function useLabelingHotkeys({
           e.preventDefault();
           player.setPlaybackRate(Math.min(player.playbackRate + 0.25, 2.0));
           break;
+        case "i":
+          e.preventDefault();
+          onSetLoopStart();
+          break;
+        case "p":
+          e.preventDefault();
+          onSetLoopEnd();
+          break;
+        case "l":
+          e.preventDefault();
+          onToggleLoop();
+          break;
         case " ": {
           e.preventDefault();
           const sel = suggestions.find((s) => s.id === selectedSuggestionId);
@@ -131,11 +153,13 @@ export function useLabelingHotkeys({
         }
         case "tab": {
           e.preventDefault();
-          if (suggestions.length === 0) break;
-          const idx = suggestions.findIndex((s) => s.id === selectedSuggestionId);
+          const pendingSuggestions = suggestions.filter((s) => s.status === "pending");
+          if (pendingSuggestions.length === 0) break;
+          const idx = pendingSuggestions.findIndex((s) => s.id === selectedSuggestionId);
           const dir = e.shiftKey ? -1 : 1;
-          const next = (idx + dir + suggestions.length) % suggestions.length;
-          selectSuggestion(suggestions[next]?.id ?? null);
+          const baseIdx = idx === -1 ? 0 : idx;
+          const next = (baseIdx + dir + pendingSuggestions.length) % pendingSuggestions.length;
+          selectSuggestion(pendingSuggestions[next]?.id ?? null);
           break;
         }
         case "arrowdown": {
@@ -167,6 +191,9 @@ export function useLabelingHotkeys({
     handlePrevFile,
     undo,
     redo,
+    onSetLoopStart,
+    onSetLoopEnd,
+    onToggleLoop,
     player,
     suggestions,
     selectedSuggestionId,

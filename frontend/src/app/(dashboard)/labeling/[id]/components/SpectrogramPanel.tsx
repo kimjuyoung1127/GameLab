@@ -18,6 +18,7 @@ type SpectrogramPanelProps = {
   activeSuggestion: AISuggestion | undefined;
   onConfirm: () => void;
   onReject: () => void;
+  onScrub: (time: number) => void;
   onToggleHotkeyHelp: () => void;
   suggestionBoxStyle: (s: AISuggestion, totalDuration: number) => {
     left: string;
@@ -46,6 +47,7 @@ export default function SpectrogramPanel({
   activeSuggestion,
   onConfirm,
   onReject,
+  onScrub,
   onToggleHotkeyHelp,
   suggestionBoxStyle,
   statusColors,
@@ -61,6 +63,7 @@ export default function SpectrogramPanel({
               currentTime={player.currentTime}
               duration={totalDuration}
               onSeek={player.seek}
+              onScrub={onScrub}
             />
           </div>
         )}

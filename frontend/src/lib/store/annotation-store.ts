@@ -1,12 +1,17 @@
 /** 라벨링 상태 관리: 모드(review/edit), 도구, AI 제안, undo/redo 스택. */
 import { create } from "zustand";
 import type {
+  ActionHistoryItem,
   AISuggestion,
   Annotation,
+  BookmarkType,
   LabelingMode,
+  LabelingBookmark,
   DrawTool,
   HistorySnapshot,
 } from "@/types";
+
+const MAX_HISTORY_ITEMS = 20;
 
 interface AnnotationState {
   mode: LabelingMode;
@@ -14,6 +19,8 @@ interface AnnotationState {
   snapEnabled: boolean;
   suggestions: AISuggestion[];
   annotations: Annotation[];
+  bookmarks: LabelingBookmark[];
+  history: ActionHistoryItem[];
   selectedSuggestionId: string | null;
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
@@ -27,6 +34,19 @@ interface AnnotationState {
   applyFix: () => { points: number } | null;
   undo: () => void;
   redo: () => void;
+  addBookmark: (input: {
+    time: number;
+    type: BookmarkType;
+    note: string;
+    suggestionId?: string;
+  }) => void;
+  removeBookmark: (id: string) => void;
+  pushHistory: (
+    type: ActionHistoryItem["type"],
+    summary: string,
+    payload?: ActionHistoryItem["payload"],
+  ) => void;
+  clearHistory: () => void;
   loadSuggestions: (items: AISuggestion[]) => void;
   restoreSuggestions: (suggestions: AISuggestion[]) => void;
 }
@@ -37,6 +57,8 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   snapEnabled: true,
   suggestions: [],
   annotations: [],
+  bookmarks: [],
+  history: [],
   selectedSuggestionId: null,
   undoStack: [],
   redoStack: [],
@@ -48,7 +70,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   selectSuggestion: (id) => set({ selectedSuggestionId: id }),
 
   confirmSuggestion: () => {
-    const { suggestions, selectedSuggestionId, mode, undoStack } = get();
+    const { suggestions, selectedSuggestionId, mode, undoStack, pushHistory } = get();
     if (!selectedSuggestionId) return null;
 
     const prevSnapshot: HistorySnapshot = {
@@ -70,12 +92,13 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       undoStack: [...undoStack, prevSnapshot],
       redoStack: [],
     });
+    pushHistory("confirm", "Confirmed selected suggestion");
 
     return { points: 10 };
   },
 
   rejectSuggestion: () => {
-    const { suggestions, selectedSuggestionId, mode, undoStack } = get();
+    const { suggestions, selectedSuggestionId, mode, undoStack, pushHistory } = get();
     if (!selectedSuggestionId) return;
 
     const prevSnapshot: HistorySnapshot = {
@@ -93,10 +116,11 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       undoStack: [...undoStack, prevSnapshot],
       redoStack: [],
     });
+    pushHistory("reject", "Rejected selected suggestion");
   },
 
   applyFix: () => {
-    const { suggestions, selectedSuggestionId, mode, undoStack } = get();
+    const { suggestions, selectedSuggestionId, mode, undoStack, pushHistory } = get();
     if (!selectedSuggestionId) return null;
 
     const prevSnapshot: HistorySnapshot = {
@@ -117,12 +141,13 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       undoStack: [...undoStack, prevSnapshot],
       redoStack: [],
     });
+    pushHistory("apply_fix", "Applied fix for rejected suggestion");
 
     return { points: 20 };
   },
 
   undo: () => {
-    const { undoStack, suggestions, mode, selectedSuggestionId, redoStack } = get();
+    const { undoStack, suggestions, mode, selectedSuggestionId, redoStack, pushHistory } = get();
     if (undoStack.length === 0) return;
 
     const prev = undoStack[undoStack.length - 1];
@@ -139,10 +164,11 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       undoStack: undoStack.slice(0, -1),
       redoStack: [...redoStack, currentSnapshot],
     });
+    pushHistory("undo", "Undo latest action");
   },
 
   redo: () => {
-    const { redoStack, suggestions, mode, selectedSuggestionId, undoStack } = get();
+    const { redoStack, suggestions, mode, selectedSuggestionId, undoStack, pushHistory } = get();
     if (redoStack.length === 0) return;
 
     const next = redoStack[redoStack.length - 1];
@@ -159,7 +185,40 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       redoStack: redoStack.slice(0, -1),
       undoStack: [...undoStack, currentSnapshot],
     });
+    pushHistory("redo", "Redo latest action");
   },
+
+  addBookmark: ({ time, type, note, suggestionId }) => {
+    const item: LabelingBookmark = {
+      id: `bm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      time,
+      type,
+      note,
+      suggestionId,
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({ bookmarks: [item, ...state.bookmarks] }));
+    get().pushHistory("bookmark", `Added bookmark: ${type}`);
+  },
+
+  removeBookmark: (id) => {
+    set((state) => ({ bookmarks: state.bookmarks.filter((item) => item.id !== id) }));
+  },
+
+  pushHistory: (type, summary, payload) => {
+    const item: ActionHistoryItem = {
+      id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      summary,
+      createdAt: new Date().toISOString(),
+      payload,
+    };
+    set((state) => ({
+      history: [item, ...state.history].slice(0, MAX_HISTORY_ITEMS),
+    }));
+  },
+
+  clearHistory: () => set({ history: [] }),
 
   loadSuggestions: (items) => {
     set({
@@ -168,6 +227,8 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       mode: "review",
       undoStack: [],
       redoStack: [],
+      history: [],
+      bookmarks: [],
     });
   },
 

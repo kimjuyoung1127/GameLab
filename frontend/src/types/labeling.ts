@@ -42,3 +42,36 @@ export interface HistorySnapshot {
   selectedSuggestionId: string | null;
   suggestions: AISuggestion[];
 }
+
+export type BookmarkType = "recheck" | "noise_suspect" | "edge_case";
+
+export interface LabelingBookmark {
+  id: string;
+  time: number;
+  suggestionId?: string;
+  type: BookmarkType;
+  note: string;
+  createdAt: string;
+}
+
+export type ActionType =
+  | "confirm"
+  | "reject"
+  | "apply_fix"
+  | "seek"
+  | "loop_set"
+  | "bookmark"
+  | "undo"
+  | "redo";
+
+export interface ActionHistoryItem {
+  id: string;
+  type: ActionType;
+  createdAt: string;
+  summary: string;
+  payload?: {
+    time?: number;
+    loopStart?: number | null;
+    loopEnd?: number | null;
+  };
+}

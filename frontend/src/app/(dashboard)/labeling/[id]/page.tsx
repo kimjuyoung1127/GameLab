@@ -28,6 +28,9 @@ import {
   Undo2,
   Redo2,
   Wrench,
+  Repeat,
+  Flag,
+  BookmarkPlus,
 } from "lucide-react";
 
 import { useAnnotationStore } from "@/lib/store/annotation-store";
@@ -38,11 +41,14 @@ import { useUIStore } from "@/lib/store/ui-store";
 import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
 import { useWaveform } from "@/lib/hooks/use-waveform";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
+import { useLabelingHotkeys } from "@/lib/hooks/labeling/useLabelingHotkeys";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
+import ActionHistoryPanel from "./components/ActionHistoryPanel";
+import BookmarksPanel from "./components/BookmarksPanel";
 import { endpoints } from "@/lib/api/endpoints";
 import { enqueueStatusUpdate } from "@/lib/api/action-queue";
 import { authFetch } from "@/lib/api/auth-fetch";
-import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus, Session } from "@/types";
+import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus, Session, BookmarkType, ActionHistoryItem } from "@/types";
 import { useTranslations } from "next-intl";
 
 /* ------------------------------------------------------------------ */
@@ -55,6 +61,14 @@ function parseDurationToSeconds(dur: string): number {
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   if (parts.length === 2) return parts[0] * 60 + parts[1];
   return parts[0] ?? 0;
+}
+
+function formatTimecode(value: number): string {
+  const safe = Number.isFinite(value) ? Math.max(0, value) : 0;
+  const m = Math.floor(safe / 60);
+  const s = Math.floor(safe % 60);
+  const ms = Math.floor((safe % 1) * 1000);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
 }
 
 function normalizeAudioUrl(url: string | undefined): string | null {
@@ -131,12 +145,18 @@ export default function LabelingWorkspacePage() {
     tool,
     setTool,
     suggestions,
+    bookmarks,
+    history,
     selectedSuggestionId,
     confirmSuggestion,
     rejectSuggestion,
     applyFix,
     undo,
     redo,
+    addBookmark,
+    removeBookmark,
+    pushHistory,
+    clearHistory,
     loadSuggestions,
     restoreSuggestions,
     selectSuggestion,
@@ -167,8 +187,14 @@ export default function LabelingWorkspacePage() {
   const [fileProgressMap, setFileProgressMap] = useState<Record<string, { total: number; reviewed: number }>>({});
   const [fileCompleteToast, setFileCompleteToast] = useState(false);
   const [audioRetryKey, setAudioRetryKey] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [fitToSuggestion, setFitToSuggestion] = useState(true);
+  const [showFitToast, setShowFitToast] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(true);
+  const [loopHudWarning, setLoopHudWarning] = useState(false);
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
+  const spectrogramRef = useRef<HTMLDivElement>(null);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -210,6 +236,15 @@ export default function LabelingWorkspacePage() {
   const pendingCount = suggestions.filter((s) => s.status === "pending").length;
   const confirmedCount = suggestions.filter((s) => s.status === "confirmed").length;
   const totalCount = suggestions.length;
+  const loopRangeLabel =
+    player.loopStart !== null && player.loopEnd !== null && player.loopEnd > player.loopStart
+      ? `${formatTimecode(player.loopStart)} ~ ${formatTimecode(player.loopEnd)}`
+      : t("stateHudOff");
+  const bookmarkPresets: { type: BookmarkType; label: string; note: string }[] = [
+    { type: "recheck", label: t("bookmarkRecheck"), note: t("bookmarkRecheckNote") },
+    { type: "noise_suspect", label: t("bookmarkNoise"), note: t("bookmarkNoiseNote") },
+    { type: "edge_case", label: t("bookmarkEdge"), note: t("bookmarkEdgeNote") },
+  ];
 
   /* ----- Score sync + achievement load ------------------------------ */
   useEffect(() => {
@@ -223,7 +258,7 @@ export default function LabelingWorkspacePage() {
       showToast(recentUnlock.name);
       clearRecent();
     }
-  }, [recentUnlock, clearRecent]);
+  }, [recentUnlock, clearRecent, showToast]);
 
   /* ----- Session init --------------------------------------------- */
   useEffect(() => {
@@ -345,9 +380,30 @@ export default function LabelingWorkspacePage() {
     }
   }, [applyFix, addScore, addFix, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock]);
 
-  function handleFileClick(file: AudioFile) {
+  const seekTo = useCallback((time: number, trackHistory = false) => {
+    player.seek(time);
+    if (trackHistory) {
+      pushHistory("seek", `Seek to ${time.toFixed(2)}s`, { time });
+    }
+  }, [player, pushHistory]);
+
+  const handleSelectSuggestion = useCallback((id: string | null) => {
+    selectSuggestion(id);
+    if (!id) return;
+    const selected = suggestions.find((item) => item.id === id);
+    if (!selected) return;
+    if (fitToSuggestion) {
+      const segment = Math.max(selected.endTime - selected.startTime, 0.25);
+      const desiredZoom = Math.min(3, Math.max(1, totalDuration / (segment * 4)));
+      setZoomLevel(desiredZoom);
+      setShowFitToast(true);
+    }
+    seekTo((selected.startTime + selected.endTime) / 2, true);
+  }, [fitToSuggestion, seekTo, selectSuggestion, suggestions, totalDuration]);
+
+  const handleFileClick = useCallback((file: AudioFile) => {
     setCurrentFile(file.id);
-  }
+  }, [setCurrentFile]);
 
   const isLastFile = (() => {
     if (!activeFileId) return true;
@@ -355,7 +411,7 @@ export default function LabelingWorkspacePage() {
     return idx >= audioFiles.length - 1;
   })();
 
-  function handleNextFile() {
+  const handleNextFile = useCallback(() => {
     if (!activeFileId) return;
     const idx = audioFiles.findIndex((f) => f.id === activeFileId);
     const nextFile = audioFiles[idx + 1];
@@ -364,7 +420,75 @@ export default function LabelingWorkspacePage() {
     } else {
       router.push("/sessions");
     }
-  }
+  }, [activeFileId, audioFiles, router, setCurrentFile]);
+
+  const handlePrevFile = useCallback(() => {
+    if (!activeFileId) return;
+    const idx = audioFiles.findIndex((f) => f.id === activeFileId);
+    const prevFile = audioFiles[idx - 1];
+    if (prevFile) {
+      setCurrentFile(prevFile.id);
+    }
+  }, [activeFileId, audioFiles, setCurrentFile]);
+
+  const handleScrubFromSpectrogram = useCallback((clientX: number) => {
+    const area = spectrogramRef.current;
+    if (!area || totalDuration <= 0) return;
+    const rect = area.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const ratio = rect.width > 0 ? x / rect.width : 0;
+    seekTo(ratio * totalDuration, false);
+  }, [seekTo, totalDuration]);
+
+  const handleSetLoopStart = useCallback(() => {
+    player.setLoopStart(player.currentTime);
+    pushHistory("loop_set", `Loop start ${player.currentTime.toFixed(2)}s`, {
+      loopStart: player.currentTime,
+      loopEnd: player.loopEnd,
+    });
+  }, [player, pushHistory]);
+
+  const handleSetLoopEnd = useCallback(() => {
+    player.setLoopEnd(player.currentTime);
+    pushHistory("loop_set", `Loop end ${player.currentTime.toFixed(2)}s`, {
+      loopStart: player.loopStart,
+      loopEnd: player.currentTime,
+    });
+  }, [player, pushHistory]);
+
+  const handleToggleLoop = useCallback(() => {
+    if (player.loopStart === null || player.loopEnd === null || player.loopEnd <= player.loopStart) {
+      showToast(t("loopRequireBounds"));
+      setLoopHudWarning(true);
+      return;
+    }
+    setLoopHudWarning(false);
+    player.toggleLoop();
+    showToast(player.loopEnabled ? t("loopDisabled") : t("loopEnabled"));
+  }, [player, showToast, t]);
+
+  const handleAddBookmark = useCallback((preset: { type: BookmarkType; label: string; note: string }) => {
+    addBookmark({
+      time: player.currentTime,
+      type: preset.type,
+      note: preset.note,
+      suggestionId: selectedSuggestionId ?? undefined,
+    });
+    showToast(t("bookmarkAdded", { label: preset.label }));
+  }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
+
+  const handleReplayHistory = useCallback((item: ActionHistoryItem) => {
+    if (typeof item.payload?.time === "number") {
+      seekTo(item.payload.time, false);
+      return;
+    }
+    if (typeof item.payload?.loopStart === "number") {
+      player.setLoopStart(item.payload.loopStart);
+    }
+    if (typeof item.payload?.loopEnd === "number") {
+      player.setLoopEnd(item.payload.loopEnd);
+    }
+  }, [player, seekTo]);
 
   /* ----- File completion detection + auto-next -------------------- */
   useEffect(() => {
@@ -379,7 +503,7 @@ export default function LabelingWorkspacePage() {
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [pendingCount, totalCount, fileCompleteToast]);
+  }, [pendingCount, totalCount, fileCompleteToast, handleNextFile]);
 
   // Reset toast when file changes
   useEffect(() => {
@@ -388,82 +512,37 @@ export default function LabelingWorkspacePage() {
     completionHandled.current = false;
   }, [activeFileId]);
 
-  /* ----- Hotkeys -------------------------------------------------- */
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+    if (!showFitToast) return;
+    const timer = setTimeout(() => setShowFitToast(false), 1200);
+    return () => clearTimeout(timer);
+  }, [showFitToast]);
 
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === "z") {
-          e.preventDefault();
-          if (e.shiftKey) {
-            redo();
-          } else {
-            undo();
-          }
-          return;
-        }
-      }
+  useEffect(() => {
+    if (!loopHudWarning) return;
+    const timer = setTimeout(() => setLoopHudWarning(false), 1600);
+    return () => clearTimeout(timer);
+  }, [loopHudWarning]);
 
-      switch (e.key.toLowerCase()) {
-        case "o":
-          if (mode === "review") handleConfirm();
-          break;
-        case "x":
-          if (mode === "review") handleReject();
-          break;
-        case "b":
-          setTool("brush");
-          break;
-        case "e":
-          setTool("eraser");
-          break;
-        case "r":
-          setTool("box");
-          break;
-        case "s":
-          if (!e.ctrlKey && !e.metaKey) setTool("select");
-          break;
-        case "f":
-          if (mode === "edit") handleApplyFix();
-          break;
-        case " ": {
-          e.preventDefault();
-          const sel = suggestions.find((s) => s.id === selectedSuggestionId);
-          if (sel && !player.isPlaying) {
-            player.playRegion(sel.startTime, sel.endTime);
-          } else {
-            player.toggle();
-          }
-          break;
-        }
-        case "tab": {
-          e.preventDefault();
-          const idx = suggestions.findIndex((s) => s.id === selectedSuggestionId);
-          const dir = e.shiftKey ? -1 : 1;
-          const next = (idx + dir + suggestions.length) % suggestions.length;
-          selectSuggestion(suggestions[next]?.id ?? null);
-          break;
-        }
-        case "arrowdown": {
-          e.preventDefault();
-          const idx = suggestions.findIndex((s) => s.id === selectedSuggestionId);
-          selectSuggestion(suggestions[Math.min(idx + 1, suggestions.length - 1)]?.id ?? null);
-          break;
-        }
-        case "arrowup": {
-          e.preventDefault();
-          const idx = suggestions.findIndex((s) => s.id === selectedSuggestionId);
-          selectSuggestion(suggestions[Math.max(idx - 1, 0)]?.id ?? null);
-          break;
-        }
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mode, handleConfirm, handleReject, handleApplyFix, undo, redo, setTool, player, suggestions, selectedSuggestionId, selectSuggestion]);
+  useLabelingHotkeys({
+    mode,
+    setTool,
+    handleConfirm,
+    handleReject,
+    handleApplyFix,
+    handleNextFile,
+    handlePrevFile,
+    undo,
+    redo,
+    onSetLoopStart: handleSetLoopStart,
+    onSetLoopEnd: handleSetLoopEnd,
+    onToggleLoop: handleToggleLoop,
+    player,
+    suggestions,
+    selectedSuggestionId,
+    selectSuggestion: handleSelectSuggestion,
+    setZoomLevel,
+  });
 
   /* ================================================================ */
   /*  RENDER                                                          */
@@ -671,11 +750,30 @@ export default function LabelingWorkspacePage() {
               <button
                 key={zt.id}
                 title={t(zt.labelKey)}
+                onClick={() =>
+                  setZoomLevel((prev) =>
+                    zt.id === "zoom-in"
+                      ? Math.min(prev + 0.25, 3.0)
+                      : Math.max(prev - 0.25, 0.5),
+                  )
+                }
                 className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
               >
                 <zt.icon className="w-4 h-4" />
               </button>
             ))}
+
+            <button
+              onClick={() => setFitToSuggestion((prev) => !prev)}
+              title={t("fitToSuggestion")}
+              className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
+                fitToSuggestion
+                  ? "bg-primary/20 text-primary-light"
+                  : "bg-surface text-text-muted hover:text-text-secondary"
+              }`}
+            >
+              {t("fitShort")}
+            </button>
 
             <div className="h-5 w-px bg-border-light mx-1" />
 
@@ -725,17 +823,21 @@ export default function LabelingWorkspacePage() {
 
           {/* Spectrogram + Waveform area */}
           <div className="flex-1 relative overflow-hidden flex flex-col">
-            {/* Waveform preview (real data / synthetic fallback) */}
-            {waveformData && (
-              <div className="h-20 shrink-0 bg-surface/50 border-b border-border/30 relative">
+            {/* Waveform preview */}
+            <div className="h-20 shrink-0 bg-surface/50 border-b border-border/30 relative">
+              {waveformData ? (
                 <WaveformCanvas
                   peaks={waveformData.peaks}
                   currentTime={player.currentTime}
                   duration={totalDuration}
-                  onSeek={player.canPlay ? player.seek : () => {}}
+                  onSeek={player.canPlay ? (time) => seekTo(time, false) : () => {}}
                 />
-              </div>
-            )}
+              ) : (
+                <div className="h-full flex items-center justify-center text-[11px] text-text-muted">
+                  {t("waveformLoading")}
+                </div>
+              )}
+            </div>
             {audioLoadError && (
               <div className="mx-3 mt-3 shrink-0 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger flex items-center justify-between gap-3">
                 <span>{audioLoadError}</span>
@@ -750,6 +852,14 @@ export default function LabelingWorkspacePage() {
 
             {/* Spectrogram zone */}
             <div className="flex-1 relative overflow-hidden">
+            <div
+              className="absolute inset-0 origin-top-left"
+              style={{
+                transform: zoomLevel === 1 ? undefined : `scale(${zoomLevel})`,
+                width: `${100 / zoomLevel}%`,
+                height: `${100 / zoomLevel}%`,
+              }}
+            >
             {/* File complete toast */}
             {fileCompleteToast && (
               <div
@@ -774,7 +884,11 @@ export default function LabelingWorkspacePage() {
             </div>
 
             {/* Spectrogram gradient background */}
-            <div className="absolute top-0 left-12 right-0 bottom-6 bg-gradient-to-b from-indigo-950 via-purple-900 to-amber-950 opacity-90">
+            <div
+              ref={spectrogramRef}
+              onPointerDown={(e) => handleScrubFromSpectrogram(e.clientX)}
+              className="absolute top-0 left-12 right-0 bottom-6 bg-gradient-to-b from-indigo-950 via-purple-900 to-amber-950 opacity-90 cursor-crosshair"
+            >
               {/* Horizontal grid lines */}
               <div className="absolute inset-0">
                 {[20, 40, 60, 80].map((pct) => (
@@ -793,6 +907,30 @@ export default function LabelingWorkspacePage() {
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent opacity-60" />
               <div className="absolute left-[25%] right-[30%] top-[30%] bottom-[40%] bg-orange-500/8 rounded-full blur-3xl" />
               <div className="absolute left-[55%] right-[10%] top-[55%] bottom-[15%] bg-red-500/6 rounded-full blur-3xl" />
+              {/* Energy bands from suggestion regions */}
+              {suggestions.map((s) => {
+                const boxPos = suggestionBoxStyle(s, totalDuration);
+                const energyClass =
+                  s.status === "pending"
+                    ? "bg-orange-400/10"
+                    : s.status === "confirmed"
+                      ? "bg-accent/10"
+                      : s.status === "rejected"
+                        ? "bg-danger/10"
+                        : "bg-cyan-400/10";
+                return (
+                  <div
+                    key={`energy-${s.id}`}
+                    className={`absolute ${energyClass} blur-md pointer-events-none`}
+                    style={{
+                      left: boxPos.left,
+                      width: boxPos.width,
+                      top: "6%",
+                      bottom: "6%",
+                    }}
+                  />
+                );
+              })}
             </div>
 
             {/* Dynamic annotation boxes from suggestions */}
@@ -803,7 +941,7 @@ export default function LabelingWorkspacePage() {
               return (
                 <button
                   key={s.id}
-                  onClick={() => selectSuggestion(s.id)}
+                  onClick={() => handleSelectSuggestion(s.id)}
                   className={`absolute border-2 rounded-sm z-20 transition-all duration-200 ${
                     sc.border
                   } ${sc.dashed ? "border-dashed" : ""} ${
@@ -826,7 +964,7 @@ export default function LabelingWorkspacePage() {
                     {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
                     {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
                     {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
-                    {s.label.slice(0, 18)}
+                    <span title={s.label}>{s.label.slice(0, 18)}</span>
                   </div>
                   {/* Corner handles */}
                   {isSelected && (
@@ -848,7 +986,33 @@ export default function LabelingWorkspacePage() {
             {/* Playback cursor line */}
             <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: `calc(48px + ${playbackPct}%)` }}>
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
+              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/50 text-[9px] text-white/90 font-mono whitespace-nowrap">
+                {formatTimecode(player.currentTime)}
+              </div>
             </div>
+
+            {/* Loop markers + band */}
+            {player.loopStart !== null && (
+              <div
+                className="absolute top-0 bottom-6 w-px bg-warning/80 z-30"
+                style={{ left: `calc(48px + ${(player.loopStart / totalDuration) * 100}%)` }}
+              />
+            )}
+            {player.loopEnd !== null && (
+              <div
+                className="absolute top-0 bottom-6 w-px bg-warning/80 z-30"
+                style={{ left: `calc(48px + ${(player.loopEnd / totalDuration) * 100}%)` }}
+              />
+            )}
+            {player.loopStart !== null && player.loopEnd !== null && player.loopEnd > player.loopStart && (
+              <div
+                className="absolute top-0 bottom-6 bg-warning/10 border-y border-warning/30 z-20 pointer-events-none"
+                style={{
+                  left: `calc(48px + ${(player.loopStart / totalDuration) * 100}%)`,
+                  width: `${((player.loopEnd - player.loopStart) / totalDuration) * 100}%`,
+                }}
+              />
+            )}
 
             {/* Time axis (bottom) */}
             <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
@@ -877,6 +1041,35 @@ export default function LabelingWorkspacePage() {
               })}
             </div>
 
+            {/* State HUD */}
+            <div className="absolute top-8 right-3 z-30 rounded-lg border border-white/10 bg-black/45 backdrop-blur-sm px-2.5 py-2 text-[10px] space-y-1 min-w-[180px]">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudFit")}</span>
+                <span className={fitToSuggestion ? "text-accent font-semibold" : "text-text-secondary"}>{fitToSuggestion ? "ON" : "OFF"}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudZoom")}</span>
+                <span className="text-text-secondary font-mono">{zoomLevel.toFixed(2)}x</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudLoop")}</span>
+                <span className={`${player.loopEnabled ? "text-warning" : "text-text-secondary"} font-mono`}>{loopRangeLabel}</span>
+              </div>
+              {loopHudWarning && (
+                <p className="text-danger text-[9px]">{t("loopRequireBounds")}</p>
+              )}
+            </div>
+
+            {/* Canvas helper hints */}
+            <div className="absolute bottom-8 left-3 z-30 bg-black/55 text-[9px] text-text-muted px-2 py-1 rounded font-mono">
+              {t("clickDragSeekHint")}
+            </div>
+            {showFitToast && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-accent/90 text-white text-[10px] font-semibold px-2.5 py-1 rounded">
+                {t("autoFitApplied")}
+              </div>
+            )}
+
             {/* Hotkey hint overlay */}
             <div className="absolute bottom-8 right-3 z-30 flex gap-1.5">
               {[
@@ -884,7 +1077,9 @@ export default function LabelingWorkspacePage() {
                 { key: "X", labelKey: "hintReject" },
                 { key: "B", labelKey: "hintBrush" },
                 { key: "R", labelKey: "hintBox" },
-                { key: "^Z", labelKey: "hintUndo" },
+                { key: "Ctrl+Z", labelKey: "hintUndo" },
+                { key: "Ctrl+Shift+Z", labelKey: "hintRedo" },
+                { key: "I/P/L", labelKey: "hintLoop" },
               ].map((hint) => (
                 <div
                   key={hint.key}
@@ -894,6 +1089,7 @@ export default function LabelingWorkspacePage() {
                   {t(hint.labelKey)}
                 </div>
               ))}
+            </div>
             </div>
           </div>{/* /spectrogram zone */}
           </div>{/* /spectrogram + waveform area */}
@@ -936,9 +1132,47 @@ export default function LabelingWorkspacePage() {
               <Lock className="w-3.5 h-3.5" />
             </button>
 
-            <span className="text-[11px] font-medium text-text-secondary bg-surface px-2 py-1 rounded-md">
-              1.0x
-            </span>
+            <button
+              onClick={() => player.setPlaybackRate(1.0)}
+              title={t("playbackSpeedTitle")}
+              className="text-[11px] font-medium text-text-secondary bg-surface px-2 py-1 rounded-md hover:bg-panel-light transition-colors"
+            >
+              {player.playbackRate.toFixed(2)}x
+            </button>
+
+            <button
+              onClick={handleSetLoopStart}
+              className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
+              title={t("loopIn")}
+            >
+              <Flag className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={handleSetLoopEnd}
+              className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
+              title={t("loopOut")}
+            >
+              <Flag className="w-3.5 h-3.5 rotate-180" />
+            </button>
+
+            <button
+              onClick={handleToggleLoop}
+              className={`p-1.5 rounded-md transition-colors ${
+                player.loopEnabled ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-secondary"
+              }`}
+              title={t("loopToggle")}
+            >
+              <Repeat className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={() => handleAddBookmark(bookmarkPresets[0])}
+              className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
+              title={t("bookmarkAdd")}
+            >
+              <BookmarkPlus className="w-3.5 h-3.5" />
+            </button>
 
             <div className="flex items-center gap-2">
               <button
@@ -1032,6 +1266,7 @@ export default function LabelingWorkspacePage() {
                   <div>
                     <h3 className="text-sm font-bold text-text">{activeSuggestion.label}</h3>
                     <p className="text-[10px] text-text-muted mt-0.5">{t("aiDetectedAnomaly")}</p>
+                    <p className="text-[10px] text-text-muted mt-1">{t("aiActionGuide")}</p>
                   </div>
                   <div className="text-right">
                     <span className="text-2xl font-black text-primary-light tabular-nums">
@@ -1123,6 +1358,7 @@ export default function LabelingWorkspacePage() {
               <div className="flex-1 min-w-0">
                 <h4 className="text-xs font-semibold text-text">{t("noiseReductionTitle")}</h4>
                 <p className="text-[10px] text-text-muted mt-0.5">{t("noiseReductionDesc")}</p>
+                <p className="text-[10px] text-text-muted/80 mt-0.5">{t("noiseReductionRole")}</p>
               </div>
               <button className="text-[11px] font-bold text-primary-light hover:text-primary transition-colors shrink-0">
                 {t("noiseReductionApply")}
@@ -1164,6 +1400,23 @@ export default function LabelingWorkspacePage() {
               className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors resize-none"
             />
           </div>
+
+          <BookmarksPanel
+            bookmarks={bookmarks}
+            presets={bookmarkPresets}
+            onAdd={handleAddBookmark}
+            onSeek={(time) => seekTo(time, true)}
+            onRemove={removeBookmark}
+          />
+
+          <ActionHistoryPanel
+            items={history}
+            onClear={clearHistory}
+            onReplay={handleReplayHistory}
+            collapsed={historyCollapsed}
+            onToggleCollapsed={() => setHistoryCollapsed((prev) => !prev)}
+            undoHint={t("historyUndoHint")}
+          />
 
           {/* ---- Save & Next Button ---- */}
           <div className="p-4 mt-auto">

@@ -38,6 +38,7 @@ export default function HotkeyHelp() {
         { key: "Shift+\u2191", desc: t("volumeUp") },
         { key: "Shift+\u2193", desc: t("volumeDown") },
         { key: "[ / ]", desc: t("playbackSpeed") },
+        { key: "I / P / L", desc: "Loop in/out/toggle" },
       ],
     },
     {
@@ -84,7 +85,7 @@ export default function HotkeyHelp() {
       toggleHotkeyHelp();
       localStorage.setItem(ONBOARDING_KEY, "true");
     }
-  }, []);
+  }, [toggleHotkeyHelp]);
 
   // Listen for ? key and Escape
   useEffect(() => {

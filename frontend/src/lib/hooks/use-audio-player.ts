@@ -9,6 +9,9 @@ export interface AudioPlayerState {
   duration: number;
   volume: number;
   playbackRate: number;
+  loopEnabled: boolean;
+  loopStart: number | null;
+  loopEnd: number | null;
   canPlay: boolean;
   error: string | null;
   play: () => void;
@@ -18,6 +21,9 @@ export interface AudioPlayerState {
   playRegion: (start: number, end: number) => void;
   setVolume: (v: number) => void;
   setPlaybackRate: (r: number) => void;
+  setLoopStart: (time: number | null) => void;
+  setLoopEnd: (time: number | null) => void;
+  toggleLoop: () => void;
 }
 
 export function useAudioPlayer(
@@ -36,6 +42,9 @@ export function useAudioPlayer(
   const [canPlay, setCanPlay] = useState(false);
   const [volume, setVolumeState] = useState(0.75);
   const [playbackRate, setPlaybackRateState] = useState(1.0);
+  const [loopEnabled, setLoopEnabled] = useState(false);
+  const [loopStart, setLoopStartState] = useState<number | null>(null);
+  const [loopEnd, setLoopEndState] = useState<number | null>(null);
 
   const resetPlayerState = useCallback(() => {
     setIsPlaying(false);
@@ -62,6 +71,28 @@ export function useAudioPlayer(
     if (audioRef.current) {
       audioRef.current.playbackRate = clamped;
     }
+  }, []);
+
+  const setLoopStart = useCallback((time: number | null) => {
+    if (time === null) {
+      setLoopStartState(null);
+      return;
+    }
+    const clamped = Math.max(0, Math.min(time, duration));
+    setLoopStartState(clamped);
+  }, [duration]);
+
+  const setLoopEnd = useCallback((time: number | null) => {
+    if (time === null) {
+      setLoopEndState(null);
+      return;
+    }
+    const clamped = Math.max(0, Math.min(time, duration));
+    setLoopEndState(clamped);
+  }, [duration]);
+
+  const toggleLoop = useCallback(() => {
+    setLoopEnabled((prev) => !prev);
   }, []);
 
   useEffect(() => {
@@ -137,6 +168,18 @@ export function useAudioPlayer(
           regionEndRef.current = null;
           return;
         }
+        if (
+          loopEnabled &&
+          loopStart !== null &&
+          loopEnd !== null &&
+          loopEnd > loopStart &&
+          t >= loopEnd
+        ) {
+          audioRef.current.currentTime = loopStart;
+          setCurrentTime(loopStart);
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
         setCurrentTime(t);
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -147,7 +190,7 @@ export function useAudioPlayer(
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [isPlaying]);
+  }, [isPlaying, loopEnabled, loopEnd, loopStart]);
 
   const play = useCallback(() => {
     if (!audioRef.current || !canPlay) return;
@@ -196,6 +239,9 @@ export function useAudioPlayer(
     duration,
     volume,
     playbackRate,
+    loopEnabled,
+    loopStart,
+    loopEnd,
     canPlay,
     error,
     play,
@@ -205,5 +251,8 @@ export function useAudioPlayer(
     playRegion,
     setVolume,
     setPlaybackRate,
+    setLoopStart,
+    setLoopEnd,
+    toggleLoop,
   };
 }
