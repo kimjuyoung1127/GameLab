@@ -24,11 +24,10 @@ export default function HotkeyHelp() {
     {
       title: t("tools"),
       keys: [
-        { key: "S", desc: t("selectTool") },
-        { key: "B", desc: t("brushTool") },
+        { key: "A", desc: t("selectTool") },
         { key: "E", desc: t("eraserTool") },
         { key: "R", desc: t("boxTool") },
-        { key: "A", desc: t("anchorTool") },
+        { key: "G", desc: t("anchorTool") },
       ],
     },
     {

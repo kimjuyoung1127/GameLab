@@ -19,6 +19,18 @@ function formatTime(iso: string): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+function typeLabel(type: ActionHistoryItem["type"]): string {
+  if (type === "ai_confirm") return "AI";
+  if (type === "manual_create") return "MANUAL+";
+  if (type === "manual_delete") return "MANUAL-";
+  if (type === "manual_move") return "MOVE";
+  if (type === "manual_resize") return "RESIZE";
+  if (type === "loop_set") return "LOOP";
+  if (type === "undo") return "UNDO";
+  if (type === "redo") return "REDO";
+  return type.toUpperCase();
+}
+
 export default function ActionHistoryPanel({
   items,
   onClear,
@@ -58,7 +70,12 @@ export default function ActionHistoryPanel({
               className="w-full text-left rounded-md bg-surface px-2 py-1.5 hover:bg-panel-light transition-colors"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] text-text-secondary truncate">{item.summary}</span>
+                <span className="text-[11px] text-text-secondary truncate">
+                  <span className="inline-block mr-1 rounded bg-panel px-1 py-0.5 text-[9px] text-text-muted">
+                    {typeLabel(item.type)}
+                  </span>
+                  {item.summary}
+                </span>
                 <span className="text-[10px] text-text-muted font-mono shrink-0">
                   {formatTime(item.createdAt)}
                 </span>

@@ -21,7 +21,24 @@ class SuggestionResponse(CamelModel):
     freq_low: float
     freq_high: float
     status: SuggestionStatusValue
+    source: str = "ai"
+    created_by: str | None = None
 
 
 class UpdateSuggestionRequest(CamelModel):
     status: SuggestionStatusValue
+
+
+class CreateSuggestionInput(CamelModel):
+    audio_id: str
+    label: str
+    start_time: float
+    end_time: float
+    freq_low: float
+    freq_high: float
+    description: str = ""
+    confidence: int = 100
+
+
+class CreateSuggestionsRequest(CamelModel):
+    suggestions: list[CreateSuggestionInput]

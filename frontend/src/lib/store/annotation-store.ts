@@ -1,14 +1,15 @@
-/** 라벨링 상태 관리: 모드(review/edit), 도구, AI 제안, undo/redo 스택. */
+/** Labeling store: AI suggestion review + manual draft editing with undo/redo snapshots. */
 import { create } from "zustand";
 import type {
   ActionHistoryItem,
-  AISuggestion,
-  Annotation,
   BookmarkType,
-  LabelingMode,
-  LabelingBookmark,
   DrawTool,
   HistorySnapshot,
+  LabelingBookmark,
+  LabelingMode,
+  LoopState,
+  ManualDraft,
+  Suggestion,
 } from "@/types";
 
 const MAX_HISTORY_ITEMS = 20;
@@ -17,8 +18,10 @@ interface AnnotationState {
   mode: LabelingMode;
   tool: DrawTool;
   snapEnabled: boolean;
-  suggestions: AISuggestion[];
-  annotations: Annotation[];
+  suggestions: Suggestion[];
+  manualDrafts: ManualDraft[];
+  selectedDraftId: string | null;
+  loopState: LoopState;
   bookmarks: LabelingBookmark[];
   history: ActionHistoryItem[];
   selectedSuggestionId: string | null;
@@ -28,7 +31,18 @@ interface AnnotationState {
   setMode: (mode: LabelingMode) => void;
   setTool: (tool: DrawTool) => void;
   toggleSnap: () => void;
+  setLoopState: (next: Partial<LoopState>) => void;
   selectSuggestion: (id: string | null) => void;
+  selectDraft: (id: string | null) => void;
+  startDraft: (input: Omit<ManualDraft, "id" | "source">) => string;
+  updateDraft: (
+    id: string,
+    patch: Partial<ManualDraft>,
+    options?: { trackHistory?: boolean },
+  ) => void;
+  removeDraft: (id: string) => void;
+  clearDrafts: () => void;
+  saveDraftsSuccess: (created: Suggestion[], removedDraftIds: string[]) => void;
   confirmSuggestion: () => { points: number } | null;
   rejectSuggestion: () => void;
   applyFix: () => { points: number } | null;
@@ -47,8 +61,19 @@ interface AnnotationState {
     payload?: ActionHistoryItem["payload"],
   ) => void;
   clearHistory: () => void;
-  loadSuggestions: (items: AISuggestion[]) => void;
-  restoreSuggestions: (suggestions: AISuggestion[]) => void;
+  loadSuggestions: (items: Suggestion[]) => void;
+  restoreSuggestions: (suggestions: Suggestion[]) => void;
+}
+
+function makeSnapshot(state: AnnotationState): HistorySnapshot {
+  return {
+    mode: state.mode,
+    selectedSuggestionId: state.selectedSuggestionId,
+    suggestions: [...state.suggestions],
+    manualDrafts: [...state.manualDrafts],
+    selectedDraftId: state.selectedDraftId,
+    loopState: { ...state.loopState },
+  };
 }
 
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
@@ -56,7 +81,9 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   tool: "select",
   snapEnabled: true,
   suggestions: [],
-  annotations: [],
+  manualDrafts: [],
+  selectedDraftId: null,
+  loopState: { enabled: false, start: null, end: null },
   bookmarks: [],
   history: [],
   selectedSuggestionId: null,
@@ -67,125 +94,171 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   setTool: (tool) => set({ tool }),
   toggleSnap: () => set((s) => ({ snapEnabled: !s.snapEnabled })),
 
-  selectSuggestion: (id) => set({ selectedSuggestionId: id }),
+  setLoopState: (next) => {
+    const state = get();
+    const prev = makeSnapshot(state);
+    set({
+      loopState: { ...state.loopState, ...next },
+      undoStack: [...state.undoStack, prev],
+      redoStack: [],
+    });
+  },
+
+  selectSuggestion: (id) => set({ selectedSuggestionId: id, selectedDraftId: null }),
+  selectDraft: (id) => set({ selectedDraftId: id, selectedSuggestionId: null }),
+
+  startDraft: (input) => {
+    const state = get();
+    const id = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const prev = makeSnapshot(state);
+    const draft: ManualDraft = { id, source: "user", ...input };
+    set({
+      manualDrafts: [...state.manualDrafts, draft],
+      selectedDraftId: id,
+      selectedSuggestionId: null,
+      undoStack: [...state.undoStack, prev],
+      redoStack: [],
+    });
+    return id;
+  },
+
+  updateDraft: (id, patch, options) => {
+    if (options?.trackHistory) {
+      const state = get();
+      const prev = makeSnapshot(state);
+      set({
+        manualDrafts: state.manualDrafts.map((d) => (d.id === id ? { ...d, ...patch } : d)),
+        undoStack: [...state.undoStack, prev],
+        redoStack: [],
+      });
+      return;
+    }
+    set((state) => ({
+      manualDrafts: state.manualDrafts.map((d) => (d.id === id ? { ...d, ...patch } : d)),
+    }));
+  },
+
+  removeDraft: (id) => {
+    const state = get();
+    const prev = makeSnapshot(state);
+    set({
+      manualDrafts: state.manualDrafts.filter((d) => d.id !== id),
+      selectedDraftId: state.selectedDraftId === id ? null : state.selectedDraftId,
+      undoStack: [...state.undoStack, prev],
+      redoStack: [],
+    });
+    get().pushHistory("manual_delete", "Removed manual draft");
+  },
+
+  clearDrafts: () => set({ manualDrafts: [], selectedDraftId: null }),
+
+  saveDraftsSuccess: (created, removedDraftIds) => {
+    const state = get();
+    const prev = makeSnapshot(state);
+    set({
+      suggestions: [...created, ...state.suggestions],
+      manualDrafts: state.manualDrafts.filter((d) => !removedDraftIds.includes(d.id)),
+      selectedDraftId: null,
+      undoStack: [...state.undoStack, prev],
+      redoStack: [],
+    });
+    get().pushHistory("manual_create", `Saved ${created.length} manual suggestion(s)`);
+  },
 
   confirmSuggestion: () => {
-    const { suggestions, selectedSuggestionId, mode, undoStack, pushHistory } = get();
+    const state = get();
+    const { suggestions, selectedSuggestionId } = state;
     if (!selectedSuggestionId) return null;
+    const target = suggestions.find((s) => s.id === selectedSuggestionId);
+    if (!target || target.source === "user") return null;
 
-    const prevSnapshot: HistorySnapshot = {
-      mode,
-      selectedSuggestionId,
-      suggestions: [...suggestions],
-    };
+    const prev = makeSnapshot(state);
     const updated = suggestions.map((s) =>
-      s.id === selectedSuggestionId ? { ...s, status: "confirmed" as const } : s
+      s.id === selectedSuggestionId ? { ...s, status: "confirmed" as const } : s,
     );
-
-    const nextPending = updated.find(
-      (s) => s.status === "pending" && s.id !== selectedSuggestionId
-    );
+    const nextPending = updated.find((s) => s.status === "pending" && s.id !== selectedSuggestionId);
 
     set({
       suggestions: updated,
       selectedSuggestionId: nextPending?.id ?? null,
-      undoStack: [...undoStack, prevSnapshot],
+      undoStack: [...state.undoStack, prev],
       redoStack: [],
     });
-    pushHistory("confirm", "Confirmed selected suggestion");
-
+    get().pushHistory("ai_confirm", "Confirmed selected AI suggestion");
     return { points: 10 };
   },
 
   rejectSuggestion: () => {
-    const { suggestions, selectedSuggestionId, mode, undoStack, pushHistory } = get();
+    const state = get();
+    const { suggestions, selectedSuggestionId } = state;
     if (!selectedSuggestionId) return;
-
-    const prevSnapshot: HistorySnapshot = {
-      mode,
-      selectedSuggestionId,
-      suggestions: [...suggestions],
-    };
+    const prev = makeSnapshot(state);
     const updated = suggestions.map((s) =>
-      s.id === selectedSuggestionId ? { ...s, status: "rejected" as const } : s
+      s.id === selectedSuggestionId ? { ...s, status: "rejected" as const } : s,
     );
-
     set({
       suggestions: updated,
       mode: "edit",
-      undoStack: [...undoStack, prevSnapshot],
+      undoStack: [...state.undoStack, prev],
       redoStack: [],
     });
-    pushHistory("reject", "Rejected selected suggestion");
+    get().pushHistory("reject", "Rejected selected suggestion");
   },
 
   applyFix: () => {
-    const { suggestions, selectedSuggestionId, mode, undoStack, pushHistory } = get();
+    const state = get();
+    const { suggestions, selectedSuggestionId } = state;
     if (!selectedSuggestionId) return null;
-
-    const prevSnapshot: HistorySnapshot = {
-      mode,
-      selectedSuggestionId,
-      suggestions: [...suggestions],
-    };
+    const prev = makeSnapshot(state);
     const updated = suggestions.map((s) =>
-      s.id === selectedSuggestionId ? { ...s, status: "corrected" as const } : s
+      s.id === selectedSuggestionId ? { ...s, status: "corrected" as const } : s,
     );
-
     const nextPending = updated.find((s) => s.status === "pending");
-
     set({
       suggestions: updated,
       mode: "review",
       selectedSuggestionId: nextPending?.id ?? null,
-      undoStack: [...undoStack, prevSnapshot],
+      undoStack: [...state.undoStack, prev],
       redoStack: [],
     });
-    pushHistory("apply_fix", "Applied fix for rejected suggestion");
-
+    get().pushHistory("apply_fix", "Applied fix for rejected suggestion");
     return { points: 20 };
   },
 
   undo: () => {
-    const { undoStack, suggestions, mode, selectedSuggestionId, redoStack, pushHistory } = get();
-    if (undoStack.length === 0) return;
-
-    const prev = undoStack[undoStack.length - 1];
-    const currentSnapshot: HistorySnapshot = {
-      mode,
-      selectedSuggestionId,
-      suggestions: [...suggestions],
-    };
-
+    const state = get();
+    if (state.undoStack.length === 0) return;
+    const prev = state.undoStack[state.undoStack.length - 1];
+    const current = makeSnapshot(state);
     set({
       mode: prev.mode,
       selectedSuggestionId: prev.selectedSuggestionId,
       suggestions: prev.suggestions,
-      undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, currentSnapshot],
+      manualDrafts: prev.manualDrafts,
+      selectedDraftId: prev.selectedDraftId,
+      loopState: prev.loopState,
+      undoStack: state.undoStack.slice(0, -1),
+      redoStack: [...state.redoStack, current],
     });
-    pushHistory("undo", "Undo latest action");
+    get().pushHistory("undo", "Undo latest action");
   },
 
   redo: () => {
-    const { redoStack, suggestions, mode, selectedSuggestionId, undoStack, pushHistory } = get();
-    if (redoStack.length === 0) return;
-
-    const next = redoStack[redoStack.length - 1];
-    const currentSnapshot: HistorySnapshot = {
-      mode,
-      selectedSuggestionId,
-      suggestions: [...suggestions],
-    };
-
+    const state = get();
+    if (state.redoStack.length === 0) return;
+    const next = state.redoStack[state.redoStack.length - 1];
+    const current = makeSnapshot(state);
     set({
       mode: next.mode,
       selectedSuggestionId: next.selectedSuggestionId,
       suggestions: next.suggestions,
-      redoStack: redoStack.slice(0, -1),
-      undoStack: [...undoStack, currentSnapshot],
+      manualDrafts: next.manualDrafts,
+      selectedDraftId: next.selectedDraftId,
+      loopState: next.loopState,
+      redoStack: state.redoStack.slice(0, -1),
+      undoStack: [...state.undoStack, current],
     });
-    pushHistory("redo", "Redo latest action");
+    get().pushHistory("redo", "Redo latest action");
   },
 
   addBookmark: ({ time, type, note, suggestionId }) => {
@@ -229,14 +302,16 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       redoStack: [],
       history: [],
       bookmarks: [],
+      manualDrafts: [],
+      selectedDraftId: null,
+      loopState: { enabled: false, start: null, end: null },
     });
   },
 
   restoreSuggestions: (savedSuggestions) => {
     set({
       suggestions: savedSuggestions,
-      selectedSuggestionId:
-        savedSuggestions.find((s) => s.status === "pending")?.id ?? null,
+      selectedSuggestionId: savedSuggestions.find((s) => s.status === "pending")?.id ?? null,
       mode: "review",
       undoStack: [],
       redoStack: [],

@@ -7,7 +7,6 @@ import {
   AudioLines,
   Search,
   MousePointer2,
-  Pencil,
   Anchor,
   Square,
   ZoomIn,
@@ -48,13 +47,25 @@ import BookmarksPanel from "./components/BookmarksPanel";
 import { endpoints } from "@/lib/api/endpoints";
 import { enqueueStatusUpdate } from "@/lib/api/action-queue";
 import { authFetch } from "@/lib/api/auth-fetch";
-import type { DrawTool, AudioFile, AISuggestion, SuggestionStatus, Session, BookmarkType, ActionHistoryItem } from "@/types";
+import type {
+  ActionHistoryItem,
+  AudioFile,
+  BookmarkType,
+  DrawTool,
+  ManualDraft,
+  Session,
+  Suggestion,
+  SuggestionStatus,
+} from "@/types";
 import { useTranslations } from "next-intl";
 
 /* ------------------------------------------------------------------ */
 /*  Spectrogram helpers                                                */
 /* ------------------------------------------------------------------ */
 const MAX_FREQ = 20_000; // Hz
+const MIN_DRAFT_DURATION = 0.05; // seconds
+const MIN_DRAFT_FREQ_RANGE = 100; // Hz
+type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 function parseDurationToSeconds(dur: string): number {
   const parts = dur.split(":").map(Number);
@@ -84,7 +95,7 @@ function normalizeAudioUrl(url: string | undefined): string | null {
   }
 }
 
-function suggestionBoxStyle(s: AISuggestion, totalDuration: number) {
+function suggestionBoxStyle(s: Suggestion | ManualDraft, totalDuration: number) {
   const leftPct = (s.startTime / totalDuration) * 100;
   const widthPct = ((s.endTime - s.startTime) / totalDuration) * 100;
   const topPct = ((MAX_FREQ - s.freqHigh) / MAX_FREQ) * 100;
@@ -103,9 +114,8 @@ const statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg
 /*  Tool definitions                                                   */
 /* ------------------------------------------------------------------ */
 const tools: { id: DrawTool; icon: typeof MousePointer2; labelKey: string; hotkey: string }[] = [
-  { id: "select", icon: MousePointer2, labelKey: "toolSelect", hotkey: "S" },
-  { id: "brush", icon: Pencil, labelKey: "toolBrush", hotkey: "B" },
-  { id: "anchor", icon: Anchor, labelKey: "toolAnchor", hotkey: "A" },
+  { id: "select", icon: MousePointer2, labelKey: "toolSelect", hotkey: "A" },
+  { id: "anchor", icon: Anchor, labelKey: "toolAnchor", hotkey: "G" },
   { id: "box", icon: Square, labelKey: "toolBox", hotkey: "R" },
 ];
 
@@ -144,7 +154,13 @@ export default function LabelingWorkspacePage() {
     mode,
     tool,
     setTool,
+    snapEnabled,
+    toggleSnap,
     suggestions,
+    manualDrafts,
+    selectedDraftId,
+    loopState,
+    setLoopState,
     bookmarks,
     history,
     selectedSuggestionId,
@@ -157,6 +173,11 @@ export default function LabelingWorkspacePage() {
     removeBookmark,
     pushHistory,
     clearHistory,
+    selectDraft,
+    startDraft,
+    updateDraft,
+    removeDraft,
+    saveDraftsSuccess,
     loadSuggestions,
     restoreSuggestions,
     selectSuggestion,
@@ -192,9 +213,43 @@ export default function LabelingWorkspacePage() {
   const [showFitToast, setShowFitToast] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [loopHudWarning, setLoopHudWarning] = useState(false);
+  const [isDrawingDraft, setIsDrawingDraft] = useState(false);
+  const [draftPreview, setDraftPreview] = useState<ManualDraft | null>(null);
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
+  const draftPointerRef = useRef<{ audioId: string; startTime: number; startFreq: number } | null>(null);
+  const draftUpdateRafRef = useRef<number | null>(null);
+  const pendingPreviewRef = useRef<ManualDraft | null>(null);
+  const [isDraggingDraft, setIsDraggingDraft] = useState(false);
+  const dragDraftRef = useRef<{
+    draftId: string;
+    pointerId: number;
+    pointerStartX: number;
+    pointerStartY: number;
+    startTime: number;
+    endTime: number;
+    freqLow: number;
+    freqHigh: number;
+  } | null>(null);
+  const dragRafRef = useRef<number | null>(null);
+  const pendingDragPatchRef = useRef<{ id: string; patch: Partial<ManualDraft> } | null>(null);
+  const hasMovedDraftRef = useRef(false);
+  const [isResizingDraft, setIsResizingDraft] = useState(false);
+  const resizeDraftRef = useRef<{
+    draftId: string;
+    pointerId: number;
+    handle: ResizeHandle;
+    pointerStartX: number;
+    pointerStartY: number;
+    startTime: number;
+    endTime: number;
+    freqLow: number;
+    freqHigh: number;
+  } | null>(null);
+  const resizeRafRef = useRef<number | null>(null);
+  const pendingResizePatchRef = useRef<{ id: string; patch: Partial<ManualDraft> } | null>(null);
+  const hasResizedDraftRef = useRef(false);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -225,8 +280,8 @@ export default function LabelingWorkspacePage() {
   });
 
   const activeSuggestion =
-    suggestions.find((s) => s.id === selectedSuggestionId && s.status === "pending") ??
-    suggestions.find((s) => s.status === "pending");
+    suggestions.find((s) => s.id === selectedSuggestionId && s.status === "pending" && s.source !== "user") ??
+    suggestions.find((s) => s.status === "pending" && s.source !== "user");
 
   const rejectedSuggestion =
     mode === "edit"
@@ -237,8 +292,8 @@ export default function LabelingWorkspacePage() {
   const confirmedCount = suggestions.filter((s) => s.status === "confirmed").length;
   const totalCount = suggestions.length;
   const loopRangeLabel =
-    player.loopStart !== null && player.loopEnd !== null && player.loopEnd > player.loopStart
-      ? `${formatTimecode(player.loopStart)} ~ ${formatTimecode(player.loopEnd)}`
+    loopState.start !== null && loopState.end !== null && loopState.end > loopState.start
+      ? `${formatTimecode(loopState.start)} ~ ${formatTimecode(loopState.end)}`
       : t("stateHudOff");
   const bookmarkPresets: { type: BookmarkType; label: string; note: string }[] = [
     { type: "recheck", label: t("bookmarkRecheck"), note: t("bookmarkRecheckNote") },
@@ -307,7 +362,8 @@ export default function LabelingWorkspacePage() {
         if (!res.ok) {
           throw new Error("Failed to load suggestions");
         }
-        const all = (await res.json()) as AISuggestion[];
+        const allRaw = (await res.json()) as Suggestion[];
+        const all = allRaw.map((s) => ({ ...s, source: s.source ?? "ai", createdBy: s.createdBy ?? null }));
         const filtered = all.filter((s) => s.audioId === activeFileId);
 
         if (filtered.length === 0 && retryCount < 5 && !cancelled) {
@@ -348,6 +404,11 @@ export default function LabelingWorkspacePage() {
   const handleConfirm = useCallback(() => {
     hasInteracted.current = true;
     const currentId = selectedSuggestionId;
+    const selected = suggestions.find((s) => s.id === currentId);
+    if (!selected || selected.source === "user") {
+      showToast(t("manualConfirmBlocked"));
+      return;
+    }
     const result = confirmSuggestion();
     if (result) {
       addScore(result.points);
@@ -357,7 +418,7 @@ export default function LabelingWorkspacePage() {
       if (currentId) enqueueStatusUpdate(currentId, "confirmed");
       void checkAndUnlock();
     }
-  }, [confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock]);
+  }, [suggestions, selectedSuggestionId, showToast, t, confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, checkAndUnlock]);
 
   const handleReject = useCallback(() => {
     hasInteracted.current = true;
@@ -440,32 +501,387 @@ export default function LabelingWorkspacePage() {
     seekTo(ratio * totalDuration, false);
   }, [seekTo, totalDuration]);
 
+  const pointerToDomain = useCallback((clientX: number, clientY: number) => {
+    const area = spectrogramRef.current;
+    if (!area || totalDuration <= 0) return null;
+    const rect = area.getBoundingClientRect();
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const y = Math.max(0, Math.min(clientY - rect.top, rect.height));
+    const time = (x / Math.max(rect.width, 1)) * totalDuration;
+    const freq = MAX_FREQ * (1 - y / Math.max(rect.height, 1));
+    return { time, freq };
+  }, [totalDuration]);
+
+  const handleDraftPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!activeFileId) return;
+    if (isDraggingDraft || isResizingDraft) return;
+    if (tool !== "box") {
+      handleScrubFromSpectrogram(e.clientX);
+      return;
+    }
+    const mapped = pointerToDomain(e.clientX, e.clientY);
+    if (!mapped) return;
+    const snapTime = snapEnabled ? Math.round(mapped.time * 10) / 10 : mapped.time;
+    const snapFreq = snapEnabled ? Math.round(mapped.freq / 100) * 100 : mapped.freq;
+    const preview: ManualDraft = {
+      id: "draft-preview",
+      audioId: activeFileId,
+      label: t("manualDefaultLabel"),
+      description: t("manualDefaultDescription"),
+      startTime: snapTime,
+      endTime: snapTime + 0.05,
+      freqLow: Math.max(0, snapFreq - 100),
+      freqHigh: Math.min(MAX_FREQ, snapFreq + 100),
+      source: "user",
+    };
+    setDraftPreview(preview);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    draftPointerRef.current = { audioId: activeFileId, startTime: snapTime, startFreq: snapFreq };
+    setIsDrawingDraft(true);
+  }, [activeFileId, isDraggingDraft, isResizingDraft, tool, handleScrubFromSpectrogram, pointerToDomain, snapEnabled, t]);
+
+  const scheduleDraftPreview = useCallback((next: ManualDraft) => {
+    pendingPreviewRef.current = next;
+    if (draftUpdateRafRef.current !== null) return;
+    draftUpdateRafRef.current = requestAnimationFrame(() => {
+      draftUpdateRafRef.current = null;
+      if (pendingPreviewRef.current) {
+        setDraftPreview(pendingPreviewRef.current);
+      }
+      pendingPreviewRef.current = null;
+    });
+  }, []);
+
+  const handleDraftPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDrawingDraft || !draftPointerRef.current) return;
+    const mapped = pointerToDomain(e.clientX, e.clientY);
+    if (!mapped) return;
+    const { audioId, startTime, startFreq } = draftPointerRef.current;
+    const curTime = snapEnabled ? Math.round(mapped.time * 10) / 10 : mapped.time;
+    const curFreq = snapEnabled ? Math.round(mapped.freq / 100) * 100 : mapped.freq;
+    scheduleDraftPreview({
+      id: "draft-preview",
+      audioId,
+      label: t("manualDefaultLabel"),
+      description: t("manualDefaultDescription"),
+      startTime: Math.min(startTime, curTime),
+      endTime: Math.max(startTime, curTime),
+      freqLow: Math.max(0, Math.min(startFreq, curFreq)),
+      freqHigh: Math.min(MAX_FREQ, Math.max(startFreq, curFreq)),
+      source: "user",
+    });
+  }, [isDrawingDraft, pointerToDomain, scheduleDraftPreview, snapEnabled, t]);
+
+  const handleDraftPointerUp = useCallback((e?: React.PointerEvent<HTMLDivElement>) => {
+    if (e?.currentTarget && e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    if (draftPreview) {
+      startDraft({
+        audioId: draftPreview.audioId,
+        label: draftPreview.label,
+        description: draftPreview.description,
+        startTime: draftPreview.startTime,
+        endTime: draftPreview.endTime,
+        freqLow: draftPreview.freqLow,
+        freqHigh: draftPreview.freqHigh,
+      });
+    }
+    setDraftPreview(null);
+    draftPointerRef.current = null;
+    pendingPreviewRef.current = null;
+    setIsDrawingDraft(false);
+  }, [draftPreview, startDraft]);
+
+  const scheduleDraftMove = useCallback((id: string, patch: Partial<ManualDraft>) => {
+    hasMovedDraftRef.current = true;
+    pendingDragPatchRef.current = { id, patch };
+    if (dragRafRef.current !== null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      if (!pendingDragPatchRef.current) return;
+      const { id: draftId, patch: nextPatch } = pendingDragPatchRef.current;
+      updateDraft(draftId, nextPatch);
+      pendingDragPatchRef.current = null;
+    });
+  }, [updateDraft]);
+
+  const handleDraftDragPointerDown = useCallback((
+    e: React.PointerEvent<HTMLButtonElement>,
+    draft: ManualDraft,
+  ) => {
+    if (tool !== "select" || isResizingDraft) return;
+    e.preventDefault();
+    e.stopPropagation();
+    selectDraft(draft.id);
+    if (e.currentTarget.setPointerCapture) {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    updateDraft(draft.id, {}, { trackHistory: true });
+    hasMovedDraftRef.current = false;
+    dragDraftRef.current = {
+      draftId: draft.id,
+      pointerId: e.pointerId,
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      startTime: draft.startTime,
+      endTime: draft.endTime,
+      freqLow: draft.freqLow,
+      freqHigh: draft.freqHigh,
+    };
+    setIsDraggingDraft(true);
+  }, [isResizingDraft, selectDraft, tool, updateDraft]);
+
+  const handleDraftDragPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragDraftRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const area = spectrogramRef.current;
+    if (!area || totalDuration <= 0) return;
+    const rect = area.getBoundingClientRect();
+    const dx = e.clientX - drag.pointerStartX;
+    const dy = e.clientY - drag.pointerStartY;
+
+    const boxDuration = Math.max(0.01, drag.endTime - drag.startTime);
+    const boxFreqRange = Math.max(1, drag.freqHigh - drag.freqLow);
+    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
+    const freqDelta = (-dy / Math.max(rect.height, 1)) * MAX_FREQ;
+
+    const maxStart = Math.max(0, totalDuration - boxDuration);
+    let startTime = Math.max(0, Math.min(drag.startTime + timeDelta, maxStart));
+    let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, MAX_FREQ - boxFreqRange));
+
+    if (snapEnabled) {
+      startTime = Math.round(startTime * 10) / 10;
+      freqLow = Math.round(freqLow / 100) * 100;
+      startTime = Math.max(0, Math.min(startTime, maxStart));
+      freqLow = Math.max(0, Math.min(freqLow, MAX_FREQ - boxFreqRange));
+    }
+
+    const endTime = Math.min(totalDuration, startTime + boxDuration);
+    const freqHigh = Math.min(MAX_FREQ, freqLow + boxFreqRange);
+
+    scheduleDraftMove(drag.draftId, {
+      startTime,
+      endTime,
+      freqLow,
+      freqHigh,
+    });
+  }, [scheduleDraftMove, snapEnabled, totalDuration]);
+
+  const handleDraftDragPointerUp = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragDraftRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    e.preventDefault();
+    if (hasMovedDraftRef.current) {
+      pushHistory("manual_move", "Moved manual draft");
+    }
+    pendingDragPatchRef.current = null;
+    hasMovedDraftRef.current = false;
+    dragDraftRef.current = null;
+    setIsDraggingDraft(false);
+  }, [pushHistory]);
+
+  const scheduleDraftResize = useCallback((id: string, patch: Partial<ManualDraft>) => {
+    hasResizedDraftRef.current = true;
+    pendingResizePatchRef.current = { id, patch };
+    if (resizeRafRef.current !== null) return;
+    resizeRafRef.current = requestAnimationFrame(() => {
+      resizeRafRef.current = null;
+      if (!pendingResizePatchRef.current) return;
+      const { id: draftId, patch: nextPatch } = pendingResizePatchRef.current;
+      updateDraft(draftId, nextPatch);
+      pendingResizePatchRef.current = null;
+    });
+  }, [updateDraft]);
+
+  const handleDraftResizePointerDown = useCallback((
+    e: React.PointerEvent<HTMLDivElement>,
+    draft: ManualDraft,
+    handle: ResizeHandle,
+  ) => {
+    if (tool !== "select") return;
+    e.preventDefault();
+    e.stopPropagation();
+    selectDraft(draft.id);
+    if (e.currentTarget.setPointerCapture) {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    updateDraft(draft.id, {}, { trackHistory: true });
+    hasResizedDraftRef.current = false;
+    resizeDraftRef.current = {
+      draftId: draft.id,
+      pointerId: e.pointerId,
+      handle,
+      pointerStartX: e.clientX,
+      pointerStartY: e.clientY,
+      startTime: draft.startTime,
+      endTime: draft.endTime,
+      freqLow: draft.freqLow,
+      freqHigh: draft.freqHigh,
+    };
+    setIsResizingDraft(true);
+  }, [selectDraft, tool, updateDraft]);
+
+  const handleDraftResizePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const resize = resizeDraftRef.current;
+    if (!resize || resize.pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const area = spectrogramRef.current;
+    if (!area || totalDuration <= 0) return;
+    const rect = area.getBoundingClientRect();
+    const dx = e.clientX - resize.pointerStartX;
+    const dy = e.clientY - resize.pointerStartY;
+    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
+    const freqDelta = (-dy / Math.max(rect.height, 1)) * MAX_FREQ;
+
+    let nextStart = resize.startTime;
+    let nextEnd = resize.endTime;
+    let nextLow = resize.freqLow;
+    let nextHigh = resize.freqHigh;
+
+    if (resize.handle === "nw" || resize.handle === "sw") nextStart = resize.startTime + timeDelta;
+    if (resize.handle === "ne" || resize.handle === "se") nextEnd = resize.endTime + timeDelta;
+    if (resize.handle === "nw" || resize.handle === "ne") nextHigh = resize.freqHigh + freqDelta;
+    if (resize.handle === "sw" || resize.handle === "se") nextLow = resize.freqLow + freqDelta;
+
+    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
+    nextEnd = Math.max(MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
+    if (nextEnd - nextStart < MIN_DRAFT_DURATION) {
+      if (resize.handle === "nw" || resize.handle === "sw") {
+        nextStart = nextEnd - MIN_DRAFT_DURATION;
+      } else {
+        nextEnd = nextStart + MIN_DRAFT_DURATION;
+      }
+    }
+    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
+    nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
+
+    nextLow = Math.max(0, Math.min(nextLow, MAX_FREQ - MIN_DRAFT_FREQ_RANGE));
+    nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, MAX_FREQ));
+    if (nextHigh - nextLow < MIN_DRAFT_FREQ_RANGE) {
+      if (resize.handle === "nw" || resize.handle === "ne") {
+        nextHigh = nextLow + MIN_DRAFT_FREQ_RANGE;
+      } else {
+        nextLow = nextHigh - MIN_DRAFT_FREQ_RANGE;
+      }
+    }
+    nextLow = Math.max(0, Math.min(nextLow, MAX_FREQ - MIN_DRAFT_FREQ_RANGE));
+    nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, MAX_FREQ));
+
+    if (snapEnabled) {
+      nextStart = Math.round(nextStart * 10) / 10;
+      nextEnd = Math.round(nextEnd * 10) / 10;
+      nextLow = Math.round(nextLow / 100) * 100;
+      nextHigh = Math.round(nextHigh / 100) * 100;
+      nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
+      nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
+      nextLow = Math.max(0, Math.min(nextLow, MAX_FREQ - MIN_DRAFT_FREQ_RANGE));
+      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, MAX_FREQ));
+    }
+
+    scheduleDraftResize(resize.draftId, {
+      startTime: nextStart,
+      endTime: nextEnd,
+      freqLow: nextLow,
+      freqHigh: nextHigh,
+    });
+  }, [scheduleDraftResize, snapEnabled, totalDuration]);
+
+  const handleDraftResizePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const resize = resizeDraftRef.current;
+    if (!resize || resize.pointerId !== e.pointerId) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    e.preventDefault();
+    if (hasResizedDraftRef.current) {
+      pushHistory("manual_resize", "Resized manual draft");
+    }
+    pendingResizePatchRef.current = null;
+    hasResizedDraftRef.current = false;
+    resizeDraftRef.current = null;
+    setIsResizingDraft(false);
+  }, [pushHistory]);
+
+  const handleDeleteSelectedDraft = useCallback(() => {
+    if (!selectedDraftId) return;
+    removeDraft(selectedDraftId);
+  }, [removeDraft, selectedDraftId]);
+
+  const handleSaveManualDrafts = useCallback(async () => {
+    if (!sessionId || manualDrafts.length === 0) {
+      showToast(t("manualNoDraftToSave"));
+      return;
+    }
+    const targetDrafts = selectedDraftId
+      ? manualDrafts.filter((d) => d.id === selectedDraftId)
+      : manualDrafts;
+    if (targetDrafts.length === 0) {
+      showToast(t("manualNoDraftToSave"));
+      return;
+    }
+
+    const payload = {
+      suggestions: targetDrafts.map((d) => ({
+        audioId: d.audioId,
+        label: d.label,
+        startTime: d.startTime,
+        endTime: d.endTime,
+        freqLow: d.freqLow,
+        freqHigh: d.freqHigh,
+        description: d.description,
+        confidence: 100,
+      })),
+    };
+
+    try {
+      const res = await authFetch(endpoints.labeling.createSuggestions(sessionId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to save manual suggestions");
+      const created = (await res.json()) as Suggestion[];
+      saveDraftsSuccess(
+        created.map((s) => ({ ...s, source: s.source ?? "user", createdBy: s.createdBy ?? null })),
+        targetDrafts.map((d) => d.id),
+      );
+      showToast(t("manualSaved", { count: created.length }));
+    } catch (err) {
+      showToast((err as Error).message ?? t("manualSaveFailed"));
+    }
+  }, [manualDrafts, saveDraftsSuccess, selectedDraftId, sessionId, showToast, t]);
+
   const handleSetLoopStart = useCallback(() => {
-    player.setLoopStart(player.currentTime);
+    setLoopState({ start: player.currentTime });
     pushHistory("loop_set", `Loop start ${player.currentTime.toFixed(2)}s`, {
       loopStart: player.currentTime,
-      loopEnd: player.loopEnd,
+      loopEnd: loopState.end,
     });
-  }, [player, pushHistory]);
+  }, [player.currentTime, pushHistory, setLoopState, loopState.end]);
 
   const handleSetLoopEnd = useCallback(() => {
-    player.setLoopEnd(player.currentTime);
+    setLoopState({ end: player.currentTime });
     pushHistory("loop_set", `Loop end ${player.currentTime.toFixed(2)}s`, {
-      loopStart: player.loopStart,
+      loopStart: loopState.start,
       loopEnd: player.currentTime,
     });
-  }, [player, pushHistory]);
+  }, [player.currentTime, pushHistory, setLoopState, loopState.start]);
 
   const handleToggleLoop = useCallback(() => {
-    if (player.loopStart === null || player.loopEnd === null || player.loopEnd <= player.loopStart) {
+    if (loopState.start === null || loopState.end === null || loopState.end <= loopState.start) {
       showToast(t("loopRequireBounds"));
       setLoopHudWarning(true);
       return;
     }
     setLoopHudWarning(false);
-    player.toggleLoop();
-    showToast(player.loopEnabled ? t("loopDisabled") : t("loopEnabled"));
-  }, [player, showToast, t]);
+    setLoopState({ enabled: !loopState.enabled });
+    showToast(loopState.enabled ? t("loopDisabled") : t("loopEnabled"));
+  }, [loopState, setLoopState, showToast, t]);
 
   const handleAddBookmark = useCallback((preset: { type: BookmarkType; label: string; note: string }) => {
     addBookmark({
@@ -483,12 +899,12 @@ export default function LabelingWorkspacePage() {
       return;
     }
     if (typeof item.payload?.loopStart === "number") {
-      player.setLoopStart(item.payload.loopStart);
+      setLoopState({ start: item.payload.loopStart });
     }
     if (typeof item.payload?.loopEnd === "number") {
-      player.setLoopEnd(item.payload.loopEnd);
+      setLoopState({ end: item.payload.loopEnd });
     }
-  }, [player, seekTo]);
+  }, [setLoopState, seekTo]);
 
   /* ----- File completion detection + auto-next -------------------- */
   useEffect(() => {
@@ -524,14 +940,35 @@ export default function LabelingWorkspacePage() {
     return () => clearTimeout(timer);
   }, [loopHudWarning]);
 
+  useEffect(() => {
+    player.setLoopStart(loopState.start);
+    player.setLoopEnd(loopState.end);
+    player.setLoopEnabled(loopState.enabled);
+  }, [loopState, player]);
+
+  useEffect(() => () => {
+    if (draftUpdateRafRef.current !== null) {
+      cancelAnimationFrame(draftUpdateRafRef.current);
+    }
+    if (dragRafRef.current !== null) {
+      cancelAnimationFrame(dragRafRef.current);
+    }
+    if (resizeRafRef.current !== null) {
+      cancelAnimationFrame(resizeRafRef.current);
+    }
+  }, []);
+
   useLabelingHotkeys({
     mode,
     setTool,
+    toggleSnap,
     handleConfirm,
     handleReject,
     handleApplyFix,
     handleNextFile,
     handlePrevFile,
+    handleSaveManualDrafts,
+    handleDeleteSelectedDraft,
     undo,
     redo,
     onSetLoopStart: handleSetLoopStart,
@@ -539,6 +976,8 @@ export default function LabelingWorkspacePage() {
     onToggleLoop: handleToggleLoop,
     player,
     suggestions,
+    manualDrafts,
+    selectedDraftId,
     selectedSuggestionId,
     selectSuggestion: handleSelectSuggestion,
     setZoomLevel,
@@ -732,10 +1171,20 @@ export default function LabelingWorkspacePage() {
             {tools.map((toolItem) => (
               <button
                 key={toolItem.id}
-                onClick={() => setTool(toolItem.id)}
+                onClick={() => {
+                  if (toolItem.id === "anchor") {
+                    toggleSnap();
+                    return;
+                  }
+                  setTool(toolItem.id);
+                }}
                 title={`${t(toolItem.labelKey)} (${toolItem.hotkey})`}
                 className={`p-2 rounded-md transition-colors ${
-                  tool === toolItem.id
+                  toolItem.id === "anchor"
+                    ? snapEnabled
+                      ? "bg-warning/20 text-warning"
+                      : "text-text-secondary hover:bg-panel-light hover:text-text"
+                    : tool === toolItem.id
                     ? "bg-primary text-white"
                     : "text-text-secondary hover:bg-panel-light hover:text-text"
                 }`}
@@ -798,6 +1247,13 @@ export default function LabelingWorkspacePage() {
               <span className="text-text-secondary">
                 {confirmedCount}/{totalCount} {t("tagged")}
               </span>
+              <button
+                onClick={handleSaveManualDrafts}
+                className="px-2 py-1 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-[10px] font-semibold transition-colors"
+                title={t("manualSaveTitle")}
+              >
+                {t("manualSaveButton")}
+              </button>
               <a
                 href={endpoints.labeling.export(sessionId, "csv")}
                 download
@@ -886,8 +1342,13 @@ export default function LabelingWorkspacePage() {
             {/* Spectrogram gradient background */}
             <div
               ref={spectrogramRef}
-              onPointerDown={(e) => handleScrubFromSpectrogram(e.clientX)}
-              className="absolute top-0 left-12 right-0 bottom-6 bg-gradient-to-b from-indigo-950 via-purple-900 to-amber-950 opacity-90 cursor-crosshair"
+              onPointerDown={handleDraftPointerDown}
+              onPointerMove={handleDraftPointerMove}
+              onPointerUp={handleDraftPointerUp}
+              onPointerLeave={handleDraftPointerUp}
+              className={`absolute top-0 left-12 right-0 bottom-6 bg-gradient-to-b from-indigo-950 via-purple-900 to-amber-950 opacity-90 ${
+                tool === "box" ? "cursor-crosshair" : "cursor-pointer"
+              }`}
             >
               {/* Horizontal grid lines */}
               <div className="absolute inset-0">
@@ -983,6 +1444,87 @@ export default function LabelingWorkspacePage() {
               );
             })}
 
+            {/* Manual draft boxes */}
+            {manualDrafts.map((draft) => {
+              const pos = suggestionBoxStyle(draft, totalDuration);
+              const isSelected = draft.id === selectedDraftId;
+              return (
+                <button
+                  key={draft.id}
+                  onClick={() => selectDraft(draft.id)}
+                  onPointerDown={(e) => handleDraftDragPointerDown(e, draft)}
+                  onPointerMove={handleDraftDragPointerMove}
+                  onPointerUp={handleDraftDragPointerUp}
+                  onPointerCancel={handleDraftDragPointerUp}
+                  className={`absolute border-2 rounded-sm z-20 transition-all ${
+                    isSelected
+                      ? "border-cyan-300 bg-cyan-300/10 ring-2 ring-cyan-100/50"
+                      : "border-cyan-400/80 bg-cyan-400/10 hover:border-cyan-300"
+                  }`}
+                  style={{
+                    left: `calc(48px + ${pos.left})`,
+                    top: pos.top,
+                    width: pos.width,
+                    height: pos.height,
+                    minWidth: "18px",
+                    minHeight: "14px",
+                  }}
+                >
+                  <div className="absolute -top-5 left-0 bg-cyan-300/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap">
+                    {t("manualDraftTag")}
+                  </div>
+                  {isSelected && tool === "select" && (
+                    <>
+                      <div
+                        className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nwse-resize"
+                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "nw")}
+                        onPointerMove={handleDraftResizePointerMove}
+                        onPointerUp={handleDraftResizePointerUp}
+                        onPointerCancel={handleDraftResizePointerUp}
+                      />
+                      <div
+                        className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nesw-resize"
+                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "ne")}
+                        onPointerMove={handleDraftResizePointerMove}
+                        onPointerUp={handleDraftResizePointerUp}
+                        onPointerCancel={handleDraftResizePointerUp}
+                      />
+                      <div
+                        className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nesw-resize"
+                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "sw")}
+                        onPointerMove={handleDraftResizePointerMove}
+                        onPointerUp={handleDraftResizePointerUp}
+                        onPointerCancel={handleDraftResizePointerUp}
+                      />
+                      <div
+                        className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nwse-resize"
+                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "se")}
+                        onPointerMove={handleDraftResizePointerMove}
+                        onPointerUp={handleDraftResizePointerUp}
+                        onPointerCancel={handleDraftResizePointerUp}
+                      />
+                    </>
+                  )}
+                </button>
+              );
+            })}
+            {draftPreview && (() => {
+              const pos = suggestionBoxStyle(draftPreview, totalDuration);
+              return (
+                <div
+                  className="absolute border-2 border-cyan-200 bg-cyan-300/15 rounded-sm z-20 pointer-events-none"
+                  style={{
+                    left: `calc(48px + ${pos.left})`,
+                    top: pos.top,
+                    width: pos.width,
+                    height: pos.height,
+                    minWidth: "18px",
+                    minHeight: "14px",
+                  }}
+                />
+              );
+            })()}
+
             {/* Playback cursor line */}
             <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: `calc(48px + ${playbackPct}%)` }}>
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
@@ -992,24 +1534,24 @@ export default function LabelingWorkspacePage() {
             </div>
 
             {/* Loop markers + band */}
-            {player.loopStart !== null && (
+            {loopState.start !== null && (
               <div
                 className="absolute top-0 bottom-6 w-px bg-warning/80 z-30"
-                style={{ left: `calc(48px + ${(player.loopStart / totalDuration) * 100}%)` }}
+                style={{ left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)` }}
               />
             )}
-            {player.loopEnd !== null && (
+            {loopState.end !== null && (
               <div
                 className="absolute top-0 bottom-6 w-px bg-warning/80 z-30"
-                style={{ left: `calc(48px + ${(player.loopEnd / totalDuration) * 100}%)` }}
+                style={{ left: `calc(48px + ${(loopState.end / totalDuration) * 100}%)` }}
               />
             )}
-            {player.loopStart !== null && player.loopEnd !== null && player.loopEnd > player.loopStart && (
+            {loopState.start !== null && loopState.end !== null && loopState.end > loopState.start && (
               <div
                 className="absolute top-0 bottom-6 bg-warning/10 border-y border-warning/30 z-20 pointer-events-none"
                 style={{
-                  left: `calc(48px + ${(player.loopStart / totalDuration) * 100}%)`,
-                  width: `${((player.loopEnd - player.loopStart) / totalDuration) * 100}%`,
+                  left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)`,
+                  width: `${((loopState.end - loopState.start) / totalDuration) * 100}%`,
                 }}
               />
             )}
@@ -1053,7 +1595,13 @@ export default function LabelingWorkspacePage() {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-text-muted">{t("stateHudLoop")}</span>
-                <span className={`${player.loopEnabled ? "text-warning" : "text-text-secondary"} font-mono`}>{loopRangeLabel}</span>
+                <span className={`${loopState.enabled ? "text-warning" : "text-text-secondary"} font-mono`}>{loopRangeLabel}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudSaveTarget")}</span>
+                <span className="text-cyan-200 font-mono">
+                  {selectedDraftId ? t("stateHudSelectedDraft") : t("stateHudAllDrafts")}
+                </span>
               </div>
               {loopHudWarning && (
                 <p className="text-danger text-[9px]">{t("loopRequireBounds")}</p>
@@ -1075,10 +1623,10 @@ export default function LabelingWorkspacePage() {
               {[
                 { key: "O", labelKey: "hintConfirm" },
                 { key: "X", labelKey: "hintReject" },
-                { key: "B", labelKey: "hintBrush" },
                 { key: "R", labelKey: "hintBox" },
                 { key: "Ctrl+Z", labelKey: "hintUndo" },
                 { key: "Ctrl+Shift+Z", labelKey: "hintRedo" },
+                { key: "Ctrl+Enter", labelKey: "hintManualSave" },
                 { key: "I/P/L", labelKey: "hintLoop" },
               ].map((hint) => (
                 <div
@@ -1159,7 +1707,7 @@ export default function LabelingWorkspacePage() {
             <button
               onClick={handleToggleLoop}
               className={`p-1.5 rounded-md transition-colors ${
-                player.loopEnabled ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-secondary"
+                loopState.enabled ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-secondary"
               }`}
               title={t("loopToggle")}
             >

@@ -3,7 +3,9 @@ import type { LabelingMode } from "./common";
 
 export type SuggestionStatus = "pending" | "confirmed" | "rejected" | "corrected";
 
-export interface AISuggestion {
+export type SuggestionSource = "ai" | "user";
+
+export interface Suggestion {
   id: string;
   audioId: string;
   label: string;
@@ -14,7 +16,12 @@ export interface AISuggestion {
   freqLow: number;
   freqHigh: number;
   status: SuggestionStatus;
+  source?: SuggestionSource;
+  createdBy?: string | null;
 }
+
+// Backward compatibility
+export type AISuggestion = Suggestion;
 
 export interface Annotation {
   id: string;
@@ -40,7 +47,28 @@ export interface SessionScore {
 export interface HistorySnapshot {
   mode: LabelingMode;
   selectedSuggestionId: string | null;
-  suggestions: AISuggestion[];
+  suggestions: Suggestion[];
+  manualDrafts: ManualDraft[];
+  selectedDraftId: string | null;
+  loopState: LoopState;
+}
+
+export interface ManualDraft {
+  id: string;
+  audioId: string;
+  label: string;
+  description: string;
+  startTime: number;
+  endTime: number;
+  freqLow: number;
+  freqHigh: number;
+  source: "user";
+}
+
+export interface LoopState {
+  enabled: boolean;
+  start: number | null;
+  end: number | null;
 }
 
 export type BookmarkType = "recheck" | "noise_suspect" | "edge_case";
@@ -56,8 +84,13 @@ export interface LabelingBookmark {
 
 export type ActionType =
   | "confirm"
+  | "ai_confirm"
   | "reject"
   | "apply_fix"
+  | "manual_create"
+  | "manual_delete"
+  | "manual_move"
+  | "manual_resize"
   | "seek"
   | "loop_set"
   | "bookmark"

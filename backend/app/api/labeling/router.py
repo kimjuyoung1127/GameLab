@@ -11,7 +11,12 @@ from fastapi.responses import StreamingResponse
 
 from app.core.auth import CurrentUser, ensure_sst_user_exists, get_current_user
 from app.core.supabase_client import supabase
-from app.models.labeling import SuggestionResponse, SuggestionStatusValue, UpdateSuggestionRequest
+from app.models.labeling import (
+    CreateSuggestionsRequest,
+    SuggestionResponse,
+    SuggestionStatusValue,
+    UpdateSuggestionRequest,
+)
 
 router = APIRouter(prefix="/api/labeling", tags=["labeling"])
 logger = logging.getLogger(__name__)
@@ -80,6 +85,74 @@ async def update_suggestion_status(
     return _row_to_response(rows[0])
 
 
+@router.post("/{session_id}/suggestions", response_model=List[SuggestionResponse])
+async def create_manual_suggestions(
+    session_id: str,
+    body: CreateSuggestionsRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
+
+    if not body.suggestions:
+        return []
+
+    try:
+        file_res = (
+            supabase.table("sst_audio_files")
+            .select("id")
+            .eq("session_id", session_id)
+            .execute()
+        )
+        valid_file_ids = {f["id"] for f in (file_res.data or [])}
+    except Exception as exc:
+        logger.exception("Failed to validate session files", extra={"session_id": session_id})
+        raise HTTPException(status_code=503, detail="Failed to create suggestions") from exc
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rows_to_insert: list[dict] = []
+    for item in body.suggestions:
+        if item.audio_id not in valid_file_ids:
+            raise HTTPException(status_code=400, detail=f"audio_id '{item.audio_id}' is not in this session")
+        rows_to_insert.append(
+            {
+                "audio_id": item.audio_id,
+                "label": item.label,
+                "confidence": item.confidence,
+                "description": item.description,
+                "start_time": item.start_time,
+                "end_time": item.end_time,
+                "freq_low": item.freq_low,
+                "freq_high": item.freq_high,
+                "status": SuggestionStatusValue.pending.value,
+                "source": "user",
+                "created_by": current_user.id,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+        )
+
+    try:
+        insert_res = supabase.table("sst_suggestions").insert(rows_to_insert).execute()
+        created_rows = insert_res.data or []
+    except Exception:
+        # Fallback for environments where source/created_by columns are not migrated yet.
+        rows_fallback = []
+        for row in rows_to_insert:
+            row = row.copy()
+            row.pop("source", None)
+            row.pop("created_by", None)
+            rows_fallback.append(row)
+        try:
+            insert_res = supabase.table("sst_suggestions").insert(rows_fallback).execute()
+            created_rows = insert_res.data or []
+        except Exception as exc:
+            logger.exception("Failed to create manual suggestions", extra={"session_id": session_id})
+            raise HTTPException(status_code=503, detail="Failed to create suggestions") from exc
+
+    return [_row_to_response(r) for r in created_rows]
+
+
 @router.get("/{session_id}/export")
 async def export_suggestions(session_id: str, format: str = "csv"):
     """Export all suggestions for a session as CSV or JSON."""
@@ -130,6 +203,8 @@ async def export_suggestions(session_id: str, format: str = "csv"):
                 "freqLow": r.get("freq_low", 0),
                 "freqHigh": r.get("freq_high", 0),
                 "status": r.get("status", ""),
+                "source": r.get("source", "ai"),
+                "createdBy": r.get("created_by"),
                 "description": r.get("description", ""),
             }
             for r in rows
@@ -155,6 +230,8 @@ async def export_suggestions(session_id: str, format: str = "csv"):
             "freq_low",
             "freq_high",
             "status",
+            "source",
+            "created_by",
             "description",
         ]
     )
@@ -171,6 +248,8 @@ async def export_suggestions(session_id: str, format: str = "csv"):
                 r.get("freq_low", 0),
                 r.get("freq_high", 0),
                 r.get("status", ""),
+                r.get("source", "ai"),
+                r.get("created_by", ""),
                 r.get("description", ""),
             ]
         )
@@ -200,6 +279,8 @@ def _row_to_response(s: dict) -> SuggestionResponse:
         freq_low=float(s.get("freq_low", 0)),
         freq_high=float(s.get("freq_high", 0)),
         status=status,
+        source=s.get("source", "ai"),
+        created_by=s.get("created_by"),
     )
 
 

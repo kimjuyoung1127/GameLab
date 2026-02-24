@@ -24,6 +24,7 @@ export interface AudioPlayerState {
   setLoopStart: (time: number | null) => void;
   setLoopEnd: (time: number | null) => void;
   toggleLoop: () => void;
+  setLoopEnabled: (enabled: boolean) => void;
 }
 
 export function useAudioPlayer(
@@ -42,7 +43,7 @@ export function useAudioPlayer(
   const [canPlay, setCanPlay] = useState(false);
   const [volume, setVolumeState] = useState(0.75);
   const [playbackRate, setPlaybackRateState] = useState(1.0);
-  const [loopEnabled, setLoopEnabled] = useState(false);
+  const [loopEnabled, setLoopEnabledState] = useState(false);
   const [loopStart, setLoopStartState] = useState<number | null>(null);
   const [loopEnd, setLoopEndState] = useState<number | null>(null);
 
@@ -92,7 +93,11 @@ export function useAudioPlayer(
   }, [duration]);
 
   const toggleLoop = useCallback(() => {
-    setLoopEnabled((prev) => !prev);
+    setLoopEnabledState((prev) => !prev);
+  }, []);
+
+  const setLoopEnabled = useCallback((enabled: boolean) => {
+    setLoopEnabledState(enabled);
   }, []);
 
   useEffect(() => {
@@ -254,5 +259,6 @@ export function useAudioPlayer(
     setLoopStart,
     setLoopEnd,
     toggleLoop,
+    setLoopEnabled,
   };
 }

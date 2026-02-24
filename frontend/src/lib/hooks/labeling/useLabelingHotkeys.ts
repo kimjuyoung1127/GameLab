@@ -3,23 +3,28 @@
 
 import { useEffect } from "react";
 import type { AudioPlayerState } from "@/lib/hooks/use-audio-player";
-import type { AISuggestion, DrawTool, LabelingMode } from "@/types";
+import type { DrawTool, LabelingMode, ManualDraft, Suggestion } from "@/types";
 
 type UseLabelingHotkeysParams = {
   mode: LabelingMode;
   setTool: (tool: DrawTool) => void;
+  toggleSnap: () => void;
   handleConfirm: () => void;
   handleReject: () => void;
   handleApplyFix: () => void;
   handleNextFile: () => void;
   handlePrevFile: () => void;
+  handleSaveManualDrafts: () => void;
+  handleDeleteSelectedDraft: () => void;
   undo: () => void;
   redo: () => void;
   onSetLoopStart: () => void;
   onSetLoopEnd: () => void;
   onToggleLoop: () => void;
   player: AudioPlayerState;
-  suggestions: AISuggestion[];
+  suggestions: Suggestion[];
+  manualDrafts: ManualDraft[];
+  selectedDraftId: string | null;
   selectedSuggestionId: string | null;
   selectSuggestion: (id: string | null) => void;
   setZoomLevel: (updater: (value: number) => number) => void;
@@ -28,11 +33,14 @@ type UseLabelingHotkeysParams = {
 export function useLabelingHotkeys({
   mode,
   setTool,
+  toggleSnap,
   handleConfirm,
   handleReject,
   handleApplyFix,
   handleNextFile,
   handlePrevFile,
+  handleSaveManualDrafts,
+  handleDeleteSelectedDraft,
   undo,
   redo,
   onSetLoopStart,
@@ -40,6 +48,8 @@ export function useLabelingHotkeys({
   onToggleLoop,
   player,
   suggestions,
+  manualDrafts,
+  selectedDraftId,
   selectedSuggestionId,
   selectSuggestion,
   setZoomLevel,
@@ -72,7 +82,7 @@ export function useLabelingHotkeys({
         }
         if (e.key === "Enter") {
           e.preventDefault();
-          handleNextFile();
+          handleSaveManualDrafts();
           return;
         }
       }
@@ -97,9 +107,6 @@ export function useLabelingHotkeys({
         case "x":
           if (mode === "review") handleReject();
           break;
-        case "b":
-          setTool("brush");
-          break;
         case "e":
           setTool("eraser");
           break;
@@ -107,10 +114,10 @@ export function useLabelingHotkeys({
           setTool("box");
           break;
         case "a":
-          setTool("anchor");
-          break;
-        case "s":
           if (!e.ctrlKey && !e.metaKey) setTool("select");
+          break;
+        case "g":
+          toggleSnap();
           break;
         case "f":
           if (mode === "edit") handleApplyFix();
@@ -162,6 +169,13 @@ export function useLabelingHotkeys({
           selectSuggestion(pendingSuggestions[next]?.id ?? null);
           break;
         }
+        case "delete":
+        case "backspace":
+          if (selectedDraftId) {
+            e.preventDefault();
+            handleDeleteSelectedDraft();
+          }
+          break;
         case "arrowdown": {
           e.preventDefault();
           if (suggestions.length === 0) break;
@@ -184,11 +198,14 @@ export function useLabelingHotkeys({
   }, [
     mode,
     setTool,
+    toggleSnap,
     handleConfirm,
     handleReject,
     handleApplyFix,
     handleNextFile,
     handlePrevFile,
+    handleSaveManualDrafts,
+    handleDeleteSelectedDraft,
     undo,
     redo,
     onSetLoopStart,
@@ -196,6 +213,8 @@ export function useLabelingHotkeys({
     onToggleLoop,
     player,
     suggestions,
+    manualDrafts,
+    selectedDraftId,
     selectedSuggestionId,
     selectSuggestion,
     setZoomLevel,

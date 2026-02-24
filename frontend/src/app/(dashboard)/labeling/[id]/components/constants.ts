@@ -6,9 +6,9 @@ import type { DrawTool, SuggestionStatus } from "@/types";
 export const MAX_FREQ = 20_000;
 
 export const tools: { id: DrawTool; icon: LucideIcon; label: string; hotkey: string }[] = [
-  { id: "select", icon: MousePointer2, label: "Select", hotkey: "S" },
+  { id: "select", icon: MousePointer2, label: "Select", hotkey: "A" },
   { id: "brush", icon: Pencil, label: "Brush", hotkey: "B" },
-  { id: "anchor", icon: Anchor, label: "Anchor", hotkey: "A" },
+  { id: "anchor", icon: Anchor, label: "Anchor", hotkey: "G" },
   { id: "box", icon: Square, label: "Box", hotkey: "R" },
 ];
 
