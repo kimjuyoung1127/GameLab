@@ -434,3 +434,67 @@ CSS 그라디언트 가짜 스펙트로그램을 실제 FFT 기반 스펙트로�
 - `frontend/src/lib/hooks/use-audio-player.ts`
 - `frontend/src/lib/store/annotation-store.ts`
 - `frontend/src/types/labeling.ts`
+
+---
+
+## 9. 저장된 사용자 제안 수정/삭제 기능 (Session 3)
+
+### 배경
+수동 드래프트를 저장하면 위치/라벨/설명 수정이 불가하고 삭제도 불가하여 UX 저하.
+AI 제안(source="ai")은 기존 확인/거절 워크플로우 유지, 사용자 제안(source="user")만 수정/삭제 가능하도록 구현.
+
+### 9.1 BE 변경
+
+#### `backend/app/models/labeling.py`
+- `UpdateSuggestionRequest` 확장: `status` optional + `label`, `description`, `start_time`, `end_time`, `freq_low`, `freq_high` 추가
+- `model_validator`: 최소 1개 필드 필수 + 범위 검증 (`start < end`, `low < high`)
+
+#### `backend/app/api/labeling/router.py`
+- PATCH: 하드코딩 `{"status": ...}` → 동적 dict 빌더 (non-None 필드만)
+- `_update_user_score` 호출을 `if body.status is not None:` 가드로 보호
+- 신규 `DELETE /api/labeling/suggestions/{id}` (204)
+  - source="user" + created_by 본인만 허용
+  - AI 제안 삭제 시 403
+
+### 9.2 FE 변경
+
+#### 타입/API
+- `frontend/src/types/labeling.ts`: `UpdateSuggestionPayload` 인터페이스 + `ActionType`에 `suggestion_edit` / `suggestion_delete` 추가
+- `frontend/src/lib/api/labeling.ts`: `updateSuggestion`, `deleteSuggestion` URL 추가
+
+#### 스토어
+- `frontend/src/lib/store/annotation-store.ts`: `updateSuggestion()` / `deleteSuggestion()` 액션 (undo/redo 스냅샷 지원)
+
+#### 페이지
+- `frontend/src/app/(dashboard)/labeling/[id]/page.tsx`:
+  - 사용자 제안 드래그 이동 핸들러 (`handleSugDragPointerDown/Move/Up`)
+  - 코너 리사이즈 핸들러 (`handleSugResizePointerDown/Move/Up`)
+  - 삭제 핸들러 (`handleDeleteSelectedSuggestion`)
+  - 모두 낙관적 업데이트 + authFetch API 호출 + 실패 시 undo 롤백
+  - JSX: user 제안에 `cursor-move`, 코너 리사이즈 핸들, "USER" 태그
+
+#### 핫키
+- `frontend/src/lib/hooks/labeling/useLabelingHotkeys.ts`: Delete/Backspace가 선택된 사용자 제안도 삭제
+
+#### i18n
+- `frontend/messages/ko.json` / `en.json`: 7개 키 추가 (suggestionEdited, suggestionEditFailed, suggestionDeleted, suggestionDeleteFailed, suggestionDeleteBlockedAI, suggestionDeleteConfirm, userSuggestionTag)
+
+### 9.3 권한 정책
+
+| 대상 | 수정 (위치/라벨) | 삭제 | 상태 변경 |
+|---|---|---|---|
+| AI 제안 (source="ai") | ❌ 불가 | ❌ 불가 | ✅ 모든 유저 |
+| 사용자 제안 (source="user") | ✅ 본인만 | ✅ 본인만 | ✅ 모든 유저 |
+
+### 9.4 검증
+
+| 항목 | 결과 |
+|---|---|
+| FE build (`npm run build`) | PASS |
+| BE tests (`pytest tests/ -v`) | 11/11 PASS |
+
+### 9.5 Git
+
+- Commit: `3ceb811` — `feat(labeling): 저장된 사용자 제안 수정/삭제 기능 추가`
+- 9파일, +466/-18
+- Pushed to `origin/main`

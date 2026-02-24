@@ -87,6 +87,7 @@ flowchart LR
     L2["O Confirm<br/>X Reject"]
     L3["수정 모드<br/>(Edit → Apply)"]
     L4["점수 업데이트<br/>(+10/+20)"]
+    L5["수동 생성/수정/삭제<br/>(user 제안)"]
   end
 
   subgraph Output["📊 결과"]
@@ -99,6 +100,7 @@ flowchart LR
   A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7 --> A8
   A8 --> L1 --> L2 --> L4
   L2 -->|"Reject"| L3 --> L4
+  L1 -->|"수동 태깅"| L5 --> L4
   L4 --> O1
   L4 --> O2
   L1 -->|"Export"| O3
@@ -144,16 +146,18 @@ erDiagram
   }
 
   sst_suggestions {
-    text id PK
+    text id PK "default gen_random_uuid()::text"
     text audio_id FK
     text label
     float confidence "0~100"
     text description
     float start_time "seconds"
     float end_time "seconds"
-    float freq_low "Hz"
-    float freq_high "Hz"
+    float freq_low "Hz (double precision)"
+    float freq_high "Hz (double precision)"
     text status "pending|confirmed|rejected|corrected"
+    text source "ai|user (default ai)"
+    text created_by "nullable, user id"
     timestamp created_at
     timestamp updated_at
   }
@@ -369,8 +373,10 @@ graph LR
   end
 
   subgraph Labeling["🏷️ Labeling"]
-    GET_suggestions["GET /labeling/{id}/suggestions<br/>AI 제안 조회"]
-    PATCH_suggestion["PATCH /labeling/suggestions/{id}<br/>상태 변경 + 점수"]
+    GET_suggestions["GET /labeling/{id}/suggestions<br/>제안 조회"]
+    POST_suggestions["POST /labeling/{id}/suggestions<br/>수동 제안 생성"]
+    PATCH_suggestion["PATCH /labeling/suggestions/{id}<br/>상태/위치/라벨 변경"]
+    DEL_suggestion["DELETE /labeling/suggestions/{id}<br/>사용자 제안 삭제"]
     GET_export["GET /labeling/{id}/export<br/>CSV / JSON"]
   end
 
@@ -394,6 +400,8 @@ graph LR
   GET_sessions -->|"session_id"| GET_files
   GET_files -->|"session_id"| GET_suggestions
   GET_suggestions -->|"suggestion_id"| PATCH_suggestion
+  GET_suggestions -->|"suggestion_id"| DEL_suggestion
+  GET_files -->|"session_id"| POST_suggestions
   PATCH_suggestion -->|"점수 반영"| GET_me
   PATCH_suggestion -->|"업적 체크"| POST_unlock
 
