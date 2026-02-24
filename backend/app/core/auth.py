@@ -71,14 +71,15 @@ async def get_current_user(
 def ensure_sst_user_exists(user: CurrentUser) -> bool:
     """Ensure sst_users row exists for authenticated user."""
     try:
-        existing = (
+        res = (
             supabase.table("sst_users")
             .select("id")
             .eq("id", user.id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        if existing.data:
+        rows = getattr(res, "data", None) or []
+        if rows:
             return True
 
         email = user.email or f"{user.id}@unknown.local"

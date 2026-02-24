@@ -300,14 +300,15 @@ def _update_user_score(status: SuggestionStatusValue, user_id: str) -> None:
             supabase.table("sst_users")
             .select("today_score, all_time_score")
             .eq("id", user_id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        if not user_res.data:
+        rows = getattr(user_res, "data", None) or []
+        if not rows:
             logger.warning("Score update: user %s not found", user_id)
             return
 
-        current = user_res.data
+        current = rows[0]
         new_today = current["today_score"] + points
         new_all_time = current["all_time_score"] + points
 

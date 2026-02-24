@@ -39,17 +39,18 @@ async def get_my_score(current_user: CurrentUser = Depends(get_current_user)):
             supabase.table("sst_users")
             .select("*")
             .eq("id", current_user.id)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
     except Exception as exc:
         logger.exception("Failed to fetch user score", extra={"user_id": current_user.id})
         raise HTTPException(status_code=503, detail="Failed to load user score") from exc
 
-    if not res.data:
+    rows = getattr(res, "data", None) or []
+    if not rows:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return _row_to_entry(res.data)
+    return _row_to_entry(rows[0])
 
 
 def _row_to_entry(r: dict) -> LeaderboardEntry:

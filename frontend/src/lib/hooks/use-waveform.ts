@@ -34,13 +34,16 @@ export function useWaveform(audioUrl: string | null | undefined, retryKey = 0) {
 
         const audioCtx = new AudioContext();
         const decoded = await audioCtx.decodeAudioData(buf);
-        const channelData = decoded.getChannelData(0);
-        const peaks = downsample(channelData, DOWNSAMPLE_POINTS);
+        const rawChannel = decoded.getChannelData(0);
+        const peaks = downsample(rawChannel, DOWNSAMPLE_POINTS);
+        // Copy channel data before closing AudioContext (buffer becomes detached)
+        const channelDataCopy = new Float32Array(rawChannel);
 
         setData({
           peaks,
           duration: decoded.duration,
           sampleRate: decoded.sampleRate,
+          channelData: channelDataCopy,
         });
 
         await audioCtx.close();

@@ -71,7 +71,7 @@ export interface LoopState {
   end: number | null;
 }
 
-export type BookmarkType = "recheck" | "noise_suspect" | "edge_case";
+export type BookmarkType = "recheck" | "noise_suspect" | "edge_case" | "needs_analysis";
 
 export interface LabelingBookmark {
   id: string;

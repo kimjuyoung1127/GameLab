@@ -39,9 +39,11 @@ import { useAchievementStore } from "@/lib/store/achievement-store";
 import { useUIStore } from "@/lib/store/ui-store";
 import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
 import { useWaveform } from "@/lib/hooks/use-waveform";
+import { useSpectrogram } from "@/lib/hooks/use-spectrogram";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { useLabelingHotkeys } from "@/lib/hooks/labeling/useLabelingHotkeys";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
+import SpectrogramCanvas from "@/components/domain/labeling/SpectrogramCanvas";
 import ActionHistoryPanel from "./components/ActionHistoryPanel";
 import BookmarksPanel from "./components/BookmarksPanel";
 import { endpoints } from "@/lib/api/endpoints";
@@ -95,11 +97,11 @@ function normalizeAudioUrl(url: string | undefined): string | null {
   }
 }
 
-function suggestionBoxStyle(s: Suggestion | ManualDraft, totalDuration: number) {
+function suggestionBoxStyle(s: Suggestion | ManualDraft, totalDuration: number, maxFreq = MAX_FREQ) {
   const leftPct = (s.startTime / totalDuration) * 100;
   const widthPct = ((s.endTime - s.startTime) / totalDuration) * 100;
-  const topPct = ((MAX_FREQ - s.freqHigh) / MAX_FREQ) * 100;
-  const heightPct = ((s.freqHigh - s.freqLow) / MAX_FREQ) * 100;
+  const topPct = ((maxFreq - s.freqHigh) / maxFreq) * 100;
+  const heightPct = ((s.freqHigh - s.freqLow) / maxFreq) * 100;
   return { left: `${leftPct}%`, width: `${widthPct}%`, top: `${topPct}%`, height: `${heightPct}%` };
 }
 
@@ -262,7 +264,15 @@ export default function LabelingWorkspacePage() {
   const audioUrl: string | null = normalizeAudioUrl(activeFile?.audioUrl);
   const player = useAudioPlayer(audioUrl, parsedDuration, audioRetryKey);
   const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey);
+  const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData);
   const audioLoadError = player.error ?? waveformError;
+
+  // Dynamic max frequency from spectrogram (Nyquist), fallback to 20kHz
+  const effectiveMaxFreqRef = useRef(MAX_FREQ);
+  useEffect(() => {
+    effectiveMaxFreqRef.current = spectrogramData?.maxFrequency ?? MAX_FREQ;
+  }, [spectrogramData]);
+  const effectiveMaxFreq = spectrogramData?.maxFrequency ?? MAX_FREQ;
 
   const totalDuration = player.duration || parsedDuration;
   const playbackPct = totalDuration > 0 ? (player.currentTime / totalDuration) * 100 : 0;
@@ -299,6 +309,7 @@ export default function LabelingWorkspacePage() {
     { type: "recheck", label: t("bookmarkRecheck"), note: t("bookmarkRecheckNote") },
     { type: "noise_suspect", label: t("bookmarkNoise"), note: t("bookmarkNoiseNote") },
     { type: "edge_case", label: t("bookmarkEdge"), note: t("bookmarkEdgeNote") },
+    { type: "needs_analysis", label: t("bookmarkNeedsAnalysis"), note: t("bookmarkNeedsAnalysisNote") },
   ];
 
   /* ----- Score sync + achievement load ------------------------------ */
@@ -508,7 +519,8 @@ export default function LabelingWorkspacePage() {
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
     const y = Math.max(0, Math.min(clientY - rect.top, rect.height));
     const time = (x / Math.max(rect.width, 1)) * totalDuration;
-    const freq = MAX_FREQ * (1 - y / Math.max(rect.height, 1));
+    const mf = effectiveMaxFreqRef.current;
+    const freq = mf * (1 - y / Math.max(rect.height, 1));
     return { time, freq };
   }, [totalDuration]);
 
@@ -531,7 +543,7 @@ export default function LabelingWorkspacePage() {
       startTime: snapTime,
       endTime: snapTime + 0.05,
       freqLow: Math.max(0, snapFreq - 100),
-      freqHigh: Math.min(MAX_FREQ, snapFreq + 100),
+      freqHigh: Math.min(effectiveMaxFreqRef.current, snapFreq + 100),
       source: "user",
     };
     setDraftPreview(preview);
@@ -567,7 +579,7 @@ export default function LabelingWorkspacePage() {
       startTime: Math.min(startTime, curTime),
       endTime: Math.max(startTime, curTime),
       freqLow: Math.max(0, Math.min(startFreq, curFreq)),
-      freqHigh: Math.min(MAX_FREQ, Math.max(startFreq, curFreq)),
+      freqHigh: Math.min(effectiveMaxFreqRef.current, Math.max(startFreq, curFreq)),
       source: "user",
     });
   }, [isDrawingDraft, pointerToDomain, scheduleDraftPreview, snapEnabled, t]);
@@ -645,21 +657,22 @@ export default function LabelingWorkspacePage() {
     const boxDuration = Math.max(0.01, drag.endTime - drag.startTime);
     const boxFreqRange = Math.max(1, drag.freqHigh - drag.freqLow);
     const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-    const freqDelta = (-dy / Math.max(rect.height, 1)) * MAX_FREQ;
+    const mf = effectiveMaxFreqRef.current;
+    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
 
     const maxStart = Math.max(0, totalDuration - boxDuration);
     let startTime = Math.max(0, Math.min(drag.startTime + timeDelta, maxStart));
-    let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, MAX_FREQ - boxFreqRange));
+    let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, mf - boxFreqRange));
 
     if (snapEnabled) {
       startTime = Math.round(startTime * 10) / 10;
       freqLow = Math.round(freqLow / 100) * 100;
       startTime = Math.max(0, Math.min(startTime, maxStart));
-      freqLow = Math.max(0, Math.min(freqLow, MAX_FREQ - boxFreqRange));
+      freqLow = Math.max(0, Math.min(freqLow, mf - boxFreqRange));
     }
 
     const endTime = Math.min(totalDuration, startTime + boxDuration);
-    const freqHigh = Math.min(MAX_FREQ, freqLow + boxFreqRange);
+    const freqHigh = Math.min(mf, freqLow + boxFreqRange);
 
     scheduleDraftMove(drag.draftId, {
       startTime,
@@ -736,7 +749,8 @@ export default function LabelingWorkspacePage() {
     const dx = e.clientX - resize.pointerStartX;
     const dy = e.clientY - resize.pointerStartY;
     const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-    const freqDelta = (-dy / Math.max(rect.height, 1)) * MAX_FREQ;
+    const mf = effectiveMaxFreqRef.current;
+    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
 
     let nextStart = resize.startTime;
     let nextEnd = resize.endTime;
@@ -760,8 +774,8 @@ export default function LabelingWorkspacePage() {
     nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
     nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
 
-    nextLow = Math.max(0, Math.min(nextLow, MAX_FREQ - MIN_DRAFT_FREQ_RANGE));
-    nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, MAX_FREQ));
+    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
+    nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
     if (nextHigh - nextLow < MIN_DRAFT_FREQ_RANGE) {
       if (resize.handle === "nw" || resize.handle === "ne") {
         nextHigh = nextLow + MIN_DRAFT_FREQ_RANGE;
@@ -769,8 +783,8 @@ export default function LabelingWorkspacePage() {
         nextLow = nextHigh - MIN_DRAFT_FREQ_RANGE;
       }
     }
-    nextLow = Math.max(0, Math.min(nextLow, MAX_FREQ - MIN_DRAFT_FREQ_RANGE));
-    nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, MAX_FREQ));
+    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
+    nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
 
     if (snapEnabled) {
       nextStart = Math.round(nextStart * 10) / 10;
@@ -779,8 +793,8 @@ export default function LabelingWorkspacePage() {
       nextHigh = Math.round(nextHigh / 100) * 100;
       nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
       nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-      nextLow = Math.max(0, Math.min(nextLow, MAX_FREQ - MIN_DRAFT_FREQ_RANGE));
-      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, MAX_FREQ));
+      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
+      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
     }
 
     scheduleDraftResize(resize.draftId, {
@@ -893,6 +907,16 @@ export default function LabelingWorkspacePage() {
     showToast(t("bookmarkAdded", { label: preset.label }));
   }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
 
+  const handleMarkNeedsAnalysis = useCallback(() => {
+    addBookmark({
+      time: player.currentTime,
+      type: "needs_analysis",
+      note: t("bookmarkNeedsAnalysisNote"),
+      suggestionId: selectedSuggestionId ?? undefined,
+    });
+    showToast(t("bookmarkNeedsAnalysisAdded"));
+  }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
+
   const handleReplayHistory = useCallback((item: ActionHistoryItem) => {
     if (typeof item.payload?.time === "number") {
       seekTo(item.payload.time, false);
@@ -974,6 +998,7 @@ export default function LabelingWorkspacePage() {
     onSetLoopStart: handleSetLoopStart,
     onSetLoopEnd: handleSetLoopEnd,
     onToggleLoop: handleToggleLoop,
+    onMarkNeedsAnalysis: handleMarkNeedsAnalysis,
     player,
     suggestions,
     manualDrafts,
@@ -1330,75 +1355,58 @@ export default function LabelingWorkspacePage() {
                 </div>
               </div>
             )}
-            {/* Y-axis labels */}
+            {/* Y-axis labels (dynamic based on actual Nyquist) */}
             <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
-              {["20kHz", "15kHz", "10kHz", "5kHz", "0Hz"].map((label) => (
-                <span key={label} className="text-[10px] text-text-muted/70 font-mono text-right pr-2">
-                  {label}
-                </span>
-              ))}
+              {(() => {
+                const mf = effectiveMaxFreq;
+                const steps = [mf, mf * 0.75, mf * 0.5, mf * 0.25, 0];
+                return steps.map((freq) => {
+                  const label = freq >= 1000 ? `${(freq / 1000).toFixed(freq % 1000 === 0 ? 0 : 1)}kHz` : `${Math.round(freq)}Hz`;
+                  return (
+                    <span key={freq} className="text-[10px] text-text-muted/70 font-mono text-right pr-2">
+                      {label}
+                    </span>
+                  );
+                });
+              })()}
             </div>
 
-            {/* Spectrogram gradient background */}
+            {/* Spectrogram display area */}
             <div
               ref={spectrogramRef}
               onPointerDown={handleDraftPointerDown}
               onPointerMove={handleDraftPointerMove}
               onPointerUp={handleDraftPointerUp}
               onPointerLeave={handleDraftPointerUp}
-              className={`absolute top-0 left-12 right-0 bottom-6 bg-gradient-to-b from-indigo-950 via-purple-900 to-amber-950 opacity-90 ${
+              className={`absolute top-0 left-12 right-0 bottom-6 bg-black ${
                 tool === "box" ? "cursor-crosshair" : "cursor-pointer"
               }`}
             >
+              {/* Real FFT spectrogram canvas (background layer) */}
+              <SpectrogramCanvas
+                data={spectrogramData}
+                loading={spectrogramLoading}
+                className="absolute inset-0"
+              />
               {/* Horizontal grid lines */}
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 pointer-events-none">
                 {[20, 40, 60, 80].map((pct) => (
-                  <div key={pct} className="absolute left-0 right-0 border-t border-white/5" style={{ top: `${pct}%` }} />
+                  <div key={pct} className="absolute left-0 right-0 border-t border-white/10" style={{ top: `${pct}%` }} />
                 ))}
               </div>
               {/* Vertical grid lines */}
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 pointer-events-none">
                 {[20, 40, 60, 80].map((pct) => (
-                  <div key={pct} className="absolute top-0 bottom-0 border-l border-white/5" style={{ left: `${pct}%` }} />
+                  <div key={pct} className="absolute top-0 bottom-0 border-l border-white/10" style={{ left: `${pct}%` }} />
                 ))}
               </div>
-              {/* Scan-line noise pattern */}
-              <div className="absolute inset-0 opacity-30 mix-blend-overlay bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)]" />
-              {/* Color intensity band (simulating frequency energy) */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent opacity-60" />
-              <div className="absolute left-[25%] right-[30%] top-[30%] bottom-[40%] bg-orange-500/8 rounded-full blur-3xl" />
-              <div className="absolute left-[55%] right-[10%] top-[55%] bottom-[15%] bg-red-500/6 rounded-full blur-3xl" />
-              {/* Energy bands from suggestion regions */}
-              {suggestions.map((s) => {
-                const boxPos = suggestionBoxStyle(s, totalDuration);
-                const energyClass =
-                  s.status === "pending"
-                    ? "bg-orange-400/10"
-                    : s.status === "confirmed"
-                      ? "bg-accent/10"
-                      : s.status === "rejected"
-                        ? "bg-danger/10"
-                        : "bg-cyan-400/10";
-                return (
-                  <div
-                    key={`energy-${s.id}`}
-                    className={`absolute ${energyClass} blur-md pointer-events-none`}
-                    style={{
-                      left: boxPos.left,
-                      width: boxPos.width,
-                      top: "6%",
-                      bottom: "6%",
-                    }}
-                  />
-                );
-              })}
             </div>
 
             {/* Dynamic annotation boxes from suggestions */}
             {suggestions.map((s) => {
               const sc = statusColors[s.status];
               const isSelected = s.id === selectedSuggestionId;
-              const boxPos = suggestionBoxStyle(s, totalDuration);
+              const boxPos = suggestionBoxStyle(s, totalDuration, effectiveMaxFreq);
               return (
                 <button
                   key={s.id}
@@ -1446,7 +1454,7 @@ export default function LabelingWorkspacePage() {
 
             {/* Manual draft boxes */}
             {manualDrafts.map((draft) => {
-              const pos = suggestionBoxStyle(draft, totalDuration);
+              const pos = suggestionBoxStyle(draft, totalDuration, effectiveMaxFreq);
               const isSelected = draft.id === selectedDraftId;
               return (
                 <button
@@ -1509,7 +1517,7 @@ export default function LabelingWorkspacePage() {
               );
             })}
             {draftPreview && (() => {
-              const pos = suggestionBoxStyle(draftPreview, totalDuration);
+              const pos = suggestionBoxStyle(draftPreview, totalDuration, effectiveMaxFreq);
               return (
                 <div
                   className="absolute border-2 border-cyan-200 bg-cyan-300/15 rounded-sm z-20 pointer-events-none"
@@ -1555,6 +1563,20 @@ export default function LabelingWorkspacePage() {
                 }}
               />
             )}
+
+            {/* "Needs analysis" bookmark markers */}
+            {bookmarks
+              .filter((b) => b.type === "needs_analysis")
+              .map((b) => (
+                <div
+                  key={`na-${b.id}`}
+                  className="absolute top-0 bottom-6 w-0.5 bg-amber-400/60 z-25 pointer-events-none"
+                  style={{ left: `calc(48px + ${(b.time / totalDuration) * 100}%)` }}
+                  title={b.note}
+                >
+                  <Flag className="absolute -top-0.5 -left-1.5 w-3 h-3 text-amber-400" />
+                </div>
+              ))}
 
             {/* Time axis (bottom) */}
             <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
@@ -1628,6 +1650,7 @@ export default function LabelingWorkspacePage() {
                 { key: "Ctrl+Shift+Z", labelKey: "hintRedo" },
                 { key: "Ctrl+Enter", labelKey: "hintManualSave" },
                 { key: "I/P/L", labelKey: "hintLoop" },
+                { key: "M", labelKey: "hintMark" },
               ].map((hint) => (
                 <div
                   key={hint.key}

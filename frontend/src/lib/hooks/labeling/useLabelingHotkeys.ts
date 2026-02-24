@@ -21,6 +21,7 @@ type UseLabelingHotkeysParams = {
   onSetLoopStart: () => void;
   onSetLoopEnd: () => void;
   onToggleLoop: () => void;
+  onMarkNeedsAnalysis?: () => void;
   player: AudioPlayerState;
   suggestions: Suggestion[];
   manualDrafts: ManualDraft[];
@@ -46,6 +47,7 @@ export function useLabelingHotkeys({
   onSetLoopStart,
   onSetLoopEnd,
   onToggleLoop,
+  onMarkNeedsAnalysis,
   player,
   suggestions,
   manualDrafts,
@@ -151,6 +153,10 @@ export function useLabelingHotkeys({
           e.preventDefault();
           onToggleLoop();
           break;
+        case "m":
+          e.preventDefault();
+          onMarkNeedsAnalysis?.();
+          break;
         case " ": {
           e.preventDefault();
           const sel = suggestions.find((s) => s.id === selectedSuggestionId);
@@ -211,6 +217,7 @@ export function useLabelingHotkeys({
     onSetLoopStart,
     onSetLoopEnd,
     onToggleLoop,
+    onMarkNeedsAnalysis,
     player,
     suggestions,
     manualDrafts,
