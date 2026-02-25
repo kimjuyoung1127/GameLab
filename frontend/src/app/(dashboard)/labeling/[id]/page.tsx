@@ -1,4 +1,4 @@
-/** ?쇰꺼留??묒뾽 ?섏씠吏: 3?⑤꼸 ?덉씠?꾩썐 (?뚯씪紐⑸줉 + ?ㅽ럺?몃줈洹몃옩 + AI?쒖븞 ?⑤꼸). ?듭떖 湲곕뒫. */
+/** Labeling workspace route: orchestrates 3-panel layout, state wiring, and interaction handlers. */
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -114,6 +114,7 @@ export default function LabelingWorkspacePage() {
     undo,
     redo,
     addBookmark,
+    updateBookmark,
     removeBookmark,
     pushHistory,
     clearHistory,
@@ -159,6 +160,7 @@ export default function LabelingWorkspacePage() {
   const [showFitToast, setShowFitToast] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [loopHudWarning, setLoopHudWarning] = useState(false);
+  const [highlightedBookmarkId, setHighlightedBookmarkId] = useState<string | null>(null);
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
@@ -564,6 +566,32 @@ export default function LabelingWorkspacePage() {
     showToast(t("bookmarkNeedsAnalysisAdded"));
   }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
 
+  const handleBookmarkSeek = useCallback((time: number, bookmarkId: string) => {
+    seekTo(time, true);
+    setHighlightedBookmarkId(bookmarkId);
+    setTimeout(() => setHighlightedBookmarkId(null), 800);
+  }, [seekTo]);
+
+  const handleJumpToNextBookmark = useCallback(() => {
+    const sorted = [...bookmarks].sort((a, b) => a.time - b.time);
+    const next = sorted.find((b) => b.time > player.currentTime + 0.01);
+    if (next) {
+      seekTo(next.time, true);
+      setHighlightedBookmarkId(next.id);
+      setTimeout(() => setHighlightedBookmarkId(null), 800);
+    }
+  }, [bookmarks, player.currentTime, seekTo]);
+
+  const handleJumpToPrevBookmark = useCallback(() => {
+    const sorted = [...bookmarks].sort((a, b) => b.time - a.time);
+    const prev = sorted.find((b) => b.time < player.currentTime - 0.01);
+    if (prev) {
+      seekTo(prev.time, true);
+      setHighlightedBookmarkId(prev.id);
+      setTimeout(() => setHighlightedBookmarkId(null), 800);
+    }
+  }, [bookmarks, player.currentTime, seekTo]);
+
   const handleReplayHistory = useCallback((item: ActionHistoryItem) => {
     if (typeof item.payload?.time === "number") {
       seekTo(item.payload.time, false);
@@ -634,6 +662,8 @@ export default function LabelingWorkspacePage() {
     onSetLoopEnd: handleSetLoopEnd,
     onToggleLoop: handleToggleLoop,
     onMarkNeedsAnalysis: handleMarkNeedsAnalysis,
+    onJumpToNextBookmark: handleJumpToNextBookmark,
+    onJumpToPrevBookmark: handleJumpToPrevBookmark,
     handleDeleteSelectedSuggestion,
     player,
     suggestions,
@@ -686,9 +716,9 @@ export default function LabelingWorkspacePage() {
             totalCount={totalCount}
             sessionId={sessionId}
             activeFileName={activeFile?.filename}
-            onSaveManualDrafts={() => {
-              void handleSaveManualDrafts();
-            }}
+            onSaveManualDrafts={handleSaveManualDrafts}
+            pendingDraftCount={manualDrafts.length}
+            bookmarkCount={bookmarks.length}
           />
 
           <SpectrogramPanel
@@ -746,6 +776,7 @@ export default function LabelingWorkspacePage() {
             audioLoadError={audioLoadError}
             onRetryAudio={() => setAudioRetryKey((k) => k + 1)}
             onSeek={seekTo}
+            highlightedBookmarkId={highlightedBookmarkId}
           />
 
           <PlayerControls
@@ -777,8 +808,10 @@ export default function LabelingWorkspacePage() {
             bookmarks={bookmarks}
             presets={bookmarkPresets}
             onAdd={handleAddBookmark}
-            onSeek={(time) => seekTo(time, true)}
+            onSeek={handleBookmarkSeek}
             onRemove={removeBookmark}
+            onUpdate={updateBookmark}
+            highlightedId={highlightedBookmarkId}
           />
 
           <ActionHistoryPanel
