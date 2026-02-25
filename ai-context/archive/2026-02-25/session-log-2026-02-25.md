@@ -189,3 +189,51 @@
 - pg_cron은 DB 데이터만 정리 → 디스크 파일(`./uploads/`)은 세션 삭제 API 통해 별도 제거 필요
 - RLS 정책 강화(`true` → `auth.uid()`)는 Phase 2D 향후 작업으로 보류
 - `sst_suggestions.reviewed_by` + `reviewed_at` 컬럼 추가도 향후 작업
+
+---
+
+## 9) 개발 예정 플랜 — 스펙트로그램 주파수 스케일 수정 + 가로 스크롤 확대
+
+> 피드백 출처: 협업자 ("주파수 스케일이 맞나요?", "옆으로 늘리는 기능도 있었으면")
+
+### Part A: 주파수 축 스케일 버그 수정
+
+**문제**: Web Audio API `AudioContext.decodeAudioData()`가 시스템 기본 SR(48kHz)로 리샘플링하여 Y축이 24kHz로 표시됨. 실제 오디오는 8kHz까지만 올라감.
+
+```
+원본: 16kHz SR → Nyquist 8kHz
+  ↓ AudioContext 리샘플
+decoded.sampleRate = 48,000 → maxFreq = 24kHz
+  ↓ Y축 라벨
+24kHz, 18kHz, 12kHz, 6kHz, 0Hz  ← 피드백과 일치
+```
+
+**수정 계획**:
+
+| Step | 파일 | 변경 |
+|------|------|------|
+| A-1 | `frontend/src/lib/hooks/use-waveform.ts` | `targetSampleRate` 파라미터 추가, `AudioContext({ sampleRate })` 옵션으로 리샘플링 방지 |
+| A-2 | `frontend/src/app/(dashboard)/labeling/[id]/page.tsx` | 호출부에 `activeFile.sampleRate` 전달 + `effectiveMaxFreq` 계산에 DB 원본 SR 우선 사용 |
+
+**핵심**: 파일마다 다른 sample rate를 가지므로 DB의 `sst_audio_files.sample_rate` 값을 기준으로 Y축 동적 적용.
+
+### Part B: 가로 스크롤/확대 (Audacity 스타일)
+
+**문제**: 현재 줌은 CSS `transform: scale()`만 있고 가로 스크롤이 없어 긴 파일이 좁은 폭에 압축됨.
+
+**수정 계획**:
+
+| Step | 파일 | 변경 |
+|------|------|------|
+| B-1 | `SpectrogramPanel.tsx` | `overflow-hidden` → `overflow-x-auto`, CSS transform 대신 `width: zoomLevel * 100%` 직접 확장 |
+| B-2 | `ToolBar.tsx` | 줌 범위 1.0~10.0 (기존 0.5~3.0), step 0.5 |
+| B-3 | `SpectrogramPanel.tsx` | 웨이브폼 섹션도 동일 너비 적용하여 가로 정렬 유지 |
+| B-4 | `SpectrogramPanel.tsx` | 재생 시 커서가 뷰포트 밖으로 나가면 자동 스크롤 (선택) |
+
+**접근**: 컨테이너 너비 자체를 확장하여 브라우저 네이티브 스크롤바 사용. `%` 기반 오버레이(커서/제안박스)는 자동 비례 확장.
+
+### 예상 영향도
+
+- FE만 변경 (BE 수정 없음)
+- 수정 파일 4개: `use-waveform.ts`, `page.tsx`, `SpectrogramPanel.tsx`, `ToolBar.tsx`
+- 기존 기능(드래프트, 제안 드래그/리사이즈, 북마크) 모두 `%` 기반이므로 호환 유지
