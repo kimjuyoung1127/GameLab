@@ -140,7 +140,18 @@
     "completedCount": "완료됨",
     "goToSessions": "세션 목록으로",
     "startUpload": "업로드 시작 ({count})",
-    "uploading": "업로드 중..."
+    "uploading": "업로드 중...",
+    "backgroundMsg": "분석이 백그라운드에서 진행됩니다. 다른 작업을 계속하세요."
+  },
+  "uploadProgress": {
+    "title": "업로드 현황",
+    "inProgress": "분석 중 ({count})",
+    "allComplete": "분석 완료",
+    "complete": "분석 완료",
+    "failed": "분석 실패",
+    "openLabeling": "라벨링 열기",
+    "clear": "지우기",
+    "collapse": "접기"
   },
   "sessions": {
     "title": "세션 관리",

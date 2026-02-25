@@ -140,8 +140,19 @@
                    "completedCount":  "completed",
                    "goToSessions":  "Go to Sessions",
                    "startUpload":  "Start Upload ({count})",
-                   "uploading":  "Uploading..."
+                   "uploading":  "Uploading...",
+                   "backgroundMsg":  "Analysis is running in the background. You can continue working."
                },
+    "uploadProgress":  {
+                           "title":  "Upload Status",
+                           "inProgress":  "Analyzing ({count})",
+                           "allComplete":  "Analysis complete",
+                           "complete":  "Analysis complete",
+                           "failed":  "Analysis failed",
+                           "openLabeling":  "Open Labeling",
+                           "clear":  "Clear",
+                           "collapse":  "Collapse"
+                       },
     "sessions":  {
                      "title":  "Sessions Management",
                      "subtitle":  "Smart Spectro-Tagging \u0026 Anomaly Detection",

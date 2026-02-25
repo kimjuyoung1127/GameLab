@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import type { UploadJobStatus } from "@/types";
 import { endpoints } from "@/lib/api/endpoints";
+import { useUploadStore } from "@/lib/store/upload-store";
+import { useUIStore } from "@/lib/store/ui-store";
 import styles from "./styles/page.module.css";
 
 const ACCEPTED_FORMATS = [".wav", ".m4a", ".mp3"];
@@ -39,16 +41,6 @@ interface ApiUploadResult {
   job_id?: string | null;
   sessionId?: string | null;
   session_id?: string | null;
-  progress?: number;
-  error?: string | null;
-}
-
-interface ApiJobStatusResponse {
-  jobId?: string;
-  job_id?: string;
-  sessionId?: string | null;
-  session_id?: string | null;
-  status: UploadJobStatus;
   progress?: number;
   error?: string | null;
 }
@@ -128,36 +120,8 @@ export default function UploadPage() {
     setDragOver(false);
   }, []);
 
-  const pollJobStatus = useCallback(async (entryId: string, jobId: string) => {
-    for (let i = 0; i < 30; i += 1) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        const res = await fetch(endpoints.jobs.status(jobId));
-        if (!res.ok) continue;
-        const job = (await res.json()) as ApiJobStatusResponse;
-
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === entryId
-              ? {
-                  ...f,
-                  status: job.status,
-                  progress: job.progress ?? f.progress,
-                  error: job.error ?? undefined,
-                }
-              : f
-          )
-        );
-
-        if (job.status === "done" || job.status === "failed") {
-          return job;
-        }
-      } catch {
-        // Keep current state and retry.
-      }
-    }
-    return null;
-  }, []);
+  const addJobs = useUploadStore((s) => s.addJobs);
+  const { showToast } = useUIStore();
 
   const handleUpload = useCallback(async () => {
     const validFiles = files.filter((f) => f.status !== "failed");
@@ -185,49 +149,31 @@ export default function UploadPage() {
       }
 
       const uploaded = (await res.json()) as ApiUploadResult[];
-      const sessionIdFromUpload =
+      const sessionId =
         uploaded.find((r) => (r.sessionId ?? r.session_id))?.sessionId ??
         uploaded.find((r) => (r.sessionId ?? r.session_id))?.session_id ??
-        null;
+        "";
 
-      setFiles((prev) => {
-        let idx = 0;
-        return prev.map((f) => {
-          if (f.status === "failed") return f;
+      // Register active jobs in global store for background polling
+      const jobEntries = uploaded
+        .filter((r) => (r.jobId ?? r.job_id))
+        .map((r, idx) => ({
+          jobId: ((r.jobId ?? r.job_id) as string),
+          fileId: (r.fileId ?? r.file_id) ?? validFiles[idx]?.id ?? "",
+          filename: r.filename,
+          sessionId: (r.sessionId ?? r.session_id) ?? sessionId,
+          status: r.status,
+          progress: r.progress ?? 0,
+          error: r.error ?? undefined,
+        }));
 
-          const result = uploaded[idx];
-          idx += 1;
-
-          if (!result) {
-            return { ...f, status: "failed", progress: 0, error: t("errorNoResponse") };
-          }
-
-          return {
-            ...f,
-            status: result.status,
-            progress: result.progress ?? (result.status === "failed" ? 0 : 100),
-            jobId: (result.jobId ?? result.job_id) ?? undefined,
-            error: result.error ?? undefined,
-          };
-        });
-      });
-
-      const pollTargets = uploaded
-        .map((result, idx) => ({ result, entry: validFiles[idx] }))
-        .filter((x) => (x.result.jobId ?? x.result.job_id) && (x.result.status === "queued" || x.result.status === "processing"));
-
-      const polled = await Promise.all(
-        pollTargets.map((x) => pollJobStatus(x.entry.id, (x.result.jobId ?? x.result.job_id) as string))
-      );
-      const sessionIdFromJobs =
-        polled.find((p) => p && (p.sessionId ?? p.session_id))?.sessionId ??
-        polled.find((p) => p && (p.sessionId ?? p.session_id))?.session_id ??
-        null;
-
-      const finalSessionId = sessionIdFromUpload ?? sessionIdFromJobs;
-      if (finalSessionId) {
-        router.push(`/labeling/${finalSessionId}`);
+      if (jobEntries.length > 0) {
+        addJobs(jobEntries);
       }
+
+      // Clear file list and show background message
+      setFiles([]);
+      showToast(t("backgroundMsg"));
     } catch {
       setFiles((prev) =>
         prev.map((f) =>
@@ -244,11 +190,9 @@ export default function UploadPage() {
     } finally {
       setUploading(false);
     }
-  }, [files, pollJobStatus, router, t]);
+  }, [files, addJobs, showToast, t]);
 
   const validCount = files.filter((f) => f.status !== "failed").length;
-  const doneCount = files.filter((f) => f.status === "done").length;
-  const allDone = validCount > 0 && doneCount === validCount && !uploading;
 
   return (
     <div className={styles.c001}>
@@ -407,35 +351,24 @@ export default function UploadPage() {
           <div className={styles.c041}>
             <p className={styles.c020}>
               {validCount} {t("readyCount")}
-              {doneCount > 0 && ` · ${doneCount} ${t("completedCount")}`}
             </p>
-            {allDone ? (
-              <button
-                onClick={() => router.push("/sessions")}
-                className={styles.c042}
-              >
-                <CheckCircle2 className={styles.c043} />
-                {t("goToSessions")}
-              </button>
-            ) : (
-              <button
-                onClick={handleUpload}
-                disabled={uploading || validCount === 0}
-                className={styles.c044}
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className={styles.c045} />
-                    {t("uploading")}
-                  </>
-                ) : (
-                  <>
-                    <Upload className={styles.c043} />
-                    {t("startUpload", { count: String(validCount) })}
-                  </>
-                )}
-              </button>
-            )}
+            <button
+              onClick={handleUpload}
+              disabled={uploading || validCount === 0}
+              className={styles.c044}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className={styles.c045} />
+                  {t("uploading")}
+                </>
+              ) : (
+                <>
+                  <Upload className={styles.c043} />
+                  {t("startUpload", { count: String(validCount) })}
+                </>
+              )}
+            </button>
           </div>
         )}
       </div>

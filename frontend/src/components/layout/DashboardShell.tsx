@@ -8,6 +8,7 @@ import Sidebar from "./Sidebar";
 import HotkeyHelp from "./HotkeyHelp";
 import UnsavedModal from "./UnsavedModal";
 import Toast from "../ui/Toast";
+import UploadProgress from "../ui/UploadProgress";
 import { useScoreStore, getLevel } from "@/lib/store/score-store";
 import { useUIStore } from "@/lib/store/ui-store";
 
@@ -100,6 +101,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       <HotkeyHelp />
       <UnsavedModal />
       <Toast />
+      <UploadProgress />
     </div>
   );
 }

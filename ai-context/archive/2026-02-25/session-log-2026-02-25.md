@@ -1,8 +1,8 @@
 # Session Log - 2026-02-25 (KST)
 
 ## 1) Summary
-- Scope: Labeling workspace refactor + 협업 구조 분석/구현 + Export 버그 수정 + DB 자동 정리
-- Result: 세션 소유자 추적, Export 필터 고도화, 수동 라벨 export 자동저장, pg_cron 기반 DB 자동 정리 완료
+- Scope: Labeling workspace refactor + 협업 구조 분석/구현 + Export 버그 수정 + DB 자동 정리 + Supabase Storage 전환 + 주파수 대역 필터링
+- Result: 세션 소유자 추적, Export 필터 고도화, 수동 라벨 export 자동저장, pg_cron 기반 DB 자동 정리, 오디오 파일 Supabase Storage 이전, 스펙트로그램 주파수 범위 필터링 완료
 
 ---
 
@@ -135,12 +135,17 @@
 ## 5) Git History (today)
 - `42d9e7a` refactor(labeling): split workspace into panels and interaction hooks
 - `5d7c9d3` chore(labeling): remove dead route css module classes
-- (Session B+C 변경사항: 미커밋 상태)
+- `3a15a38` docs(labeling): add 2026-02-25 archive and recover guideline encoding
+- `770cb78` feat: labeling 패널 분리 + 북마크/툴바 강화 + BE 세션 삭제 개선
+- `fc91145` docs: 스펙트로그램 주파수 스케일 + 가로 스크롤 개발 예정 플랜 추가
+- `cfc45b0` feat: Supabase Storage 전환 + 스펙트로그램 주파수 대역 필터링
+- `d12cd1c` feat: 업로드 비동기 처리 — 전역 폴링 + 진행 표시기
 
 ## 6) Verification
-- `cd frontend && npm run build` — Pass
+- `cd frontend && npm run build` — Pass (Session A~D 모두)
 - `cd backend && python -m pytest tests/ -v` — 11/11 Pass
 - Supabase `cron.job` 테이블: 3건 등록 확인
+- Supabase `sst-audio` 버킷: 생성 + RLS 정책 3개 확인
 - Supabase advisor: 보안/성능 이슈 없음
 
 ## 7) Files Added/Updated
@@ -186,13 +191,144 @@
   - `enable_pg_cron_and_cleanup`
 
 ## 8) Notes
-- pg_cron은 DB 데이터만 정리 → 디스크 파일(`./uploads/`)은 세션 삭제 API 통해 별도 제거 필요
+- pg_cron은 DB 데이터만 정리 → Supabase Storage 파일은 세션 삭제 API 통해 자동 제거
 - RLS 정책 강화(`true` → `auth.uid()`)는 Phase 2D 향후 작업으로 보류
 - `sst_suggestions.reviewed_by` + `reviewed_at` 컬럼 추가도 향후 작업
 
 ---
 
-## 9) 개발 예정 플랜 — 스펙트로그램 주파수 스케일 수정 + 가로 스크롤 확대
+## 9) Session D — Supabase Storage 전환 + 주파수 대역 필터링
+
+> 피드백 출처: 김민교 ("오디오 파일이 계속 fail to load", "주파수를 원하는 대역으로 잘라서 볼 수 있어야")
+
+### D-1. Supabase Storage 버킷 생성
+- Supabase migration `create_sst_audio_bucket`:
+  - `sst-audio` 퍼블릭 버킷 (1GB 제한, 오디오 MIME 타입만 허용)
+  - RLS 정책 3개: public SELECT, service-role INSERT, service-role DELETE
+
+### D-2. BE — 업로드 Storage 전환
+- `backend/app/api/upload/router.py`:
+  - `_build_audio_url()` 제거 → `_upload_to_storage()` 신규 함수
+  - `MIME_MAP` 추가 (.wav/.mp3/.m4a/.flac)
+  - 업로드 흐름: 로컬 임시 저장 → 메타데이터 추출 → Supabase Storage 업로드 → public URL DB 저장
+  - `_run_analysis_jobs()`: 분석 완료 후 로컬 임시 파일 자동 삭제
+
+### D-3. BE — 세션 삭제 Storage 연동
+- `backend/app/api/sessions/router.py`:
+  - 디스크 파일 삭제 → `supabase.storage.from_("sst-audio").remove()` 전환
+  - URL에서 storage key 추출 (`/sst-audio/` 이후 경로)
+
+### D-4. BE — config 정리
+- `backend/app/core/config.py`: `upload_dir` → `temp_upload_dir`, `public_file_base_url` 삭제
+- `backend/app/main.py`: `StaticFiles("/uploads")` 마운트 제거
+- `backend/.env`: `UPLOAD_DIR` → `TEMP_UPLOAD_DIR`
+
+### D-5. FFT 렌더러 주파수 범위 슬라이싱
+- `frontend/src/lib/audio/spectrogram-renderer.ts`:
+  - `SpectrogramOptions`에 `freqMin?`/`freqMax?` 추가
+  - `computeSpectrogram()`: Hz→bin 변환 후 `[binMin, binMax]` 범위만 ImageData 출력
+  - 반환값에 `binMin`/`binMax` 추가
+
+### D-6. Web Worker + Hook 확장
+- `frontend/src/lib/audio/spectrogram-worker.ts`: input/output에 `freqMin`/`freqMax` 추가
+- `frontend/src/lib/hooks/use-spectrogram.ts`: `freqMin`/`freqMax` 파라미터 추가, 의존성 배열 반영
+
+### D-7. UI — 주파수 범위 프리셋 버튼
+- `frontend/src/app/(dashboard)/labeling/[id]/page.tsx`:
+  - `freqMin`/`freqMax` 상태 추가
+  - `suggestionBoxStyle()`: 주파수 범위 기준 좌표 계산으로 수정
+- `frontend/src/app/(dashboard)/labeling/[id]/components/SpectrogramPanel.tsx`:
+  - 프리셋 버튼 4개: 전체(0-max), 저대역(0-5k), 중대역(1k-8k), 고대역(5k-max)
+  - 주파수 축 라벨 `freqMin`~`freqMax` 범위 동적 표시
+
+### D-8. i18n 메시지 추가 (Session D)
+- `frontend/messages/ko.json`: `freqPresetFull`, `freqPresetLow`, `freqPresetMid`, `freqPresetHigh` (4개)
+- `frontend/messages/en.json`: 동일 4개 키
+
+### D-9. 배포 환경변수 정리
+- **Vercel (FE)**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_API_URL`
+- **Fly.io (BE)**: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_ORIGINS`, `TEMP_UPLOAD_DIR`, `ANALYSIS_ENGINE`
+- `PUBLIC_FILE_BASE_URL` 삭제됨, `UPLOAD_DIR` → `TEMP_UPLOAD_DIR` 변경됨
+
+---
+
+### Session D — Files Updated
+- Updated:
+  - `backend/app/api/upload/router.py` — Storage 업로드 + 임시 파일 클린업
+  - `backend/app/api/sessions/router.py` — Storage 파일 삭제
+  - `backend/app/core/config.py` — `temp_upload_dir` 리네임
+  - `backend/app/main.py` — StaticFiles 마운트 제거
+  - `backend/app/core/CLAUDE.md` — 설정 문서 갱신
+  - `frontend/src/types/common.ts` — `SpectrogramData.freqMin/freqMax`
+  - `frontend/src/lib/audio/spectrogram-renderer.ts` — 주파수 범위 슬라이싱
+  - `frontend/src/lib/audio/spectrogram-worker.ts` — Worker input/output 확장
+  - `frontend/src/lib/hooks/use-spectrogram.ts` — `freqMin/freqMax` 파라미터
+  - `frontend/src/app/(dashboard)/labeling/[id]/page.tsx` — 주파수 상태 + suggestionBoxStyle
+  - `frontend/src/app/(dashboard)/labeling/[id]/components/SpectrogramPanel.tsx` — 프리셋 UI + 축 라벨
+  - `frontend/messages/ko.json` — 4개 키 추가
+  - `frontend/messages/en.json` — 4개 키 추가
+- Supabase migrations:
+  - `create_sst_audio_bucket`
+
+---
+
+## 10) Session E — 업로드 비동기 처리 (백그라운드 분석)
+
+> 요청: "업로드 중에 자리를 비우거나 다른 작업을 할 수 있는 비동기 처리"
+
+### E-1. 현황 분석
+- BE는 이미 `asyncio.create_task()`로 분석을 백그라운드 실행 (HTTP 응답 즉시 반환)
+- FE 업로드 페이지가 `pollJobStatus()` 최대 60초 블로킹 → 사용자가 페이지 이탈 불가
+- 분석 상태가 로컬 `useState`에만 존재 → 페이지 이동 시 소실
+
+### E-2. Zustand 업로드 스토어
+- `frontend/src/lib/store/upload-store.ts` (**신규**)
+  - `UploadJob` 인터페이스 (jobId, fileId, filename, sessionId, status, progress)
+  - `persist` 미들웨어 — 브라우저 새로고침에도 상태 유지
+  - `addJobs`, `updateJob`, `removeJob`, `clearCompleted`, `toggleCollapsed` 액션
+
+### E-3. 전역 폴링 훅
+- `frontend/src/lib/hooks/use-upload-polling.ts` (**신규**)
+  - 활성 잡(queued/processing)이 있으면 3초 간격 폴링
+  - 활성 잡 없으면 폴링 정지 (리소스 절약)
+  - 완료/실패 전환 시 `showToast()` 알림
+
+### E-4. 전역 진행 표시기
+- `frontend/src/components/ui/UploadProgress.tsx` (**신규**)
+  - DashboardShell에 마운트 — 모든 대시보드 페이지에서 표시
+  - 화면 우하단 고정, 접기/펼치기 토글
+  - 파일별 프로그레스 바 + 상태 아이콘
+  - 완료 시 "라벨링 열기" 링크, 실패 시 에러 메시지
+
+### E-5. 업로드 페이지 수정
+- `frontend/src/app/(dashboard)/upload/page.tsx`:
+  - `pollJobStatus()` 함수 삭제 (60초 블로킹 제거)
+  - `handleUpload()`: POST 응답 후 스토어에 job 등록 → 파일 목록 초기화 → 토스트 표시
+  - 사용자는 즉시 다른 페이지로 이동 가능
+  - `ApiJobStatusResponse` 인터페이스 삭제 (폴링 훅으로 이동)
+
+### E-6. DashboardShell 마운트
+- `frontend/src/components/layout/DashboardShell.tsx`:
+  - `<UploadProgress />` 추가 (Toast 옆)
+
+### E-7. i18n 메시지 추가 (Session E)
+- `frontend/messages/ko.json`: `upload.backgroundMsg` + `uploadProgress` 섹션 (8개 키)
+- `frontend/messages/en.json`: 동일 8개 키
+
+### Session E — Files
+- Added:
+  - `frontend/src/lib/store/upload-store.ts` — Zustand 업로드 잡 스토어
+  - `frontend/src/lib/hooks/use-upload-polling.ts` — 전역 폴링 훅
+  - `frontend/src/components/ui/UploadProgress.tsx` — 전역 진행 표시기
+- Updated:
+  - `frontend/src/app/(dashboard)/upload/page.tsx` — 블로킹 폴링 제거, 스토어 연동
+  - `frontend/src/components/layout/DashboardShell.tsx` — UploadProgress 마운트
+  - `frontend/messages/ko.json` — upload.backgroundMsg + uploadProgress 섹션
+  - `frontend/messages/en.json` — 동일
+
+---
+
+## 11) 개발 예정 플랜 — 스펙트로그램 주파수 스케일 수정 + 가로 스크롤 확대
 
 > 피드백 출처: 협업자 ("주파수 스케일이 맞나요?", "옆으로 늘리는 기능도 있었으면")
 
