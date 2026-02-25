@@ -1,20 +1,19 @@
-/** Labeling UI constants: tool metadata and suggestion status display mapping. */
+/** Local constants for tool metadata and status colors used by labeling components. */
 import type { LucideIcon } from "lucide-react";
-import { MousePointer2, Pencil, Anchor, Square, ZoomIn, ZoomOut } from "lucide-react";
+import { Anchor, MousePointer2, Square, ZoomIn, ZoomOut } from "lucide-react";
 import type { DrawTool, SuggestionStatus } from "@/types";
 
 export const MAX_FREQ = 20_000;
 
-export const tools: { id: DrawTool; icon: LucideIcon; label: string; hotkey: string }[] = [
-  { id: "select", icon: MousePointer2, label: "Select", hotkey: "A" },
-  { id: "brush", icon: Pencil, label: "Brush", hotkey: "B" },
-  { id: "anchor", icon: Anchor, label: "Anchor", hotkey: "G" },
-  { id: "box", icon: Square, label: "Box", hotkey: "R" },
+export const tools: { id: DrawTool; icon: LucideIcon; labelKey: string; hotkey: string }[] = [
+  { id: "select", icon: MousePointer2, labelKey: "toolSelect", hotkey: "A" },
+  { id: "anchor", icon: Anchor, labelKey: "toolAnchor", hotkey: "G" },
+  { id: "box", icon: Square, labelKey: "toolBox", hotkey: "R" },
 ];
 
-export const zoomTools: { id: "zoom-in" | "zoom-out"; icon: LucideIcon; label: string }[] = [
-  { id: "zoom-in", icon: ZoomIn, label: "Zoom In" },
-  { id: "zoom-out", icon: ZoomOut, label: "Zoom Out" },
+export const zoomTools: { id: "zoom-in" | "zoom-out"; icon: LucideIcon; labelKey: string }[] = [
+  { id: "zoom-in", icon: ZoomIn, labelKey: "zoomIn" },
+  { id: "zoom-out", icon: ZoomOut, labelKey: "zoomOut" },
 ];
 
 export const statusColors: Record<

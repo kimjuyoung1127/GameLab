@@ -1,90 +1,136 @@
-/** Toolbar in center panel: draw tools, zoom controls, undo/redo, export links. */
+/** Top toolbar with tools, zoom, undo/redo, save, export and file indicator. */
 import { FileAudio, Redo2, Undo2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { DrawTool } from "@/types";
 import { endpoints } from "@/lib/api/endpoints";
 import { tools, zoomTools } from "./constants";
 
 type ToolBarProps = {
   tool: DrawTool;
+  snapEnabled: boolean;
+  fitToSuggestion: boolean;
   onToolChange: (tool: DrawTool) => void;
+  onToggleSnap: () => void;
+  onToggleFit: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  zoomLevel: number;
   onZoomLevelChange: (updater: (current: number) => number) => void;
   confirmedCount: number;
   totalCount: number;
   sessionId: string;
   activeFileName?: string;
-  styles: Record<string, string>;
+  onSaveManualDrafts: () => void;
 };
 
 export default function ToolBar({
   tool,
+  snapEnabled,
+  fitToSuggestion,
   onToolChange,
+  onToggleSnap,
+  onToggleFit,
   onUndo,
   onRedo,
-  zoomLevel,
   onZoomLevelChange,
   confirmedCount,
   totalCount,
   sessionId,
   activeFileName,
-  styles,
+  onSaveManualDrafts,
 }: ToolBarProps) {
+  const t = useTranslations("labeling");
+
   return (
-    <div className={styles.c045}>
-      {tools.map((t) => (
+    <div className="h-11 shrink-0 bg-panel border-b border-border flex items-center px-3 gap-1">
+      {tools.map((toolItem) => (
         <button
-          key={t.id}
-          onClick={() => onToolChange(t.id)}
-          title={`${t.label} (${t.hotkey})`}
+          key={toolItem.id}
+          onClick={() => {
+            if (toolItem.id === "anchor") {
+              onToggleSnap();
+              return;
+            }
+            onToolChange(toolItem.id);
+          }}
+          title={`${t(toolItem.labelKey)} (${toolItem.hotkey})`}
           className={`p-2 rounded-md transition-colors ${
-            tool === t.id ? "bg-primary text-white" : "text-text-secondary hover:bg-panel-light hover:text-text"
+            toolItem.id === "anchor"
+              ? snapEnabled
+                ? "bg-warning/20 text-warning"
+                : "text-text-secondary hover:bg-panel-light hover:text-text"
+              : tool === toolItem.id
+              ? "bg-primary text-white"
+              : "text-text-secondary hover:bg-panel-light hover:text-text"
           }`}
         >
-          <t.icon className={styles.c046} />
+          <toolItem.icon className="w-4 h-4" />
         </button>
       ))}
 
-      <div className={styles.c047} />
+      <div className="h-5 w-px bg-border-light mx-1" />
 
-      {zoomTools.map((t) => (
+      {zoomTools.map((zt) => (
         <button
-          key={t.id}
-          title={`${t.label} (${zoomLevel.toFixed(2)}x)`}
-          className={styles.c048}
+          key={zt.id}
+          title={t(zt.labelKey)}
           onClick={() =>
-            onZoomLevelChange((z) =>
-              t.id === "zoom-in" ? Math.min(z + 0.25, 3.0) : Math.max(z - 0.25, 0.5),
+            onZoomLevelChange((prev) =>
+              zt.id === "zoom-in" ? Math.min(prev + 0.25, 3.0) : Math.max(prev - 0.25, 0.5),
             )
           }
+          className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
         >
-          <t.icon className={styles.c046} />
+          <zt.icon className="w-4 h-4" />
         </button>
       ))}
 
-      <div className={styles.c047} />
-
-      <button onClick={onUndo} title="Undo (Ctrl+Z)" className={styles.c048}>
-        <Undo2 className={styles.c046} />
+      <button
+        onClick={onToggleFit}
+        title={t("fitToSuggestion")}
+        className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
+          fitToSuggestion ? "bg-primary/20 text-primary-light" : "bg-surface text-text-muted hover:text-text-secondary"
+        }`}
+      >
+        {t("fitShort")}
       </button>
-      <button onClick={onRedo} title="Redo (Ctrl+Shift+Z)" className={styles.c048}>
-        <Redo2 className={styles.c046} />
+
+      <div className="h-5 w-px bg-border-light mx-1" />
+
+      <button onClick={onUndo} title={t("undoTitle")} className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
+        <Undo2 className="w-4 h-4" />
+      </button>
+      <button onClick={onRedo} title={t("redoTitle")} className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
+        <Redo2 className="w-4 h-4" />
       </button>
 
-      <div className={styles.c049}>
-        <span className={styles.c050}>
-          {confirmedCount}/{totalCount} tagged
+      <div className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
+        <span className="text-text-secondary">
+          {confirmedCount}/{totalCount} {t("tagged")}
         </span>
-        <a href={endpoints.labeling.export(sessionId, "csv")} download className={styles.c051}>
-          CSV
+        <button
+          onClick={onSaveManualDrafts}
+          className="px-2 py-1 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-[10px] font-semibold transition-colors"
+          title={t("manualSaveTitle")}
+        >
+          {t("manualSaveButton")}
+        </button>
+        <a
+          href={endpoints.labeling.export(sessionId, "csv")}
+          download
+          className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
+        >
+          {t("exportCsv")}
         </a>
-        <a href={endpoints.labeling.export(sessionId, "json")} download className={styles.c051}>
-          JSON
+        <a
+          href={endpoints.labeling.export(sessionId, "json")}
+          download
+          className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
+        >
+          {t("exportJson")}
         </a>
-        <div className={styles.c052}>
-          <FileAudio className={styles.c053} />
-          <span className={styles.c054}>{activeFileName}</span>
+        <div className="flex items-center gap-2">
+          <FileAudio className="w-3.5 h-3.5" />
+          <span className="font-medium text-text-secondary">{activeFileName}</span>
         </div>
       </div>
     </div>

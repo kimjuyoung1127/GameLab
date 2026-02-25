@@ -1,36 +1,8 @@
-/** 라벨링 작업 페이지: 3패널 레이아웃 (파일목록 + 스펙트로그램 + AI제안 패널). 핵심 기능. */
+/** ?쇰꺼留??묒뾽 ?섏씠吏: 3?⑤꼸 ?덉씠?꾩썐 (?뚯씪紐⑸줉 + ?ㅽ럺?몃줈洹몃옩 + AI?쒖븞 ?⑤꼸). ?듭떖 湲곕뒫. */
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  AudioLines,
-  Search,
-  MousePointer2,
-  Anchor,
-  Square,
-  ZoomIn,
-  ZoomOut,
-  SkipBack,
-  Play,
-  Pause,
-  SkipForward,
-  Lock,
-  Volume2,
-  VolumeX,
-  Sparkles,
-  X,
-  Check,
-  Filter,
-  FileAudio,
-  ChevronRight,
-  Undo2,
-  Redo2,
-  Wrench,
-  Repeat,
-  Flag,
-  BookmarkPlus,
-} from "lucide-react";
 
 import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
@@ -42,10 +14,16 @@ import { useWaveform } from "@/lib/hooks/use-waveform";
 import { useSpectrogram } from "@/lib/hooks/use-spectrogram";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { useLabelingHotkeys } from "@/lib/hooks/labeling/useLabelingHotkeys";
-import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
-import SpectrogramCanvas from "@/components/domain/labeling/SpectrogramCanvas";
 import ActionHistoryPanel from "./components/ActionHistoryPanel";
+import AnalysisPanel from "./components/AnalysisPanel";
 import BookmarksPanel from "./components/BookmarksPanel";
+import FileListPanel from "./components/FileListPanel";
+import LabelingHeader from "./components/LabelingHeader";
+import PlayerControls from "./components/PlayerControls";
+import SpectrogramPanel from "./components/SpectrogramPanel";
+import ToolBar from "./components/ToolBar";
+import { useDraftInteractions } from "./hooks/useDraftInteractions";
+import { useSuggestionInteractions } from "./hooks/useSuggestionInteractions";
 import { endpoints } from "@/lib/api/endpoints";
 import { enqueueStatusUpdate } from "@/lib/api/action-queue";
 import { authFetch } from "@/lib/api/auth-fetch";
@@ -53,7 +31,6 @@ import type {
   ActionHistoryItem,
   AudioFile,
   BookmarkType,
-  DrawTool,
   ManualDraft,
   Session,
   Suggestion,
@@ -65,9 +42,6 @@ import { useTranslations } from "next-intl";
 /*  Spectrogram helpers                                                */
 /* ------------------------------------------------------------------ */
 const MAX_FREQ = 20_000; // Hz
-const MIN_DRAFT_DURATION = 0.05; // seconds
-const MIN_DRAFT_FREQ_RANGE = 100; // Hz
-type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 function parseDurationToSeconds(dur: string): number {
   const parts = dur.split(":").map(Number);
@@ -111,38 +85,6 @@ const statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg
   rejected:  { border: "border-danger",     bg: "bg-danger",     tagBg: "bg-danger/90",     label: "text-danger",     dashed: true },
   corrected: { border: "border-cyan-400",   bg: "bg-cyan-400",   tagBg: "bg-cyan-400/90",   label: "text-cyan-400",   dashed: false },
 };
-
-/* ------------------------------------------------------------------ */
-/*  Tool definitions                                                   */
-/* ------------------------------------------------------------------ */
-const tools: { id: DrawTool; icon: typeof MousePointer2; labelKey: string; hotkey: string }[] = [
-  { id: "select", icon: MousePointer2, labelKey: "toolSelect", hotkey: "A" },
-  { id: "anchor", icon: Anchor, labelKey: "toolAnchor", hotkey: "G" },
-  { id: "box", icon: Square, labelKey: "toolBox", hotkey: "R" },
-];
-
-const zoomTools = [
-  { id: "zoom-in" as const, icon: ZoomIn, labelKey: "zoomIn" },
-  { id: "zoom-out" as const, icon: ZoomOut, labelKey: "zoomOut" },
-];
-
-/* ------------------------------------------------------------------ */
-/*  Status badge helper                                                */
-/* ------------------------------------------------------------------ */
-function StatusBadge({ status }: { status: string }) {
-  const t = useTranslations("labeling");
-  const map: Record<string, { label: string; cls: string }> = {
-    wip: { label: t("statusWip"), cls: "bg-warning/20 text-warning" },
-    pending: { label: t("statusPending"), cls: "bg-primary/20 text-primary-light" },
-    done: { label: t("statusDone"), cls: "bg-accent/20 text-accent" },
-  };
-  const info = map[status] ?? map.pending;
-  return (
-    <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${info.cls}`}>
-      {info.label}
-    </span>
-  );
-}
 
 /* ================================================================== */
 /*  MAIN PAGE COMPONENT                                                */
@@ -217,74 +159,9 @@ export default function LabelingWorkspacePage() {
   const [showFitToast, setShowFitToast] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [loopHudWarning, setLoopHudWarning] = useState(false);
-  const [isDrawingDraft, setIsDrawingDraft] = useState(false);
-  const [draftPreview, setDraftPreview] = useState<ManualDraft | null>(null);
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
-  const draftPointerRef = useRef<{ audioId: string; startTime: number; startFreq: number } | null>(null);
-  const draftUpdateRafRef = useRef<number | null>(null);
-  const pendingPreviewRef = useRef<ManualDraft | null>(null);
-  const [isDraggingDraft, setIsDraggingDraft] = useState(false);
-  const dragDraftRef = useRef<{
-    draftId: string;
-    pointerId: number;
-    pointerStartX: number;
-    pointerStartY: number;
-    startTime: number;
-    endTime: number;
-    freqLow: number;
-    freqHigh: number;
-  } | null>(null);
-  const dragRafRef = useRef<number | null>(null);
-  const pendingDragPatchRef = useRef<{ id: string; patch: Partial<ManualDraft> } | null>(null);
-  const hasMovedDraftRef = useRef(false);
-  const [isResizingDraft, setIsResizingDraft] = useState(false);
-  const resizeDraftRef = useRef<{
-    draftId: string;
-    pointerId: number;
-    handle: ResizeHandle;
-    pointerStartX: number;
-    pointerStartY: number;
-    startTime: number;
-    endTime: number;
-    freqLow: number;
-    freqHigh: number;
-  } | null>(null);
-  const resizeRafRef = useRef<number | null>(null);
-  const pendingResizePatchRef = useRef<{ id: string; patch: Partial<ManualDraft> } | null>(null);
-  const hasResizedDraftRef = useRef(false);
-
-  /* Suggestion drag/resize state (for user-created suggestions) */
-  const [isDraggingSuggestion, setIsDraggingSuggestion] = useState(false);
-  const dragSugRef = useRef<{
-    suggestionId: string;
-    pointerId: number;
-    pointerStartX: number;
-    pointerStartY: number;
-    startTime: number;
-    endTime: number;
-    freqLow: number;
-    freqHigh: number;
-  } | null>(null);
-  const dragSugRafRef = useRef<number | null>(null);
-  const pendingSugDragPatchRef = useRef<{ id: string; patch: Partial<Suggestion> } | null>(null);
-  const hasMovedSuggestionRef = useRef(false);
-  const [isResizingSuggestion, setIsResizingSuggestion] = useState(false);
-  const resizeSugRef = useRef<{
-    suggestionId: string;
-    pointerId: number;
-    handle: ResizeHandle;
-    pointerStartX: number;
-    pointerStartY: number;
-    startTime: number;
-    endTime: number;
-    freqLow: number;
-    freqHigh: number;
-  } | null>(null);
-  const resizeSugRafRef = useRef<number | null>(null);
-  const pendingSugResizePatchRef = useRef<{ id: string; patch: Partial<Suggestion> } | null>(null);
-  const hasResizedSuggestionRef = useRef(false);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -536,323 +413,60 @@ export default function LabelingWorkspacePage() {
     }
   }, [activeFileId, audioFiles, setCurrentFile]);
 
-  const handleScrubFromSpectrogram = useCallback((clientX: number) => {
-    const area = spectrogramRef.current;
-    if (!area || totalDuration <= 0) return;
-    const rect = area.getBoundingClientRect();
-    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const ratio = rect.width > 0 ? x / rect.width : 0;
-    seekTo(ratio * totalDuration, false);
-  }, [seekTo, totalDuration]);
+  const {
+    isDraggingSuggestion,
+    isResizingSuggestion,
+    handleSugDragPointerDown,
+    handleSugDragPointerMove,
+    handleSugDragPointerUp,
+    handleSugResizePointerDown,
+    handleSugResizePointerMove,
+    handleSugResizePointerUp,
+    handleDeleteSelectedSuggestion,
+  } = useSuggestionInteractions({
+    tool,
+    totalDuration,
+    snapEnabled,
+    effectiveMaxFreqRef,
+    spectrogramRef,
+    updateSuggestion,
+    selectSuggestion,
+    deleteSuggestion,
+    pushHistory,
+    suggestions,
+    selectedSuggestionId,
+    showToast,
+    t: (key) => t(key),
+    undo,
+  });
 
-  const pointerToDomain = useCallback((clientX: number, clientY: number) => {
-    const area = spectrogramRef.current;
-    if (!area || totalDuration <= 0) return null;
-    const rect = area.getBoundingClientRect();
-    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const y = Math.max(0, Math.min(clientY - rect.top, rect.height));
-    const time = (x / Math.max(rect.width, 1)) * totalDuration;
-    const mf = effectiveMaxFreqRef.current;
-    const freq = mf * (1 - y / Math.max(rect.height, 1));
-    return { time, freq };
-  }, [totalDuration]);
-
-  const handleDraftPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!activeFileId) return;
-    if (isDraggingDraft || isResizingDraft || isDraggingSuggestion || isResizingSuggestion) return;
-    if (tool !== "box") {
-      handleScrubFromSpectrogram(e.clientX);
-      return;
-    }
-    const mapped = pointerToDomain(e.clientX, e.clientY);
-    if (!mapped) return;
-    const snapTime = snapEnabled ? Math.round(mapped.time * 10) / 10 : mapped.time;
-    const snapFreq = snapEnabled ? Math.round(mapped.freq / 100) * 100 : mapped.freq;
-    const preview: ManualDraft = {
-      id: "draft-preview",
-      audioId: activeFileId,
-      label: t("manualDefaultLabel"),
-      description: t("manualDefaultDescription"),
-      startTime: snapTime,
-      endTime: snapTime + 0.05,
-      freqLow: Math.max(0, snapFreq - 100),
-      freqHigh: Math.min(effectiveMaxFreqRef.current, snapFreq + 100),
-      source: "user",
-    };
-    setDraftPreview(preview);
-    e.currentTarget.setPointerCapture(e.pointerId);
-    draftPointerRef.current = { audioId: activeFileId, startTime: snapTime, startFreq: snapFreq };
-    setIsDrawingDraft(true);
-  }, [activeFileId, isDraggingDraft, isResizingDraft, tool, handleScrubFromSpectrogram, pointerToDomain, snapEnabled, t]);
-
-  const scheduleDraftPreview = useCallback((next: ManualDraft) => {
-    pendingPreviewRef.current = next;
-    if (draftUpdateRafRef.current !== null) return;
-    draftUpdateRafRef.current = requestAnimationFrame(() => {
-      draftUpdateRafRef.current = null;
-      if (pendingPreviewRef.current) {
-        setDraftPreview(pendingPreviewRef.current);
-      }
-      pendingPreviewRef.current = null;
-    });
-  }, []);
-
-  const handleDraftPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDrawingDraft || !draftPointerRef.current) return;
-    const mapped = pointerToDomain(e.clientX, e.clientY);
-    if (!mapped) return;
-    const { audioId, startTime, startFreq } = draftPointerRef.current;
-    const curTime = snapEnabled ? Math.round(mapped.time * 10) / 10 : mapped.time;
-    const curFreq = snapEnabled ? Math.round(mapped.freq / 100) * 100 : mapped.freq;
-    scheduleDraftPreview({
-      id: "draft-preview",
-      audioId,
-      label: t("manualDefaultLabel"),
-      description: t("manualDefaultDescription"),
-      startTime: Math.min(startTime, curTime),
-      endTime: Math.max(startTime, curTime),
-      freqLow: Math.max(0, Math.min(startFreq, curFreq)),
-      freqHigh: Math.min(effectiveMaxFreqRef.current, Math.max(startFreq, curFreq)),
-      source: "user",
-    });
-  }, [isDrawingDraft, pointerToDomain, scheduleDraftPreview, snapEnabled, t]);
-
-  const handleDraftPointerUp = useCallback((e?: React.PointerEvent<HTMLDivElement>) => {
-    if (e?.currentTarget && e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-    if (draftPreview) {
-      startDraft({
-        audioId: draftPreview.audioId,
-        label: draftPreview.label,
-        description: draftPreview.description,
-        startTime: draftPreview.startTime,
-        endTime: draftPreview.endTime,
-        freqLow: draftPreview.freqLow,
-        freqHigh: draftPreview.freqHigh,
-      });
-    }
-    setDraftPreview(null);
-    draftPointerRef.current = null;
-    pendingPreviewRef.current = null;
-    setIsDrawingDraft(false);
-  }, [draftPreview, startDraft]);
-
-  const scheduleDraftMove = useCallback((id: string, patch: Partial<ManualDraft>) => {
-    hasMovedDraftRef.current = true;
-    pendingDragPatchRef.current = { id, patch };
-    if (dragRafRef.current !== null) return;
-    dragRafRef.current = requestAnimationFrame(() => {
-      dragRafRef.current = null;
-      if (!pendingDragPatchRef.current) return;
-      const { id: draftId, patch: nextPatch } = pendingDragPatchRef.current;
-      updateDraft(draftId, nextPatch);
-      pendingDragPatchRef.current = null;
-    });
-  }, [updateDraft]);
-
-  const handleDraftDragPointerDown = useCallback((
-    e: React.PointerEvent<HTMLButtonElement>,
-    draft: ManualDraft,
-  ) => {
-    if (tool !== "select" || isResizingDraft) return;
-    e.preventDefault();
-    e.stopPropagation();
-    selectDraft(draft.id);
-    if (e.currentTarget.setPointerCapture) {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
-    updateDraft(draft.id, {}, { trackHistory: true });
-    hasMovedDraftRef.current = false;
-    dragDraftRef.current = {
-      draftId: draft.id,
-      pointerId: e.pointerId,
-      pointerStartX: e.clientX,
-      pointerStartY: e.clientY,
-      startTime: draft.startTime,
-      endTime: draft.endTime,
-      freqLow: draft.freqLow,
-      freqHigh: draft.freqHigh,
-    };
-    setIsDraggingDraft(true);
-  }, [isResizingDraft, selectDraft, tool, updateDraft]);
-
-  const handleDraftDragPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = dragDraftRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    const area = spectrogramRef.current;
-    if (!area || totalDuration <= 0) return;
-    const rect = area.getBoundingClientRect();
-    const dx = e.clientX - drag.pointerStartX;
-    const dy = e.clientY - drag.pointerStartY;
-
-    const boxDuration = Math.max(0.01, drag.endTime - drag.startTime);
-    const boxFreqRange = Math.max(1, drag.freqHigh - drag.freqLow);
-    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-    const mf = effectiveMaxFreqRef.current;
-    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
-
-    const maxStart = Math.max(0, totalDuration - boxDuration);
-    let startTime = Math.max(0, Math.min(drag.startTime + timeDelta, maxStart));
-    let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, mf - boxFreqRange));
-
-    if (snapEnabled) {
-      startTime = Math.round(startTime * 10) / 10;
-      freqLow = Math.round(freqLow / 100) * 100;
-      startTime = Math.max(0, Math.min(startTime, maxStart));
-      freqLow = Math.max(0, Math.min(freqLow, mf - boxFreqRange));
-    }
-
-    const endTime = Math.min(totalDuration, startTime + boxDuration);
-    const freqHigh = Math.min(mf, freqLow + boxFreqRange);
-
-    scheduleDraftMove(drag.draftId, {
-      startTime,
-      endTime,
-      freqLow,
-      freqHigh,
-    });
-  }, [scheduleDraftMove, snapEnabled, totalDuration]);
-
-  const handleDraftDragPointerUp = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = dragDraftRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-    e.preventDefault();
-    if (hasMovedDraftRef.current) {
-      pushHistory("manual_move", "Moved manual draft");
-    }
-    pendingDragPatchRef.current = null;
-    hasMovedDraftRef.current = false;
-    dragDraftRef.current = null;
-    setIsDraggingDraft(false);
-  }, [pushHistory]);
-
-  const scheduleDraftResize = useCallback((id: string, patch: Partial<ManualDraft>) => {
-    hasResizedDraftRef.current = true;
-    pendingResizePatchRef.current = { id, patch };
-    if (resizeRafRef.current !== null) return;
-    resizeRafRef.current = requestAnimationFrame(() => {
-      resizeRafRef.current = null;
-      if (!pendingResizePatchRef.current) return;
-      const { id: draftId, patch: nextPatch } = pendingResizePatchRef.current;
-      updateDraft(draftId, nextPatch);
-      pendingResizePatchRef.current = null;
-    });
-  }, [updateDraft]);
-
-  const handleDraftResizePointerDown = useCallback((
-    e: React.PointerEvent<HTMLDivElement>,
-    draft: ManualDraft,
-    handle: ResizeHandle,
-  ) => {
-    if (tool !== "select") return;
-    e.preventDefault();
-    e.stopPropagation();
-    selectDraft(draft.id);
-    if (e.currentTarget.setPointerCapture) {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
-    updateDraft(draft.id, {}, { trackHistory: true });
-    hasResizedDraftRef.current = false;
-    resizeDraftRef.current = {
-      draftId: draft.id,
-      pointerId: e.pointerId,
-      handle,
-      pointerStartX: e.clientX,
-      pointerStartY: e.clientY,
-      startTime: draft.startTime,
-      endTime: draft.endTime,
-      freqLow: draft.freqLow,
-      freqHigh: draft.freqHigh,
-    };
-    setIsResizingDraft(true);
-  }, [selectDraft, tool, updateDraft]);
-
-  const handleDraftResizePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const resize = resizeDraftRef.current;
-    if (!resize || resize.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    const area = spectrogramRef.current;
-    if (!area || totalDuration <= 0) return;
-    const rect = area.getBoundingClientRect();
-    const dx = e.clientX - resize.pointerStartX;
-    const dy = e.clientY - resize.pointerStartY;
-    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-    const mf = effectiveMaxFreqRef.current;
-    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
-
-    let nextStart = resize.startTime;
-    let nextEnd = resize.endTime;
-    let nextLow = resize.freqLow;
-    let nextHigh = resize.freqHigh;
-
-    if (resize.handle === "nw" || resize.handle === "sw") nextStart = resize.startTime + timeDelta;
-    if (resize.handle === "ne" || resize.handle === "se") nextEnd = resize.endTime + timeDelta;
-    if (resize.handle === "nw" || resize.handle === "ne") nextHigh = resize.freqHigh + freqDelta;
-    if (resize.handle === "sw" || resize.handle === "se") nextLow = resize.freqLow + freqDelta;
-
-    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
-    nextEnd = Math.max(MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-    if (nextEnd - nextStart < MIN_DRAFT_DURATION) {
-      if (resize.handle === "nw" || resize.handle === "sw") {
-        nextStart = nextEnd - MIN_DRAFT_DURATION;
-      } else {
-        nextEnd = nextStart + MIN_DRAFT_DURATION;
-      }
-    }
-    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
-    nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-
-    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-    nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-    if (nextHigh - nextLow < MIN_DRAFT_FREQ_RANGE) {
-      if (resize.handle === "nw" || resize.handle === "ne") {
-        nextHigh = nextLow + MIN_DRAFT_FREQ_RANGE;
-      } else {
-        nextLow = nextHigh - MIN_DRAFT_FREQ_RANGE;
-      }
-    }
-    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-    nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-
-    if (snapEnabled) {
-      nextStart = Math.round(nextStart * 10) / 10;
-      nextEnd = Math.round(nextEnd * 10) / 10;
-      nextLow = Math.round(nextLow / 100) * 100;
-      nextHigh = Math.round(nextHigh / 100) * 100;
-      nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
-      nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-    }
-
-    scheduleDraftResize(resize.draftId, {
-      startTime: nextStart,
-      endTime: nextEnd,
-      freqLow: nextLow,
-      freqHigh: nextHigh,
-    });
-  }, [scheduleDraftResize, snapEnabled, totalDuration]);
-
-  const handleDraftResizePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const resize = resizeDraftRef.current;
-    if (!resize || resize.pointerId !== e.pointerId) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-    e.preventDefault();
-    if (hasResizedDraftRef.current) {
-      pushHistory("manual_resize", "Resized manual draft");
-    }
-    pendingResizePatchRef.current = null;
-    hasResizedDraftRef.current = false;
-    resizeDraftRef.current = null;
-    setIsResizingDraft(false);
-  }, [pushHistory]);
+  const {
+    draftPreview,
+    handleDraftPointerDown,
+    handleDraftPointerMove,
+    handleDraftPointerUp,
+    handleDraftDragPointerDown,
+    handleDraftDragPointerMove,
+    handleDraftDragPointerUp,
+    handleDraftResizePointerDown,
+    handleDraftResizePointerMove,
+    handleDraftResizePointerUp,
+  } = useDraftInteractions({
+    activeFileId,
+    tool,
+    totalDuration,
+    snapEnabled,
+    effectiveMaxFreqRef,
+    spectrogramRef,
+    isDraggingSuggestion,
+    isResizingSuggestion,
+    seekTo,
+    t: (key) => t(key),
+    startDraft,
+    updateDraft,
+    selectDraft,
+    pushHistory,
+  });
 
   const handleDeleteSelectedDraft = useCallback(() => {
     if (!selectedDraftId) return;
@@ -950,234 +564,6 @@ export default function LabelingWorkspacePage() {
     showToast(t("bookmarkNeedsAnalysisAdded"));
   }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
 
-  /* ----- Suggestion edit/delete handlers (user-created only) ------- */
-  const scheduleSugMove = useCallback((id: string, patch: Partial<Suggestion>) => {
-    hasMovedSuggestionRef.current = true;
-    pendingSugDragPatchRef.current = { id, patch };
-    if (dragSugRafRef.current !== null) return;
-    dragSugRafRef.current = requestAnimationFrame(() => {
-      dragSugRafRef.current = null;
-      if (!pendingSugDragPatchRef.current) return;
-      const { id: sId, patch: nextPatch } = pendingSugDragPatchRef.current;
-      updateSuggestion(sId, nextPatch);
-      pendingSugDragPatchRef.current = null;
-    });
-  }, [updateSuggestion]);
-
-  const handleSugDragPointerDown = useCallback((
-    e: React.PointerEvent<HTMLButtonElement>,
-    sug: Suggestion,
-  ) => {
-    if (tool !== "select" || isResizingSuggestion || sug.source !== "user") return;
-    e.preventDefault();
-    e.stopPropagation();
-    selectSuggestion(sug.id);
-    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
-    updateSuggestion(sug.id, {}, { trackHistory: true });
-    hasMovedSuggestionRef.current = false;
-    dragSugRef.current = {
-      suggestionId: sug.id,
-      pointerId: e.pointerId,
-      pointerStartX: e.clientX,
-      pointerStartY: e.clientY,
-      startTime: sug.startTime,
-      endTime: sug.endTime,
-      freqLow: sug.freqLow,
-      freqHigh: sug.freqHigh,
-    };
-    setIsDraggingSuggestion(true);
-  }, [isResizingSuggestion, selectSuggestion, tool, updateSuggestion]);
-
-  const handleSugDragPointerMove = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = dragSugRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    const area = spectrogramRef.current;
-    if (!area || totalDuration <= 0) return;
-    const rect = area.getBoundingClientRect();
-    const dx = e.clientX - drag.pointerStartX;
-    const dy = e.clientY - drag.pointerStartY;
-    const boxDuration = Math.max(0.01, drag.endTime - drag.startTime);
-    const boxFreqRange = Math.max(1, drag.freqHigh - drag.freqLow);
-    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-    const mf = effectiveMaxFreqRef.current;
-    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
-    const maxStart = Math.max(0, totalDuration - boxDuration);
-    let startTime = Math.max(0, Math.min(drag.startTime + timeDelta, maxStart));
-    let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, mf - boxFreqRange));
-    if (snapEnabled) {
-      startTime = Math.round(startTime * 10) / 10;
-      freqLow = Math.round(freqLow / 100) * 100;
-      startTime = Math.max(0, Math.min(startTime, maxStart));
-      freqLow = Math.max(0, Math.min(freqLow, mf - boxFreqRange));
-    }
-    const endTime = Math.min(totalDuration, startTime + boxDuration);
-    const freqHigh = Math.min(mf, freqLow + boxFreqRange);
-    scheduleSugMove(drag.suggestionId, { startTime, endTime, freqLow, freqHigh });
-  }, [scheduleSugMove, snapEnabled, totalDuration]);
-
-  const handleSugDragPointerUp = useCallback(async (e: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = dragSugRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    e.preventDefault();
-    if (hasMovedSuggestionRef.current) {
-      pushHistory("suggestion_edit", "Moved saved suggestion");
-      const sug = suggestions.find((s) => s.id === drag.suggestionId);
-      if (sug) {
-        try {
-          const res = await authFetch(endpoints.labeling.updateSuggestion(sug.id), {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ startTime: sug.startTime, endTime: sug.endTime, freqLow: sug.freqLow, freqHigh: sug.freqHigh }),
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        } catch {
-          showToast(t("suggestionEditFailed"));
-          undo();
-        }
-      }
-    }
-    pendingSugDragPatchRef.current = null;
-    hasMovedSuggestionRef.current = false;
-    dragSugRef.current = null;
-    setIsDraggingSuggestion(false);
-  }, [pushHistory, suggestions, showToast, t, undo]);
-
-  const scheduleSugResize = useCallback((id: string, patch: Partial<Suggestion>) => {
-    hasResizedSuggestionRef.current = true;
-    pendingSugResizePatchRef.current = { id, patch };
-    if (resizeSugRafRef.current !== null) return;
-    resizeSugRafRef.current = requestAnimationFrame(() => {
-      resizeSugRafRef.current = null;
-      if (!pendingSugResizePatchRef.current) return;
-      const { id: sId, patch: nextPatch } = pendingSugResizePatchRef.current;
-      updateSuggestion(sId, nextPatch);
-      pendingSugResizePatchRef.current = null;
-    });
-  }, [updateSuggestion]);
-
-  const handleSugResizePointerDown = useCallback((
-    e: React.PointerEvent<HTMLDivElement>,
-    sug: Suggestion,
-    handle: ResizeHandle,
-  ) => {
-    if (tool !== "select" || sug.source !== "user") return;
-    e.preventDefault();
-    e.stopPropagation();
-    selectSuggestion(sug.id);
-    if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
-    updateSuggestion(sug.id, {}, { trackHistory: true });
-    hasResizedSuggestionRef.current = false;
-    resizeSugRef.current = {
-      suggestionId: sug.id,
-      pointerId: e.pointerId,
-      handle,
-      pointerStartX: e.clientX,
-      pointerStartY: e.clientY,
-      startTime: sug.startTime,
-      endTime: sug.endTime,
-      freqLow: sug.freqLow,
-      freqHigh: sug.freqHigh,
-    };
-    setIsResizingSuggestion(true);
-  }, [selectSuggestion, tool, updateSuggestion]);
-
-  const handleSugResizePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const resize = resizeSugRef.current;
-    if (!resize || resize.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    const area = spectrogramRef.current;
-    if (!area || totalDuration <= 0) return;
-    const rect = area.getBoundingClientRect();
-    const dx = e.clientX - resize.pointerStartX;
-    const dy = e.clientY - resize.pointerStartY;
-    const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-    const mf = effectiveMaxFreqRef.current;
-    const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
-    let nextStart = resize.startTime;
-    let nextEnd = resize.endTime;
-    let nextLow = resize.freqLow;
-    let nextHigh = resize.freqHigh;
-    if (resize.handle === "nw" || resize.handle === "sw") nextStart = resize.startTime + timeDelta;
-    if (resize.handle === "ne" || resize.handle === "se") nextEnd = resize.endTime + timeDelta;
-    if (resize.handle === "nw" || resize.handle === "ne") nextHigh = resize.freqHigh + freqDelta;
-    if (resize.handle === "sw" || resize.handle === "se") nextLow = resize.freqLow + freqDelta;
-    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
-    nextEnd = Math.max(MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-    if (nextEnd - nextStart < MIN_DRAFT_DURATION) {
-      if (resize.handle === "nw" || resize.handle === "sw") nextStart = nextEnd - MIN_DRAFT_DURATION;
-      else nextEnd = nextStart + MIN_DRAFT_DURATION;
-    }
-    nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
-    nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-    nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-    if (nextHigh - nextLow < MIN_DRAFT_FREQ_RANGE) {
-      if (resize.handle === "nw" || resize.handle === "ne") nextHigh = nextLow + MIN_DRAFT_FREQ_RANGE;
-      else nextLow = nextHigh - MIN_DRAFT_FREQ_RANGE;
-    }
-    nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-    nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-    if (snapEnabled) {
-      nextStart = Math.round(nextStart * 10) / 10;
-      nextEnd = Math.round(nextEnd * 10) / 10;
-      nextLow = Math.round(nextLow / 100) * 100;
-      nextHigh = Math.round(nextHigh / 100) * 100;
-      nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
-      nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-    }
-    scheduleSugResize(resize.suggestionId, { startTime: nextStart, endTime: nextEnd, freqLow: nextLow, freqHigh: nextHigh });
-  }, [scheduleSugResize, snapEnabled, totalDuration]);
-
-  const handleSugResizePointerUp = useCallback(async (e: React.PointerEvent<HTMLDivElement>) => {
-    const resize = resizeSugRef.current;
-    if (!resize || resize.pointerId !== e.pointerId) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    e.preventDefault();
-    if (hasResizedSuggestionRef.current) {
-      pushHistory("suggestion_edit", "Resized saved suggestion");
-      const sug = suggestions.find((s) => s.id === resize.suggestionId);
-      if (sug) {
-        try {
-          const res = await authFetch(endpoints.labeling.updateSuggestion(sug.id), {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ startTime: sug.startTime, endTime: sug.endTime, freqLow: sug.freqLow, freqHigh: sug.freqHigh }),
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        } catch {
-          showToast(t("suggestionEditFailed"));
-          undo();
-        }
-      }
-    }
-    pendingSugResizePatchRef.current = null;
-    hasResizedSuggestionRef.current = false;
-    resizeSugRef.current = null;
-    setIsResizingSuggestion(false);
-  }, [pushHistory, suggestions, showToast, t, undo]);
-
-  const handleDeleteSelectedSuggestion = useCallback(async () => {
-    if (!selectedSuggestionId) return;
-    const sug = suggestions.find((s) => s.id === selectedSuggestionId);
-    if (!sug || sug.source !== "user") {
-      showToast(t("suggestionDeleteBlockedAI"));
-      return;
-    }
-    deleteSuggestion(selectedSuggestionId);
-    try {
-      const res = await authFetch(endpoints.labeling.deleteSuggestion(selectedSuggestionId), { method: "DELETE" });
-      if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
-      showToast(t("suggestionDeleted"));
-    } catch {
-      showToast(t("suggestionDeleteFailed"));
-      undo();
-    }
-  }, [selectedSuggestionId, suggestions, deleteSuggestion, showToast, t, undo]);
-
   const handleReplayHistory = useCallback((item: ActionHistoryItem) => {
     if (typeof item.payload?.time === "number") {
       seekTo(item.payload.time, false);
@@ -1231,14 +617,6 @@ export default function LabelingWorkspacePage() {
     player.setLoopEnabled(loopState.enabled);
   }, [loopState, player]);
 
-  useEffect(() => () => {
-    if (draftUpdateRafRef.current !== null) cancelAnimationFrame(draftUpdateRafRef.current);
-    if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
-    if (resizeRafRef.current !== null) cancelAnimationFrame(resizeRafRef.current);
-    if (dragSugRafRef.current !== null) cancelAnimationFrame(dragSugRafRef.current);
-    if (resizeSugRafRef.current !== null) cancelAnimationFrame(resizeSugRafRef.current);
-  }, []);
-
   useLabelingHotkeys({
     mode,
     setTool,
@@ -1271,1005 +649,130 @@ export default function LabelingWorkspacePage() {
   /* ================================================================ */
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-canvas text-text">
-      {/* ============================================================ */}
-      {/*  TOP HEADER BAR                                              */}
-      {/* ============================================================ */}
-      <header className="h-14 shrink-0 bg-panel border-b border-border flex items-center justify-between px-3 md:px-5 overflow-x-auto">
-        {/* Left cluster */}
-        <div className="flex items-center gap-2 md:gap-4 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <AudioLines className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-sm font-bold text-text tracking-tight hidden sm:inline">
-              {t("brandName")}
-            </span>
-          </div>
+      <LabelingHeader
+        mode={mode}
+        score={score}
+        streak={streak}
+        sessionError={sessionError}
+        suggestionError={suggestionError}
+      />
 
-          <div className="h-5 w-px bg-border-light hidden md:block" />
-
-          <span className="text-xs text-text-secondary hidden md:inline">
-            {t("project")}{" "}
-            <span className="text-text font-medium">{t("projectName")}</span>
-          </span>
-
-          <span className="text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full hidden lg:inline">
-            {t("version")}
-          </span>
-        </div>
-
-        {/* Right cluster */}
-        <div className="flex items-center gap-2 md:gap-5 shrink-0">
-          {/* Mode indicator */}
-          <div
-            className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
-              mode === "review"
-                ? "bg-accent/15 text-accent"
-                : "bg-warning/15 text-warning"
-            }`}
-          >
-            {mode} {t("mode")}
-          </div>
-
-          <div className="h-5 w-px bg-border-light hidden sm:block" />
-
-          <div className="flex items-center gap-1.5 text-xs font-bold text-warning">
-            <span className="text-base">&#127942;</span>
-            <span className="hidden sm:inline">{t("scoreLabel")}</span>
-            <span className="text-text tabular-nums">{score.toLocaleString()}</span>
-          </div>
-
-          <div className="h-5 w-px bg-border-light hidden md:block" />
-
-          <div className="hidden md:flex items-center gap-1.5 text-xs font-bold text-orange-400">
-            <span className="text-base">&#128293;</span>
-            <span>{t("streakLabel")}</span>
-            <span className="text-text tabular-nums">{streak} {t("streakUnit")}</span>
-          </div>
-
-          <div className="h-5 w-px bg-border-light hidden md:block" />
-
-          <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">
-            {t("arLabel")}
-          </div>
-        </div>
-      </header>
-      {(sessionError || suggestionError) && (
-        <div className="shrink-0 bg-danger/10 border-b border-danger/30 px-4 py-2 text-xs text-danger">
-          {sessionError ?? suggestionError}
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/*  3-PANEL BODY                                                */}
-      {/* ============================================================ */}
       <div className="flex flex-col md:flex-row flex-1 min-h-0">
-        {/* ========================================================== */}
-        {/*  LEFT PANEL - File List                                    */}
-        {/* ========================================================== */}
-        <aside className="hidden md:flex w-[280px] shrink-0 bg-panel border-r border-border flex-col">
-          {/* Search */}
-          <div className="p-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-              <input
-                type="text"
-                placeholder={t("filterPlaceholder")}
-                value={fileFilter}
-                onChange={(e) => setFileFilter(e.target.value)}
-                className="w-full bg-surface border border-border rounded-lg pl-8 pr-3 py-2 text-xs text-text placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
-              />
-            </div>
-          </div>
+        <FileListPanel
+          fileFilter={fileFilter}
+          onFileFilterChange={setFileFilter}
+          filterTab={filterTab}
+          onFilterTabChange={setFilterTab}
+          filteredFiles={filteredFiles}
+          activeFileId={activeFileId}
+          onFileClick={handleFileClick}
+          fileProgressMap={fileProgressMap}
+          dailyGoal={dailyGoal}
+          dailyProgress={dailyProgress}
+        />
 
-          {/* Filter tabs */}
-          <div className="flex px-3 gap-1 mb-1">
-            {(["all", "pending", "done"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setFilterTab(tab)}
-                className={`flex-1 text-[11px] font-semibold py-1.5 rounded-md transition-colors capitalize ${
-                  filterTab === tab
-                    ? "bg-primary/15 text-primary-light"
-                    : "text-text-muted hover:text-text-secondary hover:bg-panel-light"
-                }`}
-              >
-                {tab === "all" ? t("filterAll") : tab === "pending" ? t("filterPending") : t("filterDone")}
-              </button>
-            ))}
-          </div>
-
-          {/* File list */}
-          <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-            {filteredFiles.map((file) => {
-              const isActive = file.id === activeFileId;
-              return (
-                <button
-                  key={file.id}
-                  onClick={() => handleFileClick(file)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors relative group ${
-                    isActive
-                      ? "bg-surface border-l-2 border-l-warning"
-                      : "hover:bg-panel-light border-l-2 border-l-transparent"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileAudio className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                      <span className="text-xs font-medium text-text truncate">
-                        {file.filename}
-                      </span>
-                    </div>
-                    <StatusBadge status={file.status} />
-                  </div>
-                  <div className="flex items-center gap-3 pl-5.5">
-                    <span className="text-[10px] text-text-muted tabular-nums">
-                      {file.duration}
-                    </span>
-                    <span className="text-[10px] text-text-muted">{file.sampleRate}</span>
-                    {fileProgressMap[file.id] && (
-                      <span className="text-[10px] text-text-muted">
-                        {fileProgressMap[file.id].reviewed}/{fileProgressMap[file.id].total}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-
-            {filteredFiles.length === 0 && (
-              <div className="px-3 py-10 text-center">
-                <p className="text-xs text-text-muted">{t("emptyFiles")}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Daily Goal */}
-          <div className="p-3 border-t border-border">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-semibold text-text-secondary">{t("dailyGoal")}</span>
-              <span className={`text-[11px] font-bold ${dailyProgress >= dailyGoal ? "text-accent" : "text-primary-light"}`}>
-                {dailyProgress >= dailyGoal
-                  ? t("dailyGoalComplete")
-                  : t("dailyGoalProgress", { done: dailyProgress, goal: dailyGoal })}
-              </span>
-            </div>
-            <div className="h-1.5 bg-surface rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${dailyProgress >= dailyGoal ? "bg-accent" : "bg-primary"}`}
-                style={{
-                  width: `${Math.min((dailyProgress / dailyGoal) * 100, 100)}%`,
-                }}
-              />
-            </div>
-          </div>
-        </aside>
-
-        {/* ========================================================== */}
-        {/*  CENTER PANEL - Spectrogram Canvas                         */}
-        {/* ========================================================== */}
         <main className="flex-1 flex flex-col min-w-0 bg-canvas">
-          {/* Toolbar */}
-          <div className="h-11 shrink-0 bg-panel border-b border-border flex items-center px-3 gap-1">
-            {tools.map((toolItem) => (
-              <button
-                key={toolItem.id}
-                onClick={() => {
-                  if (toolItem.id === "anchor") {
-                    toggleSnap();
-                    return;
-                  }
-                  setTool(toolItem.id);
-                }}
-                title={`${t(toolItem.labelKey)} (${toolItem.hotkey})`}
-                className={`p-2 rounded-md transition-colors ${
-                  toolItem.id === "anchor"
-                    ? snapEnabled
-                      ? "bg-warning/20 text-warning"
-                      : "text-text-secondary hover:bg-panel-light hover:text-text"
-                    : tool === toolItem.id
-                    ? "bg-primary text-white"
-                    : "text-text-secondary hover:bg-panel-light hover:text-text"
-                }`}
-              >
-                <toolItem.icon className="w-4 h-4" />
-              </button>
-            ))}
+          <ToolBar
+            tool={tool}
+            snapEnabled={snapEnabled}
+            fitToSuggestion={fitToSuggestion}
+            onToolChange={setTool}
+            onToggleSnap={toggleSnap}
+            onToggleFit={() => setFitToSuggestion((prev) => !prev)}
+            onUndo={undo}
+            onRedo={redo}
+            onZoomLevelChange={setZoomLevel}
+            confirmedCount={confirmedCount}
+            totalCount={totalCount}
+            sessionId={sessionId}
+            activeFileName={activeFile?.filename}
+            onSaveManualDrafts={() => {
+              void handleSaveManualDrafts();
+            }}
+          />
 
-            <div className="h-5 w-px bg-border-light mx-1" />
+          <SpectrogramPanel
+            waveformData={waveformData}
+            spectrogramData={spectrogramData}
+            spectrogramLoading={spectrogramLoading}
+            player={player}
+            totalDuration={totalDuration}
+            zoomLevel={zoomLevel}
+            fileCompleteToast={fileCompleteToast}
+            isLastFile={isLastFile}
+            onDismissCompleteToast={() => setFileCompleteToast(false)}
+            effectiveMaxFreq={effectiveMaxFreq}
+            spectrogramRef={spectrogramRef}
+            tool={tool}
+            suggestions={suggestions}
+            manualDrafts={manualDrafts}
+            selectedSuggestionId={selectedSuggestionId}
+            selectedDraftId={selectedDraftId}
+            onSelectSuggestion={handleSelectSuggestion}
+            onSelectDraft={selectDraft}
+            onDraftPointerDown={handleDraftPointerDown}
+            onDraftPointerMove={handleDraftPointerMove}
+            onDraftPointerUp={handleDraftPointerUp}
+            onSuggestionDragPointerDown={handleSugDragPointerDown}
+            onSuggestionDragPointerMove={handleSugDragPointerMove}
+            onSuggestionDragPointerUp={(e) => {
+              void handleSugDragPointerUp(e);
+            }}
+            onSuggestionResizePointerDown={handleSugResizePointerDown}
+            onSuggestionResizePointerMove={handleSugResizePointerMove}
+            onSuggestionResizePointerUp={(e) => {
+              void handleSugResizePointerUp(e);
+            }}
+            onDraftDragPointerDown={handleDraftDragPointerDown}
+            onDraftDragPointerMove={handleDraftDragPointerMove}
+            onDraftDragPointerUp={handleDraftDragPointerUp}
+            onDraftResizePointerDown={handleDraftResizePointerDown}
+            onDraftResizePointerMove={handleDraftResizePointerMove}
+            onDraftResizePointerUp={handleDraftResizePointerUp}
+            suggestionBoxStyle={suggestionBoxStyle}
+            statusColors={statusColors}
+            draftPreview={draftPreview}
+            playbackPct={playbackPct}
+            formatTimecode={formatTimecode}
+            loopState={loopState}
+            bookmarks={bookmarks}
+            loopRangeLabel={loopRangeLabel}
+            fitToSuggestion={fitToSuggestion}
+            showFitToast={showFitToast}
+            loopHudWarning={loopHudWarning}
+            activeSuggestion={activeSuggestion ?? null}
+            onConfirm={handleConfirm}
+            onReject={handleReject}
+            audioLoadError={audioLoadError}
+            onRetryAudio={() => setAudioRetryKey((k) => k + 1)}
+            onSeek={seekTo}
+          />
 
-            {zoomTools.map((zt) => (
-              <button
-                key={zt.id}
-                title={t(zt.labelKey)}
-                onClick={() =>
-                  setZoomLevel((prev) =>
-                    zt.id === "zoom-in"
-                      ? Math.min(prev + 0.25, 3.0)
-                      : Math.max(prev - 0.25, 0.5),
-                  )
-                }
-                className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
-              >
-                <zt.icon className="w-4 h-4" />
-              </button>
-            ))}
-
-            <button
-              onClick={() => setFitToSuggestion((prev) => !prev)}
-              title={t("fitToSuggestion")}
-              className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
-                fitToSuggestion
-                  ? "bg-primary/20 text-primary-light"
-                  : "bg-surface text-text-muted hover:text-text-secondary"
-              }`}
-            >
-              {t("fitShort")}
-            </button>
-
-            <div className="h-5 w-px bg-border-light mx-1" />
-
-            {/* Undo / Redo */}
-            <button
-              onClick={undo}
-              title={t("undoTitle")}
-              className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
-            >
-              <Undo2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={redo}
-              title={t("redoTitle")}
-              className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
-            >
-              <Redo2 className="w-4 h-4" />
-            </button>
-
-            {/* File indicator + progress + export */}
-            <div className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
-              <span className="text-text-secondary">
-                {confirmedCount}/{totalCount} {t("tagged")}
-              </span>
-              <button
-                onClick={handleSaveManualDrafts}
-                className="px-2 py-1 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 text-[10px] font-semibold transition-colors"
-                title={t("manualSaveTitle")}
-              >
-                {t("manualSaveButton")}
-              </button>
-              <a
-                href={endpoints.labeling.export(sessionId, "csv")}
-                download
-                className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
-              >
-                {t("exportCsv")}
-              </a>
-              <a
-                href={endpoints.labeling.export(sessionId, "json")}
-                download
-                className="px-2 py-1 rounded-md bg-surface hover:bg-panel-light text-text-secondary text-[10px] font-medium transition-colors"
-              >
-                {t("exportJson")}
-              </a>
-              <div className="flex items-center gap-2">
-                <FileAudio className="w-3.5 h-3.5" />
-                <span className="font-medium text-text-secondary">
-                  {activeFile?.filename}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Spectrogram + Waveform area */}
-          <div className="flex-1 relative overflow-hidden flex flex-col">
-            {/* Waveform preview */}
-            <div className="h-20 shrink-0 bg-surface/50 border-b border-border/30 relative">
-              {waveformData ? (
-                <WaveformCanvas
-                  peaks={waveformData.peaks}
-                  currentTime={player.currentTime}
-                  duration={totalDuration}
-                  onSeek={player.canPlay ? (time) => seekTo(time, false) : () => {}}
-                />
-              ) : (
-                <div className="h-full flex items-center justify-center text-[11px] text-text-muted">
-                  {t("waveformLoading")}
-                </div>
-              )}
-            </div>
-            {audioLoadError && (
-              <div className="mx-3 mt-3 shrink-0 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger flex items-center justify-between gap-3">
-                <span>{audioLoadError}</span>
-                <button
-                  onClick={() => setAudioRetryKey((k) => k + 1)}
-                  className="px-2 py-1 rounded bg-danger/20 hover:bg-danger/30 transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {/* Spectrogram zone */}
-            <div className="flex-1 relative overflow-hidden">
-            <div
-              className="absolute inset-0 origin-top-left"
-              style={{
-                transform: zoomLevel === 1 ? undefined : `scale(${zoomLevel})`,
-                width: `${100 / zoomLevel}%`,
-                height: `${100 / zoomLevel}%`,
-              }}
-            >
-            {/* File complete toast */}
-            {fileCompleteToast && (
-              <div
-                onClick={() => setFileCompleteToast(false)}
-                className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer"
-                title="Click to dismiss"
-              >
-                <div className="bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg">
-                  <Check className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-sm font-bold">{isLastFile ? t("allFilesComplete") : t("fileComplete")}</p>
-                  <p className="text-xs opacity-80 mt-1">{isLastFile ? t("returningToSessions") : t("movingToNext")}</p>
-                </div>
-              </div>
-            )}
-            {/* Y-axis labels (dynamic based on actual Nyquist) */}
-            <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
-              {(() => {
-                const mf = effectiveMaxFreq;
-                const steps = [mf, mf * 0.75, mf * 0.5, mf * 0.25, 0];
-                return steps.map((freq) => {
-                  const label = freq >= 1000 ? `${(freq / 1000).toFixed(freq % 1000 === 0 ? 0 : 1)}kHz` : `${Math.round(freq)}Hz`;
-                  return (
-                    <span key={freq} className="text-[10px] text-text-muted/70 font-mono text-right pr-2">
-                      {label}
-                    </span>
-                  );
-                });
-              })()}
-            </div>
-
-            {/* Spectrogram display area */}
-            <div
-              ref={spectrogramRef}
-              onPointerDown={handleDraftPointerDown}
-              onPointerMove={handleDraftPointerMove}
-              onPointerUp={handleDraftPointerUp}
-              onPointerLeave={handleDraftPointerUp}
-              className={`absolute top-0 left-12 right-0 bottom-6 bg-black ${
-                tool === "box" ? "cursor-crosshair" : "cursor-pointer"
-              }`}
-            >
-              {/* Real FFT spectrogram canvas (background layer) */}
-              <SpectrogramCanvas
-                data={spectrogramData}
-                loading={spectrogramLoading}
-                className="absolute inset-0"
-              />
-              {/* Horizontal grid lines */}
-              <div className="absolute inset-0 pointer-events-none">
-                {[20, 40, 60, 80].map((pct) => (
-                  <div key={pct} className="absolute left-0 right-0 border-t border-white/10" style={{ top: `${pct}%` }} />
-                ))}
-              </div>
-              {/* Vertical grid lines */}
-              <div className="absolute inset-0 pointer-events-none">
-                {[20, 40, 60, 80].map((pct) => (
-                  <div key={pct} className="absolute top-0 bottom-0 border-l border-white/10" style={{ left: `${pct}%` }} />
-                ))}
-              </div>
-            </div>
-
-            {/* Dynamic annotation boxes from suggestions */}
-            {suggestions.map((s) => {
-              const sc = statusColors[s.status];
-              const isSelected = s.id === selectedSuggestionId;
-              const isEditable = s.source === "user";
-              const boxPos = suggestionBoxStyle(s, totalDuration, effectiveMaxFreq);
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => handleSelectSuggestion(s.id)}
-                  onPointerDown={isEditable ? (e) => handleSugDragPointerDown(e, s) : undefined}
-                  onPointerMove={isEditable ? handleSugDragPointerMove : undefined}
-                  onPointerUp={isEditable ? handleSugDragPointerUp : undefined}
-                  onPointerCancel={isEditable ? handleSugDragPointerUp : undefined}
-                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 ${
-                    sc.border
-                  } ${sc.dashed ? "border-dashed" : ""} ${
-                    isEditable ? "cursor-move" : ""
-                  } ${
-                    isSelected
-                      ? "ring-2 ring-white/30 shadow-lg shadow-white/10"
-                      : "hover:ring-1 hover:ring-white/20"
-                  }`}
-                  style={{
-                    left: `calc(48px + ${boxPos.left})`,
-                    top: boxPos.top,
-                    width: boxPos.width,
-                    height: boxPos.height,
-                    minWidth: "40px",
-                    minHeight: "20px",
-                  }}
-                >
-                  {/* Tag label */}
-                  <div className={`absolute -top-5 left-0 ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap`}>
-                    {s.status === "pending" && <Sparkles className="w-2.5 h-2.5" />}
-                    {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
-                    {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
-                    {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
-                    <span title={s.label}>{s.label.slice(0, 18)}</span>
-                    {isEditable && <span className="text-[7px] opacity-70">{t("userSuggestionTag")}</span>}
-                  </div>
-                  {/* Corner handles — decorative for AI, interactive resize for user */}
-                  {isSelected && !isEditable && (
-                    <>
-                      <div className={`absolute -top-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                      <div className={`absolute -top-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                      <div className={`absolute -bottom-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                      <div className={`absolute -bottom-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                    </>
-                  )}
-                  {isSelected && isEditable && tool === "select" && (
-                    <>
-                      <div
-                        className={`absolute -top-1.5 -left-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nwse-resize`}
-                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "nw")}
-                        onPointerMove={handleSugResizePointerMove}
-                        onPointerUp={handleSugResizePointerUp}
-                        onPointerCancel={handleSugResizePointerUp}
-                      />
-                      <div
-                        className={`absolute -top-1.5 -right-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nesw-resize`}
-                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "ne")}
-                        onPointerMove={handleSugResizePointerMove}
-                        onPointerUp={handleSugResizePointerUp}
-                        onPointerCancel={handleSugResizePointerUp}
-                      />
-                      <div
-                        className={`absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nesw-resize`}
-                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "sw")}
-                        onPointerMove={handleSugResizePointerMove}
-                        onPointerUp={handleSugResizePointerUp}
-                        onPointerCancel={handleSugResizePointerUp}
-                      />
-                      <div
-                        className={`absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nwse-resize`}
-                        onPointerDown={(e) => handleSugResizePointerDown(e, s, "se")}
-                        onPointerMove={handleSugResizePointerMove}
-                        onPointerUp={handleSugResizePointerUp}
-                        onPointerCancel={handleSugResizePointerUp}
-                      />
-                    </>
-                  )}
-                  {/* Confidence badge */}
-                  <span className="absolute -bottom-5 left-0 text-[9px] font-mono font-bold tabular-nums" style={{ color: "inherit" }}>
-                    <span className={sc.label}>{s.confidence}%</span>
-                  </span>
-                </button>
-              );
-            })}
-
-            {/* Manual draft boxes */}
-            {manualDrafts.map((draft) => {
-              const pos = suggestionBoxStyle(draft, totalDuration, effectiveMaxFreq);
-              const isSelected = draft.id === selectedDraftId;
-              return (
-                <button
-                  key={draft.id}
-                  onClick={() => selectDraft(draft.id)}
-                  onPointerDown={(e) => handleDraftDragPointerDown(e, draft)}
-                  onPointerMove={handleDraftDragPointerMove}
-                  onPointerUp={handleDraftDragPointerUp}
-                  onPointerCancel={handleDraftDragPointerUp}
-                  className={`absolute border-2 rounded-sm z-20 transition-all ${
-                    isSelected
-                      ? "border-cyan-300 bg-cyan-300/10 ring-2 ring-cyan-100/50"
-                      : "border-cyan-400/80 bg-cyan-400/10 hover:border-cyan-300"
-                  }`}
-                  style={{
-                    left: `calc(48px + ${pos.left})`,
-                    top: pos.top,
-                    width: pos.width,
-                    height: pos.height,
-                    minWidth: "18px",
-                    minHeight: "14px",
-                  }}
-                >
-                  <div className="absolute -top-5 left-0 bg-cyan-300/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap">
-                    {t("manualDraftTag")}
-                  </div>
-                  {isSelected && tool === "select" && (
-                    <>
-                      <div
-                        className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nwse-resize"
-                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "nw")}
-                        onPointerMove={handleDraftResizePointerMove}
-                        onPointerUp={handleDraftResizePointerUp}
-                        onPointerCancel={handleDraftResizePointerUp}
-                      />
-                      <div
-                        className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nesw-resize"
-                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "ne")}
-                        onPointerMove={handleDraftResizePointerMove}
-                        onPointerUp={handleDraftResizePointerUp}
-                        onPointerCancel={handleDraftResizePointerUp}
-                      />
-                      <div
-                        className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nesw-resize"
-                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "sw")}
-                        onPointerMove={handleDraftResizePointerMove}
-                        onPointerUp={handleDraftResizePointerUp}
-                        onPointerCancel={handleDraftResizePointerUp}
-                      />
-                      <div
-                        className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nwse-resize"
-                        onPointerDown={(e) => handleDraftResizePointerDown(e, draft, "se")}
-                        onPointerMove={handleDraftResizePointerMove}
-                        onPointerUp={handleDraftResizePointerUp}
-                        onPointerCancel={handleDraftResizePointerUp}
-                      />
-                    </>
-                  )}
-                </button>
-              );
-            })}
-            {draftPreview && (() => {
-              const pos = suggestionBoxStyle(draftPreview, totalDuration, effectiveMaxFreq);
-              return (
-                <div
-                  className="absolute border-2 border-cyan-200 bg-cyan-300/15 rounded-sm z-20 pointer-events-none"
-                  style={{
-                    left: `calc(48px + ${pos.left})`,
-                    top: pos.top,
-                    width: pos.width,
-                    height: pos.height,
-                    minWidth: "18px",
-                    minHeight: "14px",
-                  }}
-                />
-              );
-            })()}
-
-            {/* Playback cursor line */}
-            <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: `calc(48px + ${playbackPct}%)` }}>
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
-              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/50 text-[9px] text-white/90 font-mono whitespace-nowrap">
-                {formatTimecode(player.currentTime)}
-              </div>
-            </div>
-
-            {/* Loop markers + band */}
-            {loopState.start !== null && (
-              <div
-                className="absolute top-0 bottom-6 w-px bg-warning/80 z-30"
-                style={{ left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)` }}
-              />
-            )}
-            {loopState.end !== null && (
-              <div
-                className="absolute top-0 bottom-6 w-px bg-warning/80 z-30"
-                style={{ left: `calc(48px + ${(loopState.end / totalDuration) * 100}%)` }}
-              />
-            )}
-            {loopState.start !== null && loopState.end !== null && loopState.end > loopState.start && (
-              <div
-                className="absolute top-0 bottom-6 bg-warning/10 border-y border-warning/30 z-20 pointer-events-none"
-                style={{
-                  left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)`,
-                  width: `${((loopState.end - loopState.start) / totalDuration) * 100}%`,
-                }}
-              />
-            )}
-
-            {/* "Needs analysis" bookmark markers */}
-            {bookmarks
-              .filter((b) => b.type === "needs_analysis")
-              .map((b) => (
-                <div
-                  key={`na-${b.id}`}
-                  className="absolute top-0 bottom-6 w-0.5 bg-amber-400/60 z-25 pointer-events-none"
-                  style={{ left: `calc(48px + ${(b.time / totalDuration) * 100}%)` }}
-                  title={b.note}
-                >
-                  <Flag className="absolute -top-0.5 -left-1.5 w-3 h-3 text-amber-400" />
-                </div>
-              ))}
-
-            {/* Time axis (bottom) */}
-            <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
-              {Array.from({ length: 6 }, (_, i) => {
-                const timeVal = (totalDuration / 5) * i;
-                const m = Math.floor(timeVal / 60);
-                const sec = Math.floor(timeVal % 60);
-                return (
-                  <span key={i} className="text-[9px] text-text-muted/60 font-mono tabular-nums">
-                    {String(m).padStart(2, "0")}:{String(sec).padStart(2, "0")}
-                  </span>
-                );
-              })}
-            </div>
-
-            {/* Annotation legend */}
-            <div className="absolute top-2 right-3 z-30 flex gap-2">
-              {(["pending", "confirmed", "rejected", "corrected"] as const).map((st) => {
-                const c = statusColors[st];
-                return (
-                  <div key={st} className="flex items-center gap-1">
-                    <span className={`inline-block w-2 h-2 rounded-sm ${c.bg} ${c.dashed ? "opacity-70" : ""}`} />
-                    <span className="text-[9px] text-text-muted capitalize">{t(`legend${st.charAt(0).toUpperCase() + st.slice(1)}`)}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* State HUD */}
-            <div className="absolute top-8 right-3 z-30 rounded-lg border border-white/10 bg-black/45 backdrop-blur-sm px-2.5 py-2 text-[10px] space-y-1 min-w-[180px]">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-text-muted">{t("stateHudFit")}</span>
-                <span className={fitToSuggestion ? "text-accent font-semibold" : "text-text-secondary"}>{fitToSuggestion ? "ON" : "OFF"}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-text-muted">{t("stateHudZoom")}</span>
-                <span className="text-text-secondary font-mono">{zoomLevel.toFixed(2)}x</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-text-muted">{t("stateHudLoop")}</span>
-                <span className={`${loopState.enabled ? "text-warning" : "text-text-secondary"} font-mono`}>{loopRangeLabel}</span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-text-muted">{t("stateHudSaveTarget")}</span>
-                <span className="text-cyan-200 font-mono">
-                  {selectedDraftId ? t("stateHudSelectedDraft") : t("stateHudAllDrafts")}
-                </span>
-              </div>
-              {loopHudWarning && (
-                <p className="text-danger text-[9px]">{t("loopRequireBounds")}</p>
-              )}
-            </div>
-
-            {/* Canvas helper hints */}
-            <div className="absolute bottom-8 left-3 z-30 bg-black/55 text-[9px] text-text-muted px-2 py-1 rounded font-mono">
-              {t("clickDragSeekHint")}
-            </div>
-            {showFitToast && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-accent/90 text-white text-[10px] font-semibold px-2.5 py-1 rounded">
-                {t("autoFitApplied")}
-              </div>
-            )}
-
-            {/* Hotkey hint overlay */}
-            <div className="absolute bottom-8 right-3 z-30 flex gap-1.5">
-              {[
-                { key: "O", labelKey: "hintConfirm" },
-                { key: "X", labelKey: "hintReject" },
-                { key: "R", labelKey: "hintBox" },
-                { key: "Ctrl+Z", labelKey: "hintUndo" },
-                { key: "Ctrl+Shift+Z", labelKey: "hintRedo" },
-                { key: "Ctrl+Enter", labelKey: "hintManualSave" },
-                { key: "I/P/L", labelKey: "hintLoop" },
-                { key: "M", labelKey: "hintMark" },
-              ].map((hint) => (
-                <div
-                  key={hint.key}
-                  className="bg-black/60 backdrop-blur-sm text-[9px] text-text-muted px-1.5 py-0.5 rounded font-mono"
-                >
-                  <span className="text-text-secondary font-bold">{hint.key}</span>{" "}
-                  {t(hint.labelKey)}
-                </div>
-              ))}
-            </div>
-            </div>
-          </div>{/* /spectrogram zone */}
-          </div>{/* /spectrogram + waveform area */}
-
-          {/* Audio Player Controls */}
-          <div className="h-14 shrink-0 bg-panel border-t border-border flex items-center px-4 gap-4">
-            <div className="flex items-center gap-1">
-              <button className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
-                <SkipBack className="w-4 h-4" />
-              </button>
-              <button
-                onClick={player.toggle}
-                disabled={!player.canPlay}
-                className="p-2.5 rounded-lg bg-primary text-white hover:bg-primary-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {player.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              </button>
-              <button className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
-                <SkipForward className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="text-xs font-mono text-text-secondary tabular-nums">
-              <span className="text-text font-medium">
-                {(() => {
-                  const cur = player.currentTime;
-                  const m = Math.floor(cur / 60);
-                  const s = Math.floor(cur % 60);
-                  const ms = Math.floor((cur % 1) * 1000);
-                  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
-                })()}
-              </span>
-              <span className="mx-1 text-text-muted">/</span>
-              <span>{activeFile?.duration ?? "00:00"}</span>
-            </div>
-
-            <div className="flex-1" />
-
-            <button className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors">
-              <Lock className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={() => player.setPlaybackRate(1.0)}
-              title={t("playbackSpeedTitle")}
-              className="text-[11px] font-medium text-text-secondary bg-surface px-2 py-1 rounded-md hover:bg-panel-light transition-colors"
-            >
-              {player.playbackRate.toFixed(2)}x
-            </button>
-
-            <button
-              onClick={handleSetLoopStart}
-              className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
-              title={t("loopIn")}
-            >
-              <Flag className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={handleSetLoopEnd}
-              className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
-              title={t("loopOut")}
-            >
-              <Flag className="w-3.5 h-3.5 rotate-180" />
-            </button>
-
-            <button
-              onClick={handleToggleLoop}
-              className={`p-1.5 rounded-md transition-colors ${
-                loopState.enabled ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-secondary"
-              }`}
-              title={t("loopToggle")}
-            >
-              <Repeat className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={() => handleAddBookmark(bookmarkPresets[0])}
-              className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
-              title={t("bookmarkAdd")}
-            >
-              <BookmarkPlus className="w-3.5 h-3.5" />
-            </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => player.setVolume(player.volume > 0 ? 0 : 0.75)}
-                disabled={!player.canPlay}
-                className="p-0.5 rounded text-text-muted hover:text-text-secondary transition-colors"
-                title={player.volume > 0 ? t("mute") : t("unmute")}
-              >
-                {player.volume === 0 ? (
-                  <VolumeX className="w-4 h-4" />
-                ) : (
-                  <Volume2 className="w-4 h-4" />
-                )}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={player.volume}
-                onChange={(e) => player.setVolume(parseFloat(e.target.value))}
-                disabled={!player.canPlay}
-                className="w-20 h-1 accent-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                title={t("volumeTitle", { percent: Math.round(player.volume * 100) })}
-              />
-            </div>
-          </div>
-
-          {/* Mobile-only quick action bar */}
-          <div className="flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0">
-            <div className="text-xs text-text-muted">
-              {activeSuggestion ? (
-                <span>{t("suggestionFormat", { label: activeSuggestion.label, confidence: activeSuggestion.confidence })}</span>
-              ) : (
-                <span>{t("noSuggestionSelected")}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleConfirm}
-                disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold disabled:opacity-40"
-              >
-                <Check className="w-3.5 h-3.5" /> {t("okButton")}
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-40"
-              >
-                <X className="w-3.5 h-3.5" /> {t("ngButton")}
-              </button>
-            </div>
-          </div>
+          <PlayerControls
+            player={player}
+            activeFileDuration={activeFile?.duration}
+            loopEnabled={loopState.enabled}
+            onSetLoopStart={handleSetLoopStart}
+            onSetLoopEnd={handleSetLoopEnd}
+            onToggleLoop={handleToggleLoop}
+            onAddBookmark={handleAddBookmark}
+            bookmarkPreset={bookmarkPresets[0]}
+          />
         </main>
 
-        {/* ========================================================== */}
-        {/*  RIGHT PANEL - AI Analysis & Properties                    */}
-        {/* ========================================================== */}
-        <aside className="hidden md:flex w-[320px] shrink-0 bg-panel border-l border-border flex-col overflow-y-auto">
-          {/* ---- AI Analysis Header ---- */}
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary-light" />
-            <h2 className="text-xs font-bold text-text uppercase tracking-wider">
-              {t("aiAnalysis")}
-            </h2>
-            <div className="ml-auto flex items-center gap-1.5">
-              {pendingCount > 0 && (
-                <span className="text-[9px] font-bold bg-orange-400/20 text-orange-400 px-2 py-0.5 rounded-full">
-                  {t("pendingCount", { count: pendingCount })}
-                </span>
-              )}
-              {confirmedCount > 0 && (
-                <span className="text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full">
-                  {t("confirmedCount", { count: confirmedCount })}
-                </span>
-              )}
-              {totalCount - pendingCount - confirmedCount > 0 && (
-                <span className="text-[9px] font-bold bg-danger/20 text-danger px-2 py-0.5 rounded-full">
-                  {t("fixedCount", { count: totalCount - pendingCount - confirmedCount })}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* ---- Review Mode: Suggestion Card ---- */}
-          {mode === "review" && activeSuggestion && (
-            <div className="p-4 border-b border-border">
-              <div className="bg-surface rounded-xl p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-text">{activeSuggestion.label}</h3>
-                    <p className="text-[10px] text-text-muted mt-0.5">{t("aiDetectedAnomaly")}</p>
-                    <p className="text-[10px] text-text-muted mt-1">{t("aiActionGuide")}</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-black text-primary-light tabular-nums">
-                      {t("confidence", { confidence: activeSuggestion.confidence })}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="h-1.5 bg-panel rounded-full overflow-hidden mb-3">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all duration-500"
-                    style={{ width: `${activeSuggestion.confidence}%` }}
-                  />
-                </div>
-
-                <p className="text-[11px] text-text-secondary leading-relaxed mb-4">
-                  {activeSuggestion.description}
-                </p>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleReject}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-panel-light hover:bg-border text-danger text-xs font-semibold transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    {t("rejectButton")}
-                    <kbd className="text-[9px] text-text-muted ml-1 bg-panel px-1 rounded">X</kbd>
-                  </button>
-                  <button
-                    onClick={handleConfirm}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-accent hover:bg-accent-dark text-white text-xs font-semibold transition-colors"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    {t("confirmButton")}
-                    <kbd className="text-[9px] text-white/60 ml-1 bg-white/10 px-1 rounded">O</kbd>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ---- Edit Mode: Apply Fix Card ---- */}
-          {mode === "edit" && rejectedSuggestion && (
-            <div className="p-4 border-b border-border">
-              <div className="bg-warning/5 border border-warning/20 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Wrench className="w-4 h-4 text-warning" />
-                  <h3 className="text-sm font-bold text-warning">{t("editMode")}</h3>
-                </div>
-
-                <p className="text-[11px] text-text-secondary leading-relaxed mb-2">
-                  {t("rejectedPrefix")}<span className="text-text font-medium">{rejectedSuggestion.label}</span>
-                </p>
-                <p className="text-[11px] text-text-muted mb-4">
-                  {t("editInstruction")}
-                </p>
-
-                <button
-                  onClick={handleApplyFix}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-warning hover:bg-warning/90 text-black text-xs font-bold transition-colors"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  {t("applyFix")}
-                  <kbd className="text-[9px] text-black/50 ml-1 bg-black/10 px-1 rounded">F</kbd>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ---- No pending suggestions ---- */}
-          {mode === "review" && !activeSuggestion && (
-            <div className="p-4 border-b border-border">
-              <div className="bg-surface rounded-xl p-6 flex flex-col items-center text-center">
-                <Sparkles className="w-6 h-6 text-text-muted mb-2" />
-                <p className="text-xs text-text-muted">{t("allProcessed")}</p>
-                <p className="text-[10px] text-text-muted mt-1">
-                  {t("processedCounts", { confirmed: confirmedCount, fixed: totalCount - confirmedCount - pendingCount })}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* ---- Noise Reduction Card ---- */}
-          <div className="px-4 py-3 border-b border-border">
-            <div className="bg-surface rounded-xl p-3 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Filter className="w-4 h-4 text-primary-light" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-xs font-semibold text-text">{t("noiseReductionTitle")}</h4>
-                <p className="text-[10px] text-text-muted mt-0.5">{t("noiseReductionDesc")}</p>
-                <p className="text-[10px] text-text-muted/80 mt-0.5">{t("noiseReductionRole")}</p>
-              </div>
-              <button className="text-[11px] font-bold text-primary-light hover:text-primary transition-colors shrink-0">
-                {t("noiseReductionApply")}
-              </button>
-            </div>
-          </div>
-
-          {/* ---- Properties Section ---- */}
-          <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-3">
-              {t("properties")}
-            </h3>
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("sensorId")}</label>
-                <input type="text" value="N/A" readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("sampleRate")}</label>
-                <input type="text" value={activeFile?.sampleRate || "N/A"} readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
-              </div>
-            </div>
-            <div className="mt-2.5">
-              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("duration")}</label>
-              <input type="text" value={activeFile?.duration || "N/A"} readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
-            </div>
-            <div className="mt-2.5">
-              <label className="block text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">{t("capturedAt")}</label>
-              <input type="text" value="N/A" readOnly className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text" />
-            </div>
-          </div>
-
-          {/* ---- Notes Section ---- */}
-          <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">{t("notes")}</h3>
-            <textarea
-              placeholder={t("notesPlaceholder")}
-              rows={3}
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-text placeholder:text-text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors resize-none"
-            />
-          </div>
-
+        <AnalysisPanel
+          mode={mode}
+          activeSuggestion={activeSuggestion ?? null}
+          rejectedSuggestion={rejectedSuggestion ?? null}
+          pendingCount={pendingCount}
+          confirmedCount={confirmedCount}
+          totalCount={totalCount}
+          activeFile={activeFile}
+          onConfirm={handleConfirm}
+          onReject={handleReject}
+          onApplyFix={handleApplyFix}
+          onNextFile={handleNextFile}
+        >
           <BookmarksPanel
             bookmarks={bookmarks}
             presets={bookmarkPresets}
@@ -2286,18 +789,7 @@ export default function LabelingWorkspacePage() {
             onToggleCollapsed={() => setHistoryCollapsed((prev) => !prev)}
             undoHint={t("historyUndoHint")}
           />
-
-          {/* ---- Save & Next Button ---- */}
-          <div className="p-4 mt-auto">
-            <button
-              onClick={handleNextFile}
-              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-light text-white text-sm font-semibold py-2.5 rounded-lg transition-colors"
-            >
-              {t("saveAndNext")}
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </aside>
+        </AnalysisPanel>
       </div>
     </div>
   );

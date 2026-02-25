@@ -1,232 +1,462 @@
-/** Spectrogram area with waveform, annotation boxes, cursor and mobile actions. */
-import { Check, Sparkles, Wrench, X } from "lucide-react";
+/** Center spectrogram workspace with waveform, overlays, suggestion boxes, and draft interaction. */
+import type React from "react";
+import { Check, Flag, Sparkles, Wrench, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
+import SpectrogramCanvas from "@/components/domain/labeling/SpectrogramCanvas";
 import type { AudioPlayerState } from "@/lib/hooks/use-audio-player";
-import type { AISuggestion, SuggestionStatus, WaveformData } from "@/types";
+import type {
+  DrawTool,
+  LabelingBookmark,
+  LoopState,
+  ManualDraft,
+  Suggestion,
+  SuggestionStatus,
+  SpectrogramData,
+  WaveformData,
+} from "@/types";
+
+type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 type SpectrogramPanelProps = {
   waveformData: WaveformData | null;
+  spectrogramData: SpectrogramData | null;
+  spectrogramLoading: boolean;
   player: AudioPlayerState;
   totalDuration: number;
   zoomLevel: number;
   fileCompleteToast: boolean;
   isLastFile: boolean;
-  suggestions: AISuggestion[];
+  onDismissCompleteToast: () => void;
+  effectiveMaxFreq: number;
+  spectrogramRef: React.RefObject<HTMLDivElement | null>;
+  tool: DrawTool;
+  suggestions: Suggestion[];
+  manualDrafts: ManualDraft[];
   selectedSuggestionId: string | null;
-  selectSuggestion: (id: string | null) => void;
-  playbackPct: number;
-  activeSuggestion: AISuggestion | undefined;
-  onConfirm: () => void;
-  onReject: () => void;
-  onScrub: (time: number) => void;
-  onToggleHotkeyHelp: () => void;
-  suggestionBoxStyle: (s: AISuggestion, totalDuration: number) => {
+  selectedDraftId: string | null;
+  onSelectSuggestion: (id: string) => void;
+  onSelectDraft: (id: string) => void;
+  onDraftPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onDraftPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onDraftPointerUp: (e?: React.PointerEvent<HTMLDivElement>) => void;
+  onSuggestionDragPointerDown: (e: React.PointerEvent<HTMLButtonElement>, suggestion: Suggestion) => void;
+  onSuggestionDragPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onSuggestionDragPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onSuggestionResizePointerDown: (e: React.PointerEvent<HTMLDivElement>, suggestion: Suggestion, handle: ResizeHandle) => void;
+  onSuggestionResizePointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onSuggestionResizePointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onDraftDragPointerDown: (e: React.PointerEvent<HTMLButtonElement>, draft: ManualDraft) => void;
+  onDraftDragPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onDraftDragPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  onDraftResizePointerDown: (e: React.PointerEvent<HTMLDivElement>, draft: ManualDraft, handle: ResizeHandle) => void;
+  onDraftResizePointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onDraftResizePointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
+  suggestionBoxStyle: (s: Suggestion | ManualDraft, totalDuration: number, maxFreq: number) => {
     left: string;
     width: string;
     top: string;
     height: string;
   };
-  statusColors: Record<
-    SuggestionStatus,
-    { border: string; bg: string; tagBg: string; label: string; dashed: boolean }
-  >;
-  styles: Record<string, string>;
+  statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }>;
+  draftPreview: ManualDraft | null;
+  playbackPct: number;
+  formatTimecode: (value: number) => string;
+  loopState: LoopState;
+  bookmarks: LabelingBookmark[];
+  loopRangeLabel: string;
+  fitToSuggestion: boolean;
+  showFitToast: boolean;
+  loopHudWarning: boolean;
+  activeSuggestion: Suggestion | null;
+  onConfirm: () => void;
+  onReject: () => void;
+  audioLoadError: string | null;
+  onRetryAudio: () => void;
+  onSeek: (time: number, trackHistory?: boolean) => void;
 };
 
 export default function SpectrogramPanel({
   waveformData,
+  spectrogramData,
+  spectrogramLoading,
   player,
   totalDuration,
   zoomLevel,
   fileCompleteToast,
   isLastFile,
+  onDismissCompleteToast,
+  effectiveMaxFreq,
+  spectrogramRef,
+  tool,
   suggestions,
+  manualDrafts,
   selectedSuggestionId,
-  selectSuggestion,
+  selectedDraftId,
+  onSelectSuggestion,
+  onSelectDraft,
+  onDraftPointerDown,
+  onDraftPointerMove,
+  onDraftPointerUp,
+  onSuggestionDragPointerDown,
+  onSuggestionDragPointerMove,
+  onSuggestionDragPointerUp,
+  onSuggestionResizePointerDown,
+  onSuggestionResizePointerMove,
+  onSuggestionResizePointerUp,
+  onDraftDragPointerDown,
+  onDraftDragPointerMove,
+  onDraftDragPointerUp,
+  onDraftResizePointerDown,
+  onDraftResizePointerMove,
+  onDraftResizePointerUp,
+  suggestionBoxStyle,
+  statusColors,
+  draftPreview,
   playbackPct,
+  formatTimecode,
+  loopState,
+  bookmarks,
+  loopRangeLabel,
+  fitToSuggestion,
+  showFitToast,
+  loopHudWarning,
   activeSuggestion,
   onConfirm,
   onReject,
-  onScrub,
-  onToggleHotkeyHelp,
-  suggestionBoxStyle,
-  statusColors,
-  styles,
+  audioLoadError,
+  onRetryAudio,
+  onSeek,
 }: SpectrogramPanelProps) {
+  const t = useTranslations("labeling");
+
   return (
     <>
-      <div className={styles.c055}>
-        {waveformData && (
-          <div className={styles.c056}>
+      <div className="flex-1 relative overflow-hidden flex flex-col">
+        <div className="h-20 shrink-0 bg-surface/50 border-b border-border/30 relative">
+          {waveformData ? (
             <WaveformCanvas
               peaks={waveformData.peaks}
               currentTime={player.currentTime}
               duration={totalDuration}
-              onSeek={player.seek}
-              onScrub={onScrub}
+              onSeek={player.canPlay ? (time) => onSeek(time, false) : () => {}}
             />
+          ) : (
+            <div className="h-full flex items-center justify-center text-[11px] text-text-muted">{t("waveformLoading")}</div>
+          )}
+        </div>
+
+        {audioLoadError && (
+          <div className="mx-3 mt-3 shrink-0 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger flex items-center justify-between gap-3">
+            <span>{audioLoadError}</span>
+            <button onClick={onRetryAudio} className="px-2 py-1 rounded bg-danger/20 hover:bg-danger/30 transition-colors">
+              Retry
+            </button>
           </div>
         )}
 
-        <div
-          className={styles.c057}
-          style={zoomLevel !== 1 ? { transform: `scale(${zoomLevel})`, transformOrigin: "top left" } : undefined}
-        >
-          {fileCompleteToast && (
-            <div className={styles.c058}>
-              <div className={styles.c059}>
-                <Check className={styles.c060} />
-                <p className={styles.c061}>{isLastFile ? "All Files Complete!" : "File Complete!"}</p>
-                <p className={styles.c062}>{isLastFile ? "Returning to sessions..." : "Moving to next file..."}</p>
-              </div>
-            </div>
-          )}
-
-          <div className={styles.c063}>
-            {["20kHz", "15kHz", "10kHz", "5kHz", "0Hz"].map((label) => (
-              <span key={label} className={styles.c064}>
-                {label}
-              </span>
-            ))}
-          </div>
-
-          <div className={styles.c065}>
-            <div className={styles.c066}>
-              {[20, 40, 60, 80].map((pct) => (
-                <div key={pct} className={styles.c067} style={{ top: `${pct}%` }} />
-              ))}
-            </div>
-            <div className={styles.c066}>
-              {[20, 40, 60, 80].map((pct) => (
-                <div key={pct} className={styles.c068} style={{ left: `${pct}%` }} />
-              ))}
-            </div>
-            <div className={styles.c069} />
-            <div className={styles.c070} />
-            <div className={styles.c071} />
-            <div className={styles.c072} />
-          </div>
-
-          {suggestions.map((s) => {
-            const sc = statusColors[s.status];
-            const isSelected = s.id === selectedSuggestionId;
-            const boxPos = suggestionBoxStyle(s, totalDuration);
-            return (
-              <button
-                key={s.id}
-                onClick={() => selectSuggestion(s.id)}
-                className={`absolute border-2 rounded-sm z-20 transition-all duration-200 ${
-                  sc.border
-                } ${sc.dashed ? "border-dashed" : ""} ${
-                  isSelected
-                    ? "ring-2 ring-white/30 shadow-lg shadow-white/10"
-                    : "hover:ring-1 hover:ring-white/20"
-                }`}
-                style={{
-                  left: `calc(48px + ${boxPos.left})`,
-                  top: boxPos.top,
-                  width: boxPos.width,
-                  height: boxPos.height,
-                  minWidth: "40px",
-                  minHeight: "20px",
-                }}
+        <div className="flex-1 relative overflow-hidden">
+          <div
+            className="absolute inset-0 origin-top-left"
+            style={{
+              transform: zoomLevel === 1 ? undefined : `scale(${zoomLevel})`,
+              width: `${100 / zoomLevel}%`,
+              height: `${100 / zoomLevel}%`,
+            }}
+          >
+            {fileCompleteToast && (
+              <div
+                onClick={onDismissCompleteToast}
+                className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer"
+                title="Click to dismiss"
               >
-                <div
-                  className={`absolute -top-5 left-0 ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap`}
-                >
-                  {s.status === "pending" && <Sparkles className={styles.c073} />}
-                  {s.status === "confirmed" && <Check className={styles.c073} />}
-                  {s.status === "rejected" && <X className={styles.c073} />}
-                  {s.status === "corrected" && <Wrench className={styles.c073} />}
-                  {s.label.slice(0, 18)}
+                <div className="bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg">
+                  <Check className="w-8 h-8 mx-auto mb-2" />
+                  <p className="text-sm font-bold">{isLastFile ? t("allFilesComplete") : t("fileComplete")}</p>
+                  <p className="text-xs opacity-80 mt-1">{isLastFile ? t("returningToSessions") : t("movingToNext")}</p>
                 </div>
-                {isSelected && (
-                  <>
-                    <div className={`absolute -top-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                    <div className={`absolute -top-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                    <div className={`absolute -bottom-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                    <div className={`absolute -bottom-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
-                  </>
-                )}
-                <span className={styles.c074} style={{ color: "inherit" }}>
-                  <span className={sc.label}>{s.confidence}%</span>
-                </span>
-              </button>
-            );
-          })}
-
-          <div className={styles.c075} style={{ left: `calc(48px + ${playbackPct}%)` }}>
-            <div className={styles.c076} />
-          </div>
-
-          <div className={styles.c077}>
-            {Array.from({ length: 6 }, (_, i) => {
-              const t = (totalDuration / 5) * i;
-              const m = Math.floor(t / 60);
-              const sec = Math.floor(t % 60);
-              return (
-                <span key={i} className={styles.c078}>
-                  {String(m).padStart(2, "0")}:{String(sec).padStart(2, "0")}
-                </span>
-              );
-            })}
-          </div>
-
-          <div className={styles.c079}>
-            {(["pending", "confirmed", "rejected", "corrected"] as const).map((st) => {
-              const c = statusColors[st];
-              return (
-                <div key={st} className={styles.c080}>
-                  <span className={`inline-block w-2 h-2 rounded-sm ${c.bg} ${c.dashed ? "opacity-70" : ""}`} />
-                  <span className={styles.c081}>{st}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className={styles.c082}>
-            {[
-              { key: "O", label: "Confirm" },
-              { key: "X", label: "Reject" },
-              { key: "B", label: "Brush" },
-              { key: "R", label: "Box" },
-              { key: "^Z", label: "Undo" },
-            ].map((hint) => (
-              <div key={hint.key} className={styles.c083}>
-                <span className={styles.c084}>{hint.key}</span> {hint.label}
               </div>
-            ))}
-            <button onClick={onToggleHotkeyHelp} className={styles.c083} title="All shortcuts">
-              <span className={styles.c084}>?</span> More
-            </button>
+            )}
+
+            <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
+              {(() => {
+                const steps = [effectiveMaxFreq, effectiveMaxFreq * 0.75, effectiveMaxFreq * 0.5, effectiveMaxFreq * 0.25, 0];
+                return steps.map((freq) => {
+                  const label =
+                    freq >= 1000 ? `${(freq / 1000).toFixed(freq % 1000 === 0 ? 0 : 1)}kHz` : `${Math.round(freq)}Hz`;
+                  return (
+                    <span key={freq} className="text-[10px] text-text-muted/70 font-mono text-right pr-2">
+                      {label}
+                    </span>
+                  );
+                });
+              })()}
+            </div>
+
+            <div
+              ref={spectrogramRef}
+              onPointerDown={onDraftPointerDown}
+              onPointerMove={onDraftPointerMove}
+              onPointerUp={onDraftPointerUp}
+              onPointerLeave={onDraftPointerUp}
+              className={`absolute top-0 left-12 right-0 bottom-6 bg-black ${tool === "box" ? "cursor-crosshair" : "cursor-pointer"}`}
+            >
+              <SpectrogramCanvas data={spectrogramData} loading={spectrogramLoading} className="absolute inset-0" />
+              <div className="absolute inset-0 pointer-events-none">
+                {[20, 40, 60, 80].map((pct) => (
+                  <div key={pct} className="absolute left-0 right-0 border-t border-white/10" style={{ top: `${pct}%` }} />
+                ))}
+              </div>
+              <div className="absolute inset-0 pointer-events-none">
+                {[20, 40, 60, 80].map((pct) => (
+                  <div key={pct} className="absolute top-0 bottom-0 border-l border-white/10" style={{ left: `${pct}%` }} />
+                ))}
+              </div>
+            </div>
+
+            {suggestions.map((s) => {
+              const sc = statusColors[s.status];
+              const isSelected = s.id === selectedSuggestionId;
+              const isEditable = s.source === "user";
+              const boxPos = suggestionBoxStyle(s, totalDuration, effectiveMaxFreq);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => onSelectSuggestion(s.id)}
+                  onPointerDown={isEditable ? (e) => onSuggestionDragPointerDown(e, s) : undefined}
+                  onPointerMove={isEditable ? onSuggestionDragPointerMove : undefined}
+                  onPointerUp={isEditable ? onSuggestionDragPointerUp : undefined}
+                  onPointerCancel={isEditable ? onSuggestionDragPointerUp : undefined}
+                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 ${sc.border} ${sc.dashed ? "border-dashed" : ""} ${isEditable ? "cursor-move" : ""} ${
+                    isSelected ? "ring-2 ring-white/30 shadow-lg shadow-white/10" : "hover:ring-1 hover:ring-white/20"
+                  }`}
+                  style={{
+                    left: `calc(48px + ${boxPos.left})`,
+                    top: boxPos.top,
+                    width: boxPos.width,
+                    height: boxPos.height,
+                    minWidth: "40px",
+                    minHeight: "20px",
+                  }}
+                >
+                  <div className={`absolute -top-5 left-0 ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap`}>
+                    {s.status === "pending" && <Sparkles className="w-2.5 h-2.5" />}
+                    {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
+                    {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
+                    {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
+                    <span title={s.label}>{s.label.slice(0, 18)}</span>
+                    {isEditable && <span className="text-[7px] opacity-70">{t("userSuggestionTag")}</span>}
+                  </div>
+                  {isSelected && !isEditable && (
+                    <>
+                      <div className={`absolute -top-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                      <div className={`absolute -top-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                      <div className={`absolute -bottom-1 -left-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                      <div className={`absolute -bottom-1 -right-1 w-2 h-2 ${sc.bg} rounded-sm`} />
+                    </>
+                  )}
+                  {isSelected && isEditable && tool === "select" && (
+                    <>
+                      <div className={`absolute -top-1.5 -left-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nwse-resize`} onPointerDown={(e) => onSuggestionResizePointerDown(e, s, "nw")} onPointerMove={onSuggestionResizePointerMove} onPointerUp={onSuggestionResizePointerUp} onPointerCancel={onSuggestionResizePointerUp} />
+                      <div className={`absolute -top-1.5 -right-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nesw-resize`} onPointerDown={(e) => onSuggestionResizePointerDown(e, s, "ne")} onPointerMove={onSuggestionResizePointerMove} onPointerUp={onSuggestionResizePointerUp} onPointerCancel={onSuggestionResizePointerUp} />
+                      <div className={`absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nesw-resize`} onPointerDown={(e) => onSuggestionResizePointerDown(e, s, "sw")} onPointerMove={onSuggestionResizePointerMove} onPointerUp={onSuggestionResizePointerUp} onPointerCancel={onSuggestionResizePointerUp} />
+                      <div className={`absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-sm ${sc.bg} border border-white/40 cursor-nwse-resize`} onPointerDown={(e) => onSuggestionResizePointerDown(e, s, "se")} onPointerMove={onSuggestionResizePointerMove} onPointerUp={onSuggestionResizePointerUp} onPointerCancel={onSuggestionResizePointerUp} />
+                    </>
+                  )}
+                  <span className="absolute -bottom-5 left-0 text-[9px] font-mono font-bold tabular-nums" style={{ color: "inherit" }}>
+                    <span className={sc.label}>{s.confidence}%</span>
+                  </span>
+                </button>
+              );
+            })}
+
+            {manualDrafts.map((draft) => {
+              const pos = suggestionBoxStyle(draft, totalDuration, effectiveMaxFreq);
+              const isSelected = draft.id === selectedDraftId;
+              return (
+                <button
+                  key={draft.id}
+                  onClick={() => onSelectDraft(draft.id)}
+                  onPointerDown={(e) => onDraftDragPointerDown(e, draft)}
+                  onPointerMove={onDraftDragPointerMove}
+                  onPointerUp={onDraftDragPointerUp}
+                  onPointerCancel={onDraftDragPointerUp}
+                  className={`absolute border-2 rounded-sm z-20 transition-all ${
+                    isSelected ? "border-cyan-300 bg-cyan-300/10 ring-2 ring-cyan-100/50" : "border-cyan-400/80 bg-cyan-400/10 hover:border-cyan-300"
+                  }`}
+                  style={{
+                    left: `calc(48px + ${pos.left})`,
+                    top: pos.top,
+                    width: pos.width,
+                    height: pos.height,
+                    minWidth: "18px",
+                    minHeight: "14px",
+                  }}
+                >
+                  <div className="absolute -top-5 left-0 bg-cyan-300/90 text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm whitespace-nowrap">
+                    {t("manualDraftTag")}
+                  </div>
+                  {isSelected && tool === "select" && (
+                    <>
+                      <div className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nwse-resize" onPointerDown={(e) => onDraftResizePointerDown(e, draft, "nw")} onPointerMove={onDraftResizePointerMove} onPointerUp={onDraftResizePointerUp} onPointerCancel={onDraftResizePointerUp} />
+                      <div className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nesw-resize" onPointerDown={(e) => onDraftResizePointerDown(e, draft, "ne")} onPointerMove={onDraftResizePointerMove} onPointerUp={onDraftResizePointerUp} onPointerCancel={onDraftResizePointerUp} />
+                      <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nesw-resize" onPointerDown={(e) => onDraftResizePointerDown(e, draft, "sw")} onPointerMove={onDraftResizePointerMove} onPointerUp={onDraftResizePointerUp} onPointerCancel={onDraftResizePointerUp} />
+                      <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-sm bg-cyan-200 border border-cyan-50 cursor-nwse-resize" onPointerDown={(e) => onDraftResizePointerDown(e, draft, "se")} onPointerMove={onDraftResizePointerMove} onPointerUp={onDraftResizePointerUp} onPointerCancel={onDraftResizePointerUp} />
+                    </>
+                  )}
+                </button>
+              );
+            })}
+
+            {draftPreview && (() => {
+              const pos = suggestionBoxStyle(draftPreview, totalDuration, effectiveMaxFreq);
+              return (
+                <div
+                  className="absolute border-2 border-cyan-200 bg-cyan-300/15 rounded-sm z-20 pointer-events-none"
+                  style={{
+                    left: `calc(48px + ${pos.left})`,
+                    top: pos.top,
+                    width: pos.width,
+                    height: pos.height,
+                    minWidth: "18px",
+                    minHeight: "14px",
+                  }}
+                />
+              );
+            })()}
+
+            <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: `calc(48px + ${playbackPct}%)` }}>
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
+              <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/50 text-[9px] text-white/90 font-mono whitespace-nowrap">
+                {formatTimecode(player.currentTime)}
+              </div>
+            </div>
+
+            {loopState.start !== null && (
+              <div className="absolute top-0 bottom-6 w-px bg-warning/80 z-30" style={{ left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)` }} />
+            )}
+            {loopState.end !== null && (
+              <div className="absolute top-0 bottom-6 w-px bg-warning/80 z-30" style={{ left: `calc(48px + ${(loopState.end / totalDuration) * 100}%)` }} />
+            )}
+            {loopState.start !== null && loopState.end !== null && loopState.end > loopState.start && (
+              <div
+                className="absolute top-0 bottom-6 bg-warning/10 border-y border-warning/30 z-20 pointer-events-none"
+                style={{
+                  left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)`,
+                  width: `${((loopState.end - loopState.start) / totalDuration) * 100}%`,
+                }}
+              />
+            )}
+
+            {bookmarks
+              .filter((b) => b.type === "needs_analysis")
+              .map((b) => (
+                <div
+                  key={`na-${b.id}`}
+                  className="absolute top-0 bottom-6 w-0.5 bg-amber-400/60 z-25 pointer-events-none"
+                  style={{ left: `calc(48px + ${(b.time / totalDuration) * 100}%)` }}
+                  title={b.note}
+                >
+                  <Flag className="absolute -top-0.5 -left-1.5 w-3 h-3 text-amber-400" />
+                </div>
+              ))}
+
+            <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
+              {Array.from({ length: 6 }, (_, i) => {
+                const timeVal = (totalDuration / 5) * i;
+                const m = Math.floor(timeVal / 60);
+                const sec = Math.floor(timeVal % 60);
+                return (
+                  <span key={i} className="text-[9px] text-text-muted/60 font-mono tabular-nums">
+                    {String(m).padStart(2, "0")}:{String(sec).padStart(2, "0")}
+                  </span>
+                );
+              })}
+            </div>
+
+            <div className="absolute top-2 right-3 z-30 flex gap-2">
+              {(["pending", "confirmed", "rejected", "corrected"] as const).map((st) => {
+                const c = statusColors[st];
+                return (
+                  <div key={st} className="flex items-center gap-1">
+                    <span className={`inline-block w-2 h-2 rounded-sm ${c.bg} ${c.dashed ? "opacity-70" : ""}`} />
+                    <span className="text-[9px] text-text-muted capitalize">{t(`legend${st.charAt(0).toUpperCase() + st.slice(1)}`)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="absolute top-8 right-3 z-30 rounded-lg border border-white/10 bg-black/45 backdrop-blur-sm px-2.5 py-2 text-[10px] space-y-1 min-w-[180px]">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudFit")}</span>
+                <span className={fitToSuggestion ? "text-accent font-semibold" : "text-text-secondary"}>{fitToSuggestion ? "ON" : "OFF"}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudZoom")}</span>
+                <span className="text-text-secondary font-mono">{zoomLevel.toFixed(2)}x</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudLoop")}</span>
+                <span className={`${loopState.enabled ? "text-warning" : "text-text-secondary"} font-mono`}>{loopRangeLabel}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-text-muted">{t("stateHudSaveTarget")}</span>
+                <span className="text-cyan-200 font-mono">{selectedDraftId ? t("stateHudSelectedDraft") : t("stateHudAllDrafts")}</span>
+              </div>
+              {loopHudWarning && <p className="text-danger text-[9px]">{t("loopRequireBounds")}</p>}
+            </div>
+
+            <div className="absolute bottom-8 left-3 z-30 bg-black/55 text-[9px] text-text-muted px-2 py-1 rounded font-mono">
+              {t("clickDragSeekHint")}
+            </div>
+            {showFitToast && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-accent/90 text-white text-[10px] font-semibold px-2.5 py-1 rounded">
+                {t("autoFitApplied")}
+              </div>
+            )}
+
+            <div className="absolute bottom-8 right-3 z-30 flex gap-1.5">
+              {[
+                { key: "O", labelKey: "hintConfirm" },
+                { key: "X", labelKey: "hintReject" },
+                { key: "R", labelKey: "hintBox" },
+                { key: "Ctrl+Z", labelKey: "hintUndo" },
+                { key: "Ctrl+Shift+Z", labelKey: "hintRedo" },
+                { key: "Ctrl+Enter", labelKey: "hintManualSave" },
+                { key: "I/P/L", labelKey: "hintLoop" },
+                { key: "M", labelKey: "hintMark" },
+              ].map((hint) => (
+                <div key={hint.key} className="bg-black/60 backdrop-blur-sm text-[9px] text-text-muted px-1.5 py-0.5 rounded font-mono">
+                  <span className="text-text-secondary font-bold">{hint.key}</span> {t(hint.labelKey)}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className={styles.c094}>
-        <div className={styles.c037}>
+      <div className="flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0">
+        <div className="text-xs text-text-muted">
           {activeSuggestion ? (
-            <span>
-              <span className={styles.c095}>{activeSuggestion.label}</span> | {activeSuggestion.confidence}%
-            </span>
+            <span>{t("suggestionFormat", { label: activeSuggestion.label, confidence: activeSuggestion.confidence })}</span>
           ) : (
-            <span>No suggestion selected</span>
+            <span>{t("noSuggestionSelected")}</span>
           )}
         </div>
-        <div className={styles.c052}>
+        <div className="flex items-center gap-2">
           <button
             onClick={onConfirm}
             disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
-            className={styles.c096}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold disabled:opacity-40"
           >
-            <Check className={styles.c053} /> OK
+            <Check className="w-3.5 h-3.5" /> {t("okButton")}
           </button>
           <button
             onClick={onReject}
             disabled={!activeSuggestion || activeSuggestion.status !== "pending"}
-            className={styles.c097}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-danger text-white text-xs font-bold disabled:opacity-40"
           >
-            <X className={styles.c053} /> NG
+            <X className="w-3.5 h-3.5" /> {t("ngButton")}
           </button>
         </div>
       </div>

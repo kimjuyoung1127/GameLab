@@ -19,6 +19,31 @@ export default function SpectrogramCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const offscreenRef = useRef<HTMLCanvasElement | null>(null);
 
+  function drawToCanvas() {
+    const canvas = canvasRef.current;
+    const offscreen = offscreenRef.current;
+    if (!canvas || !offscreen) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Smooth scaling for spectrogram (bicubic-like interpolation)
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+
+    // Draw the offscreen spectrogram scaled to fill the display canvas
+    ctx.drawImage(offscreen, 0, 0, w, h);
+  }
+
   useEffect(() => {
     if (!data) return;
 
@@ -44,31 +69,6 @@ export default function SpectrogramCanvas({
     observer.observe(canvas);
     return () => observer.disconnect();
   }, [data]);
-
-  function drawToCanvas() {
-    const canvas = canvasRef.current;
-    const offscreen = offscreenRef.current;
-    if (!canvas || !offscreen) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
-
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    ctx.scale(dpr, dpr);
-
-    // Smooth scaling for spectrogram (bicubic-like interpolation)
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-
-    // Draw the offscreen spectrogram scaled to fill the display canvas
-    ctx.drawImage(offscreen, 0, 0, w, h);
-  }
 
   return (
     <div className={`relative ${className}`}>

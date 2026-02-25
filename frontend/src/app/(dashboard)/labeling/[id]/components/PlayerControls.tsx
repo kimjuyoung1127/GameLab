@@ -1,11 +1,20 @@
-/** Bottom player controls for transport, time, speed and volume. */
-import { Lock, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+/** Bottom player controls with transport, loop/bookmark actions, and volume. */
+import { BookmarkPlus, Flag, Lock, Pause, Play, Repeat, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import { useTranslations } from "next-intl";
+import type { BookmarkType } from "@/types";
 import type { AudioPlayerState } from "@/lib/hooks/use-audio-player";
+
+type BookmarkPreset = { type: BookmarkType; label: string; note: string };
 
 type PlayerControlsProps = {
   player: AudioPlayerState;
   activeFileDuration?: string;
-  styles: Record<string, string>;
+  loopEnabled: boolean;
+  onSetLoopStart: () => void;
+  onSetLoopEnd: () => void;
+  onToggleLoop: () => void;
+  onAddBookmark: (preset: BookmarkPreset) => void;
+  bookmarkPreset: BookmarkPreset;
 };
 
 function formatTime(currentTime: number): string {
@@ -15,48 +24,88 @@ function formatTime(currentTime: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
 }
 
-export default function PlayerControls({ player, activeFileDuration, styles }: PlayerControlsProps) {
+export default function PlayerControls({
+  player,
+  activeFileDuration,
+  loopEnabled,
+  onSetLoopStart,
+  onSetLoopEnd,
+  onToggleLoop,
+  onAddBookmark,
+  bookmarkPreset,
+}: PlayerControlsProps) {
+  const t = useTranslations("labeling");
+
   return (
-    <div className={styles.c085}>
-      <div className={styles.c080}>
-        <button className={styles.c048}>
-          <SkipBack className={styles.c046} />
+    <div className="h-14 shrink-0 bg-panel border-t border-border flex items-center px-4 gap-4">
+      <div className="flex items-center gap-1">
+        <button className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
+          <SkipBack className="w-4 h-4" />
         </button>
-        <button onClick={player.toggle} className={styles.c086}>
-          {player.isPlaying ? <Pause className={styles.c046} /> : <Play className={styles.c046} />}
+        <button
+          onClick={player.toggle}
+          disabled={!player.canPlay}
+          className="p-2.5 rounded-lg bg-primary text-white hover:bg-primary-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {player.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
-        <button className={styles.c048}>
-          <SkipForward className={styles.c046} />
+        <button className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
+          <SkipForward className="w-4 h-4" />
         </button>
       </div>
 
-      <div className={styles.c087}>
-        <span className={styles.c010}>{formatTime(player.currentTime)}</span>
-        <span className={styles.c088}>/</span>
+      <div className="text-xs font-mono text-text-secondary tabular-nums">
+        <span className="text-text font-medium">{formatTime(player.currentTime)}</span>
+        <span className="mx-1 text-text-muted">/</span>
         <span>{activeFileDuration ?? "00:00"}</span>
       </div>
 
-      <div className={styles.c089} />
+      <div className="flex-1" />
 
-      <button className={styles.c090}>
-        <Lock className={styles.c053} />
+      <button className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors">
+        <Lock className="w-3.5 h-3.5" />
       </button>
 
       <button
         onClick={() => player.setPlaybackRate(1.0)}
-        className={styles.c091}
-        title="Playback speed ([ / ] to adjust, click to reset)"
+        title={t("playbackSpeedTitle")}
+        className="text-[11px] font-medium text-text-secondary bg-surface px-2 py-1 rounded-md hover:bg-panel-light transition-colors"
       >
-        {player.playbackRate.toFixed(2).replace(/\.?0+$/, "")}x
+        {player.playbackRate.toFixed(2)}x
       </button>
 
-      <div className={styles.c052}>
+      <button onClick={onSetLoopStart} className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors" title={t("loopIn")}>
+        <Flag className="w-3.5 h-3.5" />
+      </button>
+
+      <button onClick={onSetLoopEnd} className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors" title={t("loopOut")}>
+        <Flag className="w-3.5 h-3.5 rotate-180" />
+      </button>
+
+      <button
+        onClick={onToggleLoop}
+        className={`p-1.5 rounded-md transition-colors ${loopEnabled ? "text-accent bg-accent/10" : "text-text-muted hover:text-text-secondary"}`}
+        title={t("loopToggle")}
+      >
+        <Repeat className="w-3.5 h-3.5" />
+      </button>
+
+      <button
+        onClick={() => onAddBookmark(bookmarkPreset)}
+        className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
+        title={t("bookmarkAdd")}
+      >
+        <BookmarkPlus className="w-3.5 h-3.5" />
+      </button>
+
+      <div className="flex items-center gap-2">
         <button
           onClick={() => player.setVolume(player.volume > 0 ? 0 : 0.75)}
-          className={styles.c092}
-          title={player.volume > 0 ? "Mute" : "Unmute"}
+          disabled={!player.canPlay}
+          className="p-0.5 rounded text-text-muted hover:text-text-secondary transition-colors"
+          title={player.volume > 0 ? t("mute") : t("unmute")}
         >
-          {player.volume === 0 ? <VolumeX className={styles.c046} /> : <Volume2 className={styles.c046} />}
+          {player.volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
         <input
           type="range"
@@ -65,8 +114,9 @@ export default function PlayerControls({ player, activeFileDuration, styles }: P
           step={0.01}
           value={player.volume}
           onChange={(e) => player.setVolume(parseFloat(e.target.value))}
-          className={styles.c093}
-          title={`Volume: ${Math.round(player.volume * 100)}%`}
+          disabled={!player.canPlay}
+          className="w-20 h-1 accent-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          title={t("volumeTitle", { percent: Math.round(player.volume * 100) })}
         />
       </div>
     </div>
