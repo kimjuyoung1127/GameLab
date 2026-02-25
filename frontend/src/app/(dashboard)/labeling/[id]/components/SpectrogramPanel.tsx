@@ -57,12 +57,15 @@ type SpectrogramPanelProps = {
   onDraftResizePointerDown: (e: React.PointerEvent<HTMLDivElement>, draft: ManualDraft, handle: ResizeHandle) => void;
   onDraftResizePointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
   onDraftResizePointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
-  suggestionBoxStyle: (s: Suggestion | ManualDraft, totalDuration: number, maxFreq: number) => {
+  suggestionBoxStyle: (s: Suggestion | ManualDraft, totalDuration: number, freqMin: number, freqMax: number) => {
     left: string;
     width: string;
     top: string;
     height: string;
   };
+  freqMin: number;
+  freqMax: number;
+  onFreqRangeChange: (min: number, max: number) => void;
   statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }>;
   draftPreview: ManualDraft | null;
   playbackPct: number;
@@ -134,6 +137,9 @@ export default function SpectrogramPanel({
   onRetryAudio,
   onSeek,
   highlightedBookmarkId,
+  freqMin,
+  freqMax,
+  onFreqRangeChange,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
 
@@ -211,19 +217,44 @@ export default function SpectrogramPanel({
               </div>
             )}
 
-            <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10 pointer-events-none">
+            <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10">
               {(() => {
-                const steps = [effectiveMaxFreq, effectiveMaxFreq * 0.75, effectiveMaxFreq * 0.5, effectiveMaxFreq * 0.25, 0];
-                return steps.map((freq) => {
+                const range = freqMax - freqMin;
+                const steps = [freqMax, freqMin + range * 0.75, freqMin + range * 0.5, freqMin + range * 0.25, freqMin];
+                return steps.map((freq, i) => {
                   const label =
                     freq >= 1000 ? `${(freq / 1000).toFixed(freq % 1000 === 0 ? 0 : 1)}kHz` : `${Math.round(freq)}Hz`;
                   return (
-                    <span key={freq} className="text-[10px] text-text-muted/70 font-mono text-right pr-2">
+                    <span key={i} className="text-[10px] text-text-muted/70 font-mono text-right pr-2 pointer-events-none">
                       {label}
                     </span>
                   );
                 });
               })()}
+              {/* Frequency range preset buttons */}
+              <div className="absolute -left-0.5 bottom-0 translate-y-full pt-1 flex flex-col gap-0.5 pointer-events-auto z-20">
+                {([
+                  { label: t("freqPresetFull"), min: 0, max: effectiveMaxFreq },
+                  { label: t("freqPresetLow"), min: 0, max: 5000 },
+                  { label: t("freqPresetMid"), min: 1000, max: 8000 },
+                  { label: t("freqPresetHigh"), min: 5000, max: effectiveMaxFreq },
+                ] as const).map((preset) => {
+                  const active = freqMin === preset.min && freqMax === preset.max;
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() => onFreqRangeChange(preset.min, Math.min(preset.max, effectiveMaxFreq))}
+                      className={`px-1.5 py-0.5 rounded text-[8px] font-mono transition-colors ${
+                        active
+                          ? "bg-primary/30 text-primary-light"
+                          : "bg-surface/80 text-text-muted hover:bg-panel-light hover:text-text-secondary"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div
@@ -251,7 +282,7 @@ export default function SpectrogramPanel({
               const sc = statusColors[s.status];
               const isSelected = s.id === selectedSuggestionId;
               const isEditable = s.source === "user";
-              const boxPos = suggestionBoxStyle(s, totalDuration, effectiveMaxFreq);
+              const boxPos = suggestionBoxStyle(s, totalDuration, freqMin, freqMax);
               return (
                 <button
                   key={s.id}
@@ -304,7 +335,7 @@ export default function SpectrogramPanel({
             })}
 
             {manualDrafts.map((draft) => {
-              const pos = suggestionBoxStyle(draft, totalDuration, effectiveMaxFreq);
+              const pos = suggestionBoxStyle(draft, totalDuration, freqMin, freqMax);
               const isSelected = draft.id === selectedDraftId;
               return (
                 <button
@@ -342,7 +373,7 @@ export default function SpectrogramPanel({
             })}
 
             {draftPreview && (() => {
-              const pos = suggestionBoxStyle(draftPreview, totalDuration, effectiveMaxFreq);
+              const pos = suggestionBoxStyle(draftPreview, totalDuration, freqMin, freqMax);
               return (
                 <div
                   className="absolute border-2 border-cyan-200 bg-cyan-300/15 rounded-sm z-20 pointer-events-none"

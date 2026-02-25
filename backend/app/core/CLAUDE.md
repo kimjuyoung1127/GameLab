@@ -16,9 +16,8 @@ Pydantic `BaseSettings`를 상속하며, `.env` 파일에서 값을 로드한다
 | `supabase_url` | `str` | Supabase 프로젝트 URL |
 | `supabase_anon_key` | `str` | Supabase anon 키 |
 | `allowed_origins` | `list[str]` | CORS 허용 오리진 |
-| `public_file_base_url` | `str` | 파일 공개 URL 접두어 |
 | `max_file_size_mb` | `int` | 최대 파일 크기(MB) |
-| `upload_dir` | `str` | 업로드 저장 경로 |
+| `temp_upload_dir` | `str` | 분석용 임시 업로드 경로 (분석 후 삭제) |
 | `allowed_extensions` | `list[str]` | 허용 파일 확장자 |
 | `analysis_engine` | `str` | 분석 엔진 이름 |
 | `analysis_timeout_sec` | `int` | 분석 타임아웃(초) |

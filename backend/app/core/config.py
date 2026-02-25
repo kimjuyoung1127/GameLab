@@ -7,9 +7,8 @@ class Settings(BaseSettings):
     supabase_anon_key: str
     supabase_service_role_key: str | None = None
     allowed_origins: str = "http://localhost:3000"
-    public_file_base_url: str = "http://localhost:8000"
     max_file_size_mb: int = 1024
-    upload_dir: str = "./uploads"
+    temp_upload_dir: str = "./temp_uploads"
     allowed_extensions: list[str] = [".wav", ".m4a", ".mp3"]
     analysis_engine: str = "soundlab_v57"
     analysis_timeout_sec: int = 120

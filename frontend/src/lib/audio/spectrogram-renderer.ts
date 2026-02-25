@@ -11,6 +11,10 @@ export interface SpectrogramOptions {
   sampleRate: number;
   /** 최대 프레임 수 (대용량 보호) */
   maxFrames: number;
+  /** 표시 주파수 하한 Hz (기본: 0) */
+  freqMin?: number;
+  /** 표시 주파수 상한 Hz (기본: sampleRate/2) */
+  freqMax?: number;
 }
 
 export const DEFAULT_OPTIONS: Omit<SpectrogramOptions, "sampleRate"> = {
@@ -113,9 +117,20 @@ function fft(re: Float64Array, im: Float64Array): void {
 export function computeSpectrogram(
   channelData: Float32Array,
   options: SpectrogramOptions,
-): { imageData: Uint8ClampedArray; width: number; height: number } {
-  const { fftSize, hopSize, windowFn, minDb, maxDb, maxFrames } = options;
-  const freqBins = fftSize >> 1; // fftSize / 2
+): { imageData: Uint8ClampedArray; width: number; height: number; binMin: number; binMax: number } {
+  const { fftSize, hopSize, windowFn, minDb, maxDb, maxFrames, sampleRate } = options;
+  const totalBins = fftSize >> 1; // fftSize / 2
+  const nyquist = sampleRate / 2;
+
+  // Frequency range slicing: map Hz to bin indices
+  const fMin = options.freqMin ?? 0;
+  const fMax = options.freqMax ?? nyquist;
+  const binMin = Math.max(0, Math.floor((fMin / nyquist) * totalBins));
+  const binMax = Math.min(totalBins, Math.ceil((fMax / nyquist) * totalBins));
+  const slicedBins = binMax - binMin;
+  if (slicedBins <= 0) {
+    return { imageData: new Uint8ClampedArray(0), width: 0, height: 0, binMin, binMax };
+  }
 
   // Calculate number of frames
   let numFrames = Math.floor((channelData.length - fftSize) / hopSize) + 1;
@@ -132,8 +147,8 @@ export function computeSpectrogram(
   const re = new Float64Array(fftSize);
   const im = new Float64Array(fftSize);
 
-  // Output: RGBA for each pixel (width=numFrames, height=freqBins)
-  const pixels = new Uint8ClampedArray(numFrames * freqBins * 4);
+  // Output: RGBA for each pixel (width=numFrames, height=slicedBins)
+  const pixels = new Uint8ClampedArray(numFrames * slicedBins * 4);
 
   for (let frame = 0; frame < numFrames; frame++) {
     const offset = frame * effectiveHop;
@@ -147,14 +162,14 @@ export function computeSpectrogram(
 
     fft(re, im);
 
-    // Convert to dB magnitude and map to color
-    for (let bin = 0; bin < freqBins; bin++) {
+    // Convert to dB magnitude and map to color (only for selected frequency range)
+    for (let bin = binMin; bin < binMax; bin++) {
       const mag = Math.sqrt(re[bin] * re[bin] + im[bin] * im[bin]);
       const db = mag > 0 ? 20 * Math.log10(mag) : minDb;
       const color = dbToColor(db, minDb, maxDb);
 
-      // Y-axis: row 0 = highest frequency, row (freqBins-1) = lowest frequency
-      const row = freqBins - 1 - bin;
+      // Y-axis: row 0 = highest frequency in range, row (slicedBins-1) = lowest
+      const row = (binMax - 1 - bin);
       const pixelIdx = (row * numFrames + frame) * 4;
       pixels[pixelIdx] = color[0];
       pixels[pixelIdx + 1] = color[1];
@@ -163,5 +178,5 @@ export function computeSpectrogram(
     }
   }
 
-  return { imageData: pixels, width: numFrames, height: freqBins };
+  return { imageData: pixels, width: numFrames, height: slicedBins, binMin, binMax };
 }

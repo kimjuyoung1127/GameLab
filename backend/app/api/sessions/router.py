@@ -1,12 +1,10 @@
-"""세션 API: 세션 목록 조회, 파일 조회, 세션 삭제 (cascade)."""
+"""세션 API: 세션 목록 조회, 파일 조회, 세션 삭제 (cascade + Supabase Storage 클린업)."""
 import logging
-import os
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from app.core.auth import CurrentUser, get_current_user, get_optional_current_user
 from app.models.sessions import SessionResponse, AudioFileResponse
 from app.core.supabase_client import supabase
-from app.core.config import settings
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 logger = logging.getLogger(__name__)
@@ -83,7 +81,7 @@ async def delete_session(
     2. Delete suggestions for those audio files
     3. Delete audio files
     4. Delete the session
-    5. Remove disk files
+    5. Remove files from Supabase Storage
     """
     try:
         # Step 0: Verify session exists and check ownership
@@ -122,18 +120,19 @@ async def delete_session(
         # Step 4: Delete session
         supabase.table("sst_sessions").delete().eq("id", session_id).execute()
 
-        # Step 5: Remove disk files
+        # Step 5: Remove files from Supabase Storage
+        storage_keys = []
         for fr in file_rows:
             audio_url = fr.get("audio_url", "")
-            if audio_url and "/uploads/" in audio_url:
-                url_path = audio_url.split("/uploads/")[-1]
-                if url_path:
-                    disk_path = os.path.join(settings.upload_dir, url_path)
-                    if os.path.exists(disk_path):
-                        try:
-                            os.remove(disk_path)
-                        except Exception:
-                            logger.warning("Failed to remove disk file: %s", disk_path)
+            if audio_url and "/sst-audio/" in audio_url:
+                key = audio_url.split("/sst-audio/")[-1]
+                if key:
+                    storage_keys.append(key)
+        if storage_keys:
+            try:
+                supabase.storage.from_("sst-audio").remove(storage_keys)
+            except Exception:
+                logger.warning("Failed to remove storage files: %s", storage_keys)
 
     except HTTPException:
         raise

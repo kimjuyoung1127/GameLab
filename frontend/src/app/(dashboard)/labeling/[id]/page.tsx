@@ -71,11 +71,17 @@ function normalizeAudioUrl(url: string | undefined): string | null {
   }
 }
 
-function suggestionBoxStyle(s: Suggestion | ManualDraft, totalDuration: number, maxFreq = MAX_FREQ) {
+function suggestionBoxStyle(
+  s: Suggestion | ManualDraft,
+  totalDuration: number,
+  fMin = 0,
+  fMax = MAX_FREQ,
+) {
   const leftPct = (s.startTime / totalDuration) * 100;
   const widthPct = ((s.endTime - s.startTime) / totalDuration) * 100;
-  const topPct = ((maxFreq - s.freqHigh) / maxFreq) * 100;
-  const heightPct = ((s.freqHigh - s.freqLow) / maxFreq) * 100;
+  const range = fMax - fMin || 1;
+  const topPct = Math.max(0, ((fMax - s.freqHigh) / range) * 100);
+  const heightPct = Math.min(100 - topPct, ((s.freqHigh - s.freqLow) / range) * 100);
   return { left: `${leftPct}%`, width: `${widthPct}%`, top: `${topPct}%`, height: `${heightPct}%` };
 }
 
@@ -161,6 +167,8 @@ export default function LabelingWorkspacePage() {
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [loopHudWarning, setLoopHudWarning] = useState(false);
   const [highlightedBookmarkId, setHighlightedBookmarkId] = useState<string | null>(null);
+  const [freqMin, setFreqMin] = useState(0);
+  const [freqMax, setFreqMax] = useState(MAX_FREQ);
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
@@ -176,7 +184,7 @@ export default function LabelingWorkspacePage() {
   const audioUrl: string | null = normalizeAudioUrl(activeFile?.audioUrl);
   const player = useAudioPlayer(audioUrl, parsedDuration, audioRetryKey);
   const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey);
-  const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData);
+  const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData, freqMin, freqMax);
   const audioLoadError = player.error ?? waveformError;
 
   // Dynamic max frequency from spectrogram (Nyquist), fallback to 20kHz
@@ -760,6 +768,9 @@ export default function LabelingWorkspacePage() {
             onDraftResizePointerMove={handleDraftResizePointerMove}
             onDraftResizePointerUp={handleDraftResizePointerUp}
             suggestionBoxStyle={suggestionBoxStyle}
+            freqMin={freqMin}
+            freqMax={freqMax}
+            onFreqRangeChange={(min, max) => { setFreqMin(min); setFreqMax(max); }}
             statusColors={statusColors}
             draftPreview={draftPreview}
             playbackPct={playbackPct}

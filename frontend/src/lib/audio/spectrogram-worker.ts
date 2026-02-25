@@ -11,6 +11,10 @@ export interface SpectrogramWorkerInput {
   minDb?: number;
   maxDb?: number;
   maxFrames?: number;
+  /** 표시 주파수 하한 Hz */
+  freqMin?: number;
+  /** 표시 주파수 상한 Hz */
+  freqMax?: number;
 }
 
 export interface SpectrogramWorkerOutput {
@@ -21,6 +25,10 @@ export interface SpectrogramWorkerOutput {
   maxFrequency: number;
   sampleRate: number;
   duration: number;
+  /** Actual rendered frequency range lower bound Hz */
+  freqMin: number;
+  /** Actual rendered frequency range upper bound Hz */
+  freqMax: number;
 }
 
 self.onmessage = (e: MessageEvent<SpectrogramWorkerInput>) => {
@@ -33,8 +41,11 @@ self.onmessage = (e: MessageEvent<SpectrogramWorkerInput>) => {
     minDb = DEFAULT_OPTIONS.minDb,
     maxDb = DEFAULT_OPTIONS.maxDb,
     maxFrames = DEFAULT_OPTIONS.maxFrames,
+    freqMin,
+    freqMax,
   } = e.data;
 
+  const nyquist = sampleRate / 2;
   const result = computeSpectrogram(channelData, {
     fftSize,
     hopSize,
@@ -43,15 +54,24 @@ self.onmessage = (e: MessageEvent<SpectrogramWorkerInput>) => {
     maxDb,
     sampleRate,
     maxFrames,
+    freqMin,
+    freqMax,
   });
+
+  // Compute actual frequency bounds from bin indices
+  const totalBins = fftSize >> 1;
+  const actualFreqMin = (result.binMin / totalBins) * nyquist;
+  const actualFreqMax = (result.binMax / totalBins) * nyquist;
 
   const output: SpectrogramWorkerOutput = {
     buffer: result.imageData.buffer as ArrayBuffer,
     width: result.width,
     height: result.height,
-    maxFrequency: sampleRate / 2,
+    maxFrequency: nyquist,
     sampleRate,
     duration: channelData.length / sampleRate,
+    freqMin: actualFreqMin,
+    freqMax: actualFreqMax,
   };
 
   // Transfer buffer ownership to main thread (zero-copy)

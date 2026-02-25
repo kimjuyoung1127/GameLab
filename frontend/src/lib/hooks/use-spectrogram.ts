@@ -23,9 +23,12 @@ interface UseSpectrogramResult {
 /**
  * WaveformData로부터 FFT 스펙트로그램을 연산한다.
  * Web Worker 사용 가능 시 오프스레드, 불가능 시 메인스레드 폴백.
+ * freqMin/freqMax로 주파수 범위를 지정하면 해당 대역만 렌더링한다.
  */
 export function useSpectrogram(
   waveformData: WaveformData | null,
+  freqMin?: number,
+  freqMax?: number,
 ): UseSpectrogramResult {
   const [data, setData] = useState<SpectrogramData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,6 +75,8 @@ export function useSpectrogram(
           duration: out.duration,
           maxFrequency: out.maxFrequency,
           sampleRate: out.sampleRate,
+          freqMin: out.freqMin,
+          freqMax: out.freqMax,
         });
         setLoading(false);
         worker.terminate();
@@ -90,7 +95,7 @@ export function useSpectrogram(
       // Transfer channelData buffer to worker (zero-copy)
       const transferData = new Float32Array(channelData);
       worker.postMessage(
-        { channelData: transferData, sampleRate },
+        { channelData: transferData, sampleRate, freqMin, freqMax },
         [transferData.buffer],
       );
     } catch {
@@ -108,16 +113,27 @@ export function useSpectrogram(
       id: number,
     ) {
       try {
-        const result = computeSpectrogram(cd, { ...DEFAULT_OPTIONS, sampleRate: sr });
+        const nyquist = sr / 2;
+        const totalBins = DEFAULT_OPTIONS.fftSize >> 1;
+        const result = computeSpectrogram(cd, {
+          ...DEFAULT_OPTIONS,
+          sampleRate: sr,
+          freqMin,
+          freqMax,
+        });
         if (id !== computeIdRef.current) return;
         const imageData = createImageData(result.imageData, result.width, result.height);
+        const actualFreqMin = (result.binMin / totalBins) * nyquist;
+        const actualFreqMax = (result.binMax / totalBins) * nyquist;
         setData({
           imageData,
           width: result.width,
           height: result.height,
           duration: dur,
-          maxFrequency: sr / 2,
+          maxFrequency: nyquist,
           sampleRate: sr,
+          freqMin: actualFreqMin,
+          freqMax: actualFreqMax,
         });
       } catch (err) {
         if (id !== computeIdRef.current) return;
@@ -134,7 +150,7 @@ export function useSpectrogram(
         workerRef.current = null;
       }
     };
-  }, [waveformData]);
+  }, [waveformData, freqMin, freqMax]);
 
   return { data, loading, error };
 }

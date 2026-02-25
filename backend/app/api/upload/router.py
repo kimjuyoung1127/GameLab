@@ -98,9 +98,23 @@ def _extract_audio_metadata(file_path: str, ext: str) -> tuple[str, str]:
     )
 
 
-def _build_audio_url(file_id: str, ext: str) -> str:
-    base = settings.public_file_base_url.rstrip("/")
-    return f"{base}/uploads/{file_id}{ext}"
+MIME_MAP: dict[str, str] = {
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".flac": "audio/flac",
+}
+
+
+def _upload_to_storage(file_path: str, storage_key: str, content_type: str) -> str:
+    """Upload a local file to Supabase Storage and return its public URL."""
+    with open(file_path, "rb") as f:
+        supabase.storage.from_("sst-audio").upload(
+            path=storage_key,
+            file=f,
+            file_options={"content-type": content_type, "upsert": "false"},
+        )
+    return supabase.storage.from_("sst-audio").get_public_url(storage_key)
 
 
 async def _save_file_with_size_limit(
@@ -129,6 +143,7 @@ async def _save_file_with_size_limit(
 
 
 async def _run_analysis_jobs(session_id: str, uploaded_records: list[dict]) -> None:
+    """Run analysis on each uploaded file, then remove the temp local copy."""
     analysis = AnalysisService()
     for record in uploaded_records:
         job_id = record.get("job_id")
@@ -143,12 +158,12 @@ async def _run_analysis_jobs(session_id: str, uploaded_records: list[dict]) -> N
             file_count=1,
         )
 
+        file_path = os.path.join(
+            settings.temp_upload_dir,
+            f"{record['id']}{record.get('ext', '').lower()}",
+        )
         now_iso = datetime.now(timezone.utc).isoformat()
         try:
-            file_path = os.path.join(
-                settings.upload_dir,
-                f"{record['id']}{record.get('ext', '').lower()}",
-            )
             drafts = await analysis.analyze(file_path)
             suggestion_rows = [
                 {
@@ -187,6 +202,13 @@ async def _run_analysis_jobs(session_id: str, uploaded_records: list[dict]) -> N
                 session_id=session_id,
                 file_count=1,
             )
+        finally:
+            # Clean up temp local file after analysis (success or failure)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception:
+                    logger.warning("Failed to remove temp file: %s", file_path)
 
     # Update session status after all files processed
     try:
@@ -249,7 +271,7 @@ async def upload_files(
     uploaded_records: list[dict] = []
     analysis_records: list[dict] = []
 
-    os.makedirs(settings.upload_dir, exist_ok=True)
+    os.makedirs(settings.temp_upload_dir, exist_ok=True)
     session_id = f"SES-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
     session_name = f"Upload {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
 
@@ -269,7 +291,7 @@ async def upload_files(
             continue
 
         ext = os.path.splitext(f.filename or "")[1].lower()
-        save_path = os.path.join(settings.upload_dir, f"{file_id}{ext}")
+        save_path = os.path.join(settings.temp_upload_dir, f"{file_id}{ext}")
         try:
             await _save_file_with_size_limit(f, save_path, max_bytes)
         except ValueError:
@@ -296,8 +318,27 @@ async def upload_files(
 
         duration, sample_rate = _extract_audio_metadata(save_path, ext)
 
+        # Upload to Supabase Storage for persistent CDN-backed access
+        storage_key = f"{file_id}{ext}"
+        content_type = MIME_MAP.get(ext, "application/octet-stream")
+        try:
+            audio_url = _upload_to_storage(save_path, storage_key, content_type)
+        except Exception:
+            logger.exception("Failed to upload to Supabase Storage", extra={"file_id": file_id})
+            # Clean up temp file on storage upload failure
+            if os.path.exists(save_path):
+                os.remove(save_path)
+            results.append(
+                UploadResult(
+                    file_id=file_id,
+                    filename=f.filename or "unknown",
+                    status=UploadJobStatus.failed,
+                    error="Storage upload failed",
+                )
+            )
+            continue
+
         job_id = str(uuid.uuid4())
-        # Job row must exist before session row is guaranteed; set session_id later.
         register_job(job_id, UploadJobStatus.queued, file_count=1)
 
         uploaded_records.append(
@@ -308,7 +349,7 @@ async def upload_files(
                 "duration": duration,
                 "sample_rate": sample_rate,
                 "status": "pending",
-                "audio_url": _build_audio_url(file_id, ext),
+                "audio_url": audio_url,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
         )

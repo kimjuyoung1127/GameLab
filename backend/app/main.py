@@ -4,7 +4,6 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,8 +43,7 @@ app.include_router(labeling_router)
 app.include_router(leaderboard_router)
 app.include_router(achievements_router)
 
-os.makedirs(settings.upload_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+os.makedirs(settings.temp_upload_dir, exist_ok=True)
 
 
 @app.get("/health")

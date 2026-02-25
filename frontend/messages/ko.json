@@ -371,6 +371,10 @@
     "bookmarkJumpTo": "해당 위치로 이동",
     "bookmarkNoBookmarks": "북마크가 없습니다.",
     "bookmarkCount": "북마크 {count}개",
-    "hintBookmarkNav": "북마크 이동"
+    "hintBookmarkNav": "북마크 이동",
+    "freqPresetFull": "전체",
+    "freqPresetLow": "저대역",
+    "freqPresetMid": "중대역",
+    "freqPresetHigh": "고대역"
   }
 }

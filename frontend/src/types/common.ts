@@ -23,4 +23,8 @@ export interface SpectrogramData {
   maxFrequency: number;
   /** Source audio sample rate */
   sampleRate: number;
+  /** Rendered frequency range lower bound in Hz (default: 0) */
+  freqMin?: number;
+  /** Rendered frequency range upper bound in Hz (default: maxFrequency) */
+  freqMax?: number;
 }

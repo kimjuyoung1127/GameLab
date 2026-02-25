@@ -371,6 +371,10 @@
                      "bookmarkJumpTo":  "Jump to position",
                      "bookmarkNoBookmarks":  "No bookmarks yet.",
                      "bookmarkCount":  "{count} bookmark(s)",
-                     "hintBookmarkNav":  "Bookmark nav"
+                     "hintBookmarkNav":  "Bookmark nav",
+                     "freqPresetFull":  "Full",
+                     "freqPresetLow":  "Low",
+                     "freqPresetMid":  "Mid",
+                     "freqPresetHigh":  "High"
                  }
 }
