@@ -14,6 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useAuthStore } from "@/lib/store/auth-store";
 import { useSessionStore } from "@/lib/store/session-store";
 import { endpoints } from "@/lib/api/endpoints";
 import { useScoreStore } from "@/lib/store/score-store";
@@ -84,6 +85,7 @@ export default function SessionsPage() {
   const router = useRouter();
   const { sessions, setSessions, setCurrentSession } = useSessionStore();
   const { score } = useScoreStore();
+  const currentUserId = useAuthStore((s) => s.user?.id);
 
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -354,7 +356,14 @@ export default function SessionsPage() {
                       </td>
                       <td className={styles.c050}>
                         <div>
-                          <p className={styles.c051}>{session.id}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className={styles.c051}>{session.id}</p>
+                            {session.userId && session.userId === currentUserId && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/20 text-primary-light">
+                                {t("mySession")}
+                              </span>
+                            )}
+                          </div>
                           <p className={styles.c007}>{session.name}</p>
                         </div>
                       </td>

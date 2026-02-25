@@ -47,6 +47,7 @@ Source: Supabase MCP DDL extraction
 | `progress` | integer | NO | `0` |
 | `score` | numeric | YES | — |
 | `created_at` | timestamptz | NO | `now()` |
+| `user_id` | text | YES | — |
 
 **PK:** `id`
 **CHECK:** `status IN ('pending', 'processing', 'completed')`

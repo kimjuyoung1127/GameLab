@@ -60,6 +60,7 @@ interface AnnotationState {
     note: string;
     suggestionId?: string;
   }) => void;
+  updateBookmark: (id: string, patch: Partial<Pick<LabelingBookmark, "note" | "type">>) => void;
   removeBookmark: (id: string) => void;
   pushHistory: (
     type: ActionHistoryItem["type"],
@@ -306,6 +307,13 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     };
     set((state) => ({ bookmarks: [item, ...state.bookmarks] }));
     get().pushHistory("bookmark", `Added bookmark: ${type}`);
+  },
+
+  updateBookmark: (id, patch) => {
+    set((state) => ({
+      bookmarks: state.bookmarks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
+    }));
+    get().pushHistory("bookmark", "Updated bookmark note");
   },
 
   removeBookmark: (id) => {

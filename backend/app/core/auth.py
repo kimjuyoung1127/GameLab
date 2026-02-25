@@ -68,6 +68,18 @@ async def get_current_user(
     return CurrentUser(id=str(user_id), email=email, name=name)
 
 
+async def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> CurrentUser | None:
+    """Return CurrentUser if a valid Bearer token is present, else None."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        return await get_current_user(credentials)
+    except HTTPException:
+        return None
+
+
 def ensure_sst_user_exists(user: CurrentUser) -> bool:
     """Ensure sst_users row exists for authenticated user."""
     try:

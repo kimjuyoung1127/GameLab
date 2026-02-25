@@ -1,7 +1,7 @@
-/** Local constants for tool metadata and status colors used by labeling components. */
+/** Local constants for tool metadata and status/bookmark colors used by labeling components. */
 import type { LucideIcon } from "lucide-react";
 import { Anchor, MousePointer2, Square, ZoomIn, ZoomOut } from "lucide-react";
-import type { DrawTool, SuggestionStatus } from "@/types";
+import type { BookmarkType, DrawTool, SuggestionStatus } from "@/types";
 
 export const MAX_FREQ = 20_000;
 
@@ -15,6 +15,16 @@ export const zoomTools: { id: "zoom-in" | "zoom-out"; icon: LucideIcon; labelKey
   { id: "zoom-in", icon: ZoomIn, labelKey: "zoomIn" },
   { id: "zoom-out", icon: ZoomOut, labelKey: "zoomOut" },
 ];
+
+export const bookmarkColors: Record<
+  BookmarkType,
+  { dot: string; line: string; flag: string; postIt: string }
+> = {
+  recheck:        { dot: "bg-blue-400",   line: "bg-blue-400/60",   flag: "text-blue-400",   postIt: "bg-blue-900/80 border-blue-600" },
+  noise_suspect:  { dot: "bg-red-400",    line: "bg-red-400/60",    flag: "text-red-400",    postIt: "bg-red-900/80 border-red-600" },
+  edge_case:      { dot: "bg-purple-400", line: "bg-purple-400/60", flag: "text-purple-400", postIt: "bg-purple-900/80 border-purple-600" },
+  needs_analysis: { dot: "bg-amber-400",  line: "bg-amber-400/60",  flag: "text-amber-400",  postIt: "bg-amber-900/80 border-amber-600" },
+};
 
 export const statusColors: Record<
   SuggestionStatus,

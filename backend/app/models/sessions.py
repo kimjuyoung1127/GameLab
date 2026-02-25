@@ -12,6 +12,7 @@ class SessionResponse(CamelModel):
     progress: int
     score: Optional[float] = None
     created_at: str
+    user_id: Optional[str] = None
 
 
 class AudioFileResponse(CamelModel):

@@ -1,8 +1,9 @@
 """세션 API: 세션 목록 조회, 파일 조회, 세션 삭제 (cascade)."""
 import logging
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List
+from app.core.auth import CurrentUser, get_current_user, get_optional_current_user
 from app.models.sessions import SessionResponse, AudioFileResponse
 from app.core.supabase_client import supabase
 from app.core.config import settings
@@ -35,6 +36,7 @@ async def list_sessions():
             progress=r.get("progress", 0),
             score=r.get("score"),
             created_at=r.get("created_at", ""),
+            user_id=r.get("user_id"),
         )
         for r in rows
     ]
@@ -70,7 +72,10 @@ async def get_session_files(session_id: str):
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str):
+async def delete_session(
+    session_id: str,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+):
     """Delete a session and all associated audio files and suggestions.
 
     Deletion order (no CASCADE in DB):
@@ -81,15 +86,20 @@ async def delete_session(session_id: str):
     5. Remove disk files
     """
     try:
-        # Step 0: Verify session exists before deleting
+        # Step 0: Verify session exists and check ownership
         check_res = (
             supabase.table("sst_sessions")
-            .select("id")
+            .select("id, user_id")
             .eq("id", session_id)
             .execute()
         )
         if not (check_res.data or []):
             raise HTTPException(status_code=404, detail="Session not found")
+
+        session_row = check_res.data[0]
+        owner_id = session_row.get("user_id")
+        if owner_id and current_user and owner_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the session owner can delete this session")
 
         # Step 1: Get audio file records
         file_res = (

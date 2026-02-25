@@ -10,6 +10,7 @@ export interface Session {
   progress: number;
   score: number | null;
   createdAt: string;
+  userId?: string | null;
 }
 
 export type FileStatus = "wip" | "pending" | "done";

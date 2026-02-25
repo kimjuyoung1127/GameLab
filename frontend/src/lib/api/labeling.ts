@@ -7,6 +7,13 @@ export const labelingEndpoints = {
   updateSuggestionStatus: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
   updateSuggestion: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
   deleteSuggestion: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
-  export: (sessionId: string, format: "csv" | "json" = "csv") =>
-    `${API_BASE}/labeling/${sessionId}/export?format=${format}`,
+  export: (
+    sessionId: string,
+    format: "csv" | "json" = "csv",
+    filters?: { status?: string },
+  ) => {
+    const params = new URLSearchParams({ format });
+    if (filters?.status) params.set("status", filters.status);
+    return `${API_BASE}/labeling/${sessionId}/export?${params.toString()}`;
+  },
 } as const;

@@ -1,11 +1,15 @@
 /** Center spectrogram workspace with waveform, overlays, suggestion boxes, and draft interaction. */
+"use client";
+
 import type React from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, Flag, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
 import SpectrogramCanvas from "@/components/domain/labeling/SpectrogramCanvas";
 import type { AudioPlayerState } from "@/lib/hooks/use-audio-player";
 import type {
+  BookmarkType,
   DrawTool,
   LabelingBookmark,
   LoopState,
@@ -15,6 +19,7 @@ import type {
   SpectrogramData,
   WaveformData,
 } from "@/types";
+import { bookmarkColors } from "./constants";
 
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
@@ -74,6 +79,7 @@ type SpectrogramPanelProps = {
   audioLoadError: string | null;
   onRetryAudio: () => void;
   onSeek: (time: number, trackHistory?: boolean) => void;
+  highlightedBookmarkId: string | null;
 };
 
 export default function SpectrogramPanel({
@@ -127,8 +133,35 @@ export default function SpectrogramPanel({
   audioLoadError,
   onRetryAudio,
   onSeek,
+  highlightedBookmarkId,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
+
+  /* Post-it note bubble state */
+  const [hoveredBookmarkId, setHoveredBookmarkId] = useState<string | null>(null);
+  const [pinnedBookmarkId, setPinnedBookmarkId] = useState<string | null>(null);
+
+  const handleBookmarkClick = useCallback((e: React.MouseEvent, bId: string) => {
+    e.stopPropagation();
+    setPinnedBookmarkId((prev) => (prev === bId ? null : bId));
+  }, []);
+
+  /* Close pinned bubble on Escape */
+  useEffect(() => {
+    if (!pinnedBookmarkId) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPinnedBookmarkId(null);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [pinnedBookmarkId]);
+
+  const bookmarkTypeLabel: Record<BookmarkType, string> = {
+    recheck: t("bookmarkRecheck"),
+    noise_suspect: t("bookmarkNoise"),
+    edge_case: t("bookmarkEdge"),
+    needs_analysis: t("bookmarkNeedsAnalysis"),
+  };
 
   return (
     <>
@@ -348,18 +381,47 @@ export default function SpectrogramPanel({
               />
             )}
 
-            {bookmarks
-              .filter((b) => b.type === "needs_analysis")
-              .map((b) => (
+            {bookmarks.map((b) => {
+              const colors = bookmarkColors[b.type];
+              const isHighlighted = highlightedBookmarkId === b.id;
+              const showBubble = hoveredBookmarkId === b.id || pinnedBookmarkId === b.id;
+              const leftPct = (b.time / totalDuration) * 100;
+
+              return (
                 <div
-                  key={`na-${b.id}`}
-                  className="absolute top-0 bottom-6 w-0.5 bg-amber-400/60 z-25 pointer-events-none"
-                  style={{ left: `calc(48px + ${(b.time / totalDuration) * 100}%)` }}
-                  title={b.note}
+                  key={`bm-${b.id}`}
+                  className={`absolute top-0 bottom-6 w-0.5 ${colors.line} z-25`}
+                  style={{ left: `calc(48px + ${leftPct}%)` }}
+                  onMouseEnter={() => setHoveredBookmarkId(b.id)}
+                  onMouseLeave={() => setHoveredBookmarkId(null)}
+                  onClick={(e) => handleBookmarkClick(e, b.id)}
                 >
-                  <Flag className="absolute -top-0.5 -left-1.5 w-3 h-3 text-amber-400" />
+                  <Flag
+                    className={`absolute -top-0.5 -left-1.5 w-3 h-3 ${colors.flag} cursor-pointer transition-transform duration-300 ${
+                      isHighlighted ? "scale-150 drop-shadow-[0_0_4px_currentColor]" : ""
+                    }`}
+                  />
+                  {/* Post-it note bubble */}
+                  {showBubble && (
+                    <div
+                      className={`absolute top-5 z-35 border rounded-lg shadow-lg px-2.5 py-2 max-w-[200px] min-w-[120px] text-[10px] ${colors.postIt}`}
+                      style={{ left: "50%", transform: "translateX(-50%)" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className={`font-bold mb-0.5 ${colors.flag}`}>
+                        {bookmarkTypeLabel[b.type]}
+                      </div>
+                      <div className="whitespace-pre-wrap break-words text-text-secondary leading-relaxed">
+                        {b.note || bookmarkTypeLabel[b.type]}
+                      </div>
+                      <div className="text-[8px] text-text-muted mt-1 font-mono">
+                        {formatTimecode(b.time)}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
+              );
+            })}
 
             <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
               {Array.from({ length: 6 }, (_, i) => {
@@ -425,6 +487,7 @@ export default function SpectrogramPanel({
                 { key: "Ctrl+Enter", labelKey: "hintManualSave" },
                 { key: "I/P/L", labelKey: "hintLoop" },
                 { key: "M", labelKey: "hintMark" },
+                { key: "Ctrl+Shift+\u2190/\u2192", labelKey: "hintBookmarkNav" },
               ].map((hint) => (
                 <div key={hint.key} className="bg-black/60 backdrop-blur-sm text-[9px] text-text-muted px-1.5 py-0.5 rounded font-mono">
                   <span className="text-text-secondary font-bold">{hint.key}</span> {t(hint.labelKey)}

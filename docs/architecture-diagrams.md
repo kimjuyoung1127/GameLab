@@ -132,6 +132,7 @@ erDiagram
     float progress "0~100"
     float score
     timestamp created_at
+    text user_id "nullable, uploader"
   }
 
   sst_audio_files {

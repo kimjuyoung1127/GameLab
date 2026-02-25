@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.core.auth import CurrentUser, ensure_sst_user_exists, get_current_user
@@ -211,8 +211,12 @@ async def create_manual_suggestions(
 
 
 @router.get("/{session_id}/export")
-async def export_suggestions(session_id: str, format: str = "csv"):
-    """Export all suggestions for a session as CSV or JSON."""
+async def export_suggestions(
+    session_id: str,
+    format: str = "csv",
+    status: str | None = Query(None, description="Comma-separated status filter, e.g. confirmed,corrected"),
+):
+    """Export suggestions for a session as CSV or JSON. Optionally filter by status."""
     if format not in ("csv", "json"):
         raise HTTPException(status_code=400, detail="Format must be 'csv' or 'json'")
 
@@ -234,18 +238,24 @@ async def export_suggestions(session_id: str, format: str = "csv"):
         raise HTTPException(status_code=404, detail="No files found for session")
 
     try:
-        sug_res = (
+        query = (
             supabase.table("sst_suggestions")
             .select("*")
             .in_("audio_id", file_ids)
-            .order("audio_id")
-            .order("start_time")
-            .execute()
         )
-        rows = sug_res.data or []
+        if status:
+            statuses = [s.strip() for s in status.split(",") if s.strip()]
+            if statuses:
+                # AI suggestions filtered by status + all user-created suggestions
+                # (user labels are inherently "labeled" data regardless of status)
+                status_csv = ",".join(statuses)
+                query = query.or_(f"status.in.({status_csv}),source.eq.user")
+        rows = query.order("audio_id").order("start_time").execute().data or []
     except Exception as exc:
         logger.exception("Export: failed to fetch suggestions")
         raise HTTPException(status_code=503, detail="Failed to export") from exc
+
+    file_suffix = "-labeled" if status else ""
 
     if format == "json":
         export_data = [
@@ -270,7 +280,7 @@ async def export_suggestions(session_id: str, format: str = "csv"):
         return StreamingResponse(
             io.BytesIO(content.encode("utf-8")),
             media_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="labels-{session_id}.json"'},
+            headers={"Content-Disposition": f'attachment; filename="labels-{session_id}{file_suffix}.json"'},
         )
 
     output = io.StringIO()
@@ -314,7 +324,7 @@ async def export_suggestions(session_id: str, format: str = "csv"):
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8")),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="labels-{session_id}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="labels-{session_id}{file_suffix}.csv"'},
     )
 
 

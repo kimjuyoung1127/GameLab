@@ -9,8 +9,9 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from app.core.auth import CurrentUser, get_optional_current_user
 from app.services.job_manager import register_job, set_job_status
 from app.core.config import settings
 from app.core.supabase_client import supabase
@@ -239,7 +240,10 @@ def _write_uploads_atomically(
 
 
 @router.post("/files", response_model=list[UploadResult])
-async def upload_files(files: list[UploadFile] = File(...)):
+async def upload_files(
+    files: list[UploadFile] = File(...),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+):
     max_bytes = settings.max_file_size_mb * 1024 * 1024
     results: list[UploadResult] = []
     uploaded_records: list[dict] = []
@@ -332,6 +336,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
             "progress": 100,
             "score": None,
             "created_at": now_iso,
+            "user_id": current_user.id if current_user else None,
         }
 
         try:

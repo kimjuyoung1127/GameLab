@@ -174,6 +174,7 @@
                      "progressCompleted":  "Complete {progress}%",
                      "progressPending":  "Waiting {progress}%",
                      "deleteTitle":  "Delete session",
+                     "mySession":  "Mine",
                      "emptyState":  "No real sessions found yet. Upload files first.",
                      "showingResults":  "Showing {count} results",
                      "previous":  "Previous",
@@ -252,6 +253,13 @@
                      "tagged":  "tagged",
                      "exportCsv":  "CSV",
                      "exportJson":  "JSON",
+                     "exportMenu":  "Export",
+                     "exportAllCsv":  "All CSV",
+                     "exportAllJson":  "All JSON",
+                     "exportLabeledCsv":  "Labeled CSV",
+                     "exportLabeledJson":  "Labeled JSON",
+                     "exportUnsavedWarning": "{count} unsaved draft(s) — will auto-save before export",
+                     "exportSavingDrafts": "Saving drafts...",
                      "legendPending":  "pending",
                      "legendConfirmed":  "confirmed",
                      "legendRejected":  "rejected",
@@ -357,6 +365,12 @@
                      "suggestionDeleteFailed":  "Failed to delete suggestion",
                      "suggestionDeleteBlockedAI":  "AI suggestions cannot be deleted. Use reject instead.",
                      "suggestionDeleteConfirm":  "Delete this suggestion?",
-                     "userSuggestionTag":  "USER"
+                     "userSuggestionTag":  "USER",
+                     "bookmarkEditPlaceholder":  "Type a note...",
+                     "bookmarkNoteUpdated":  "Bookmark note updated",
+                     "bookmarkJumpTo":  "Jump to position",
+                     "bookmarkNoBookmarks":  "No bookmarks yet.",
+                     "bookmarkCount":  "{count} bookmark(s)",
+                     "hintBookmarkNav":  "Bookmark nav"
                  }
 }

@@ -22,6 +22,8 @@ type UseLabelingHotkeysParams = {
   onSetLoopEnd: () => void;
   onToggleLoop: () => void;
   onMarkNeedsAnalysis?: () => void;
+  onJumpToNextBookmark?: () => void;
+  onJumpToPrevBookmark?: () => void;
   handleDeleteSelectedSuggestion?: () => void;
   player: AudioPlayerState;
   suggestions: Suggestion[];
@@ -49,6 +51,8 @@ export function useLabelingHotkeys({
   onSetLoopEnd,
   onToggleLoop,
   onMarkNeedsAnalysis,
+  onJumpToNextBookmark,
+  onJumpToPrevBookmark,
   handleDeleteSelectedSuggestion,
   player,
   suggestions,
@@ -72,6 +76,16 @@ export function useLabelingHotkeys({
           e.preventDefault();
           if (e.shiftKey) redo();
           else undo();
+          return;
+        }
+        if (e.shiftKey && e.key === "ArrowRight") {
+          e.preventDefault();
+          onJumpToNextBookmark?.();
+          return;
+        }
+        if (e.shiftKey && e.key === "ArrowLeft") {
+          e.preventDefault();
+          onJumpToPrevBookmark?.();
           return;
         }
         if (e.key === "ArrowRight") {
@@ -223,6 +237,8 @@ export function useLabelingHotkeys({
     onSetLoopEnd,
     onToggleLoop,
     onMarkNeedsAnalysis,
+    onJumpToNextBookmark,
+    onJumpToPrevBookmark,
     handleDeleteSelectedSuggestion,
     player,
     suggestions,
