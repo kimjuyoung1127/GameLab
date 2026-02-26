@@ -119,7 +119,7 @@ export default function ToolBar({
           title={t(zt.labelKey)}
           onClick={() =>
             onZoomLevelChange((prev) =>
-              zt.id === "zoom-in" ? Math.min(prev + 0.25, 3.0) : Math.max(prev - 0.25, 0.5),
+              zt.id === "zoom-in" ? Math.min(prev + 0.5, 10.0) : Math.max(prev - 0.5, 1.0),
             )
           }
           className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors"

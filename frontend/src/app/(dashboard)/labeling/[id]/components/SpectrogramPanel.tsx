@@ -35,7 +35,9 @@ type SpectrogramPanelProps = {
   onDismissCompleteToast: () => void;
   effectiveMaxFreq: number;
   spectrogramRef: React.RefObject<HTMLDivElement | null>;
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   tool: DrawTool;
+  zoomBoxMode: boolean;
   suggestions: Suggestion[];
   manualDrafts: ManualDraft[];
   selectedSuggestionId: string | null;
@@ -97,7 +99,9 @@ export default function SpectrogramPanel({
   onDismissCompleteToast,
   effectiveMaxFreq,
   spectrogramRef,
+  scrollContainerRef,
   tool,
+  zoomBoxMode,
   suggestions,
   manualDrafts,
   selectedSuggestionId,
@@ -194,28 +198,11 @@ export default function SpectrogramPanel({
           </div>
         )}
 
-        <div className="flex-1 relative overflow-hidden">
+        <div ref={scrollContainerRef} className="flex-1 relative overflow-x-auto overflow-y-hidden">
           <div
-            className="absolute inset-0 origin-top-left"
-            style={{
-              transform: zoomLevel === 1 ? undefined : `scale(${zoomLevel})`,
-              width: `${100 / zoomLevel}%`,
-              height: `${100 / zoomLevel}%`,
-            }}
+            className="relative h-full min-w-full"
+            style={{ width: `${Math.max(zoomLevel, 1) * 100}%` }}
           >
-            {fileCompleteToast && (
-              <div
-                onClick={onDismissCompleteToast}
-                className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer"
-                title="Click to dismiss"
-              >
-                <div className="bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg">
-                  <Check className="w-8 h-8 mx-auto mb-2" />
-                  <p className="text-sm font-bold">{isLastFile ? t("allFilesComplete") : t("fileComplete")}</p>
-                  <p className="text-xs opacity-80 mt-1">{isLastFile ? t("returningToSessions") : t("movingToNext")}</p>
-                </div>
-              </div>
-            )}
 
             <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10">
               {(() => {
@@ -263,7 +250,7 @@ export default function SpectrogramPanel({
               onPointerMove={onDraftPointerMove}
               onPointerUp={onDraftPointerUp}
               onPointerLeave={onDraftPointerUp}
-              className={`absolute top-0 left-12 right-0 bottom-6 bg-black ${tool === "box" ? "cursor-crosshair" : "cursor-pointer"}`}
+              className={`absolute top-0 left-12 right-0 bottom-6 bg-black ${tool === "box" || zoomBoxMode ? "cursor-crosshair" : "cursor-pointer"}`}
             >
               <SpectrogramCanvas data={spectrogramData} loading={spectrogramLoading} className="absolute inset-0" />
               <div className="absolute inset-0 pointer-events-none">
@@ -376,7 +363,9 @@ export default function SpectrogramPanel({
               const pos = suggestionBoxStyle(draftPreview, totalDuration, freqMin, freqMax);
               return (
                 <div
-                  className="absolute border-2 border-cyan-200 bg-cyan-300/15 rounded-sm z-20 pointer-events-none"
+                  className={`absolute border-2 rounded-sm z-20 pointer-events-none ${
+                    zoomBoxMode ? "border-amber-200 bg-amber-300/15" : "border-cyan-200 bg-cyan-300/15"
+                  }`}
                   style={{
                     left: `calc(48px + ${pos.left})`,
                     top: pos.top,
@@ -467,7 +456,24 @@ export default function SpectrogramPanel({
               })}
             </div>
 
-            <div className="absolute top-2 right-3 z-30 flex gap-2">
+          </div>
+
+          {fileCompleteToast && (
+            <div
+              onClick={onDismissCompleteToast}
+              className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm cursor-pointer"
+              title="Click to dismiss"
+            >
+              <div className="bg-accent/90 text-white rounded-xl px-6 py-4 text-center shadow-lg">
+                <Check className="w-8 h-8 mx-auto mb-2" />
+                <p className="text-sm font-bold">{isLastFile ? t("allFilesComplete") : t("fileComplete")}</p>
+                <p className="text-xs opacity-80 mt-1">{isLastFile ? t("returningToSessions") : t("movingToNext")}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="pointer-events-none absolute inset-0 z-30">
+            <div className="absolute top-2 right-3 flex gap-2">
               {(["pending", "confirmed", "rejected", "corrected"] as const).map((st) => {
                 const c = statusColors[st];
                 return (
@@ -479,7 +485,7 @@ export default function SpectrogramPanel({
               })}
             </div>
 
-            <div className="absolute top-8 right-3 z-30 rounded-lg border border-white/10 bg-black/45 backdrop-blur-sm px-2.5 py-2 text-[10px] space-y-1 min-w-[180px]">
+            <div className="absolute top-8 right-3 rounded-lg border border-white/10 bg-black/45 backdrop-blur-sm px-2.5 py-2 text-[10px] space-y-1 min-w-[180px]">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-text-muted">{t("stateHudFit")}</span>
                 <span className={fitToSuggestion ? "text-accent font-semibold" : "text-text-secondary"}>{fitToSuggestion ? "ON" : "OFF"}</span>
@@ -499,16 +505,16 @@ export default function SpectrogramPanel({
               {loopHudWarning && <p className="text-danger text-[9px]">{t("loopRequireBounds")}</p>}
             </div>
 
-            <div className="absolute bottom-8 left-3 z-30 bg-black/55 text-[9px] text-text-muted px-2 py-1 rounded font-mono">
-              {t("clickDragSeekHint")}
+            <div className="absolute bottom-8 left-3 bg-black/55 text-[9px] text-text-muted px-2 py-1 rounded font-mono">
+              {zoomBoxMode ? t("zoomBoxHint") : t("clickDragSeekHint")}
             </div>
             {showFitToast && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-accent/90 text-white text-[10px] font-semibold px-2.5 py-1 rounded">
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-accent/90 text-white text-[10px] font-semibold px-2.5 py-1 rounded">
                 {t("autoFitApplied")}
               </div>
             )}
 
-            <div className="absolute bottom-8 right-3 z-30 flex gap-1.5">
+            <div className="absolute bottom-8 right-3 flex gap-1.5">
               {[
                 { key: "O", labelKey: "hintConfirm" },
                 { key: "X", labelKey: "hintReject" },

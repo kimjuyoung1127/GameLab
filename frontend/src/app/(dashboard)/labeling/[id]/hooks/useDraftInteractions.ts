@@ -11,8 +11,11 @@ const MIN_DRAFT_FREQ_RANGE = 100;
 type UseDraftInteractionsArgs = {
   activeFileId: string | null;
   tool: DrawTool;
+  zoomBoxMode: boolean;
   totalDuration: number;
   snapEnabled: boolean;
+  freqMin: number;
+  freqMax: number;
   effectiveMaxFreqRef: React.RefObject<number>;
   spectrogramRef: React.RefObject<HTMLDivElement | null>;
   isDraggingSuggestion: boolean;
@@ -20,6 +23,7 @@ type UseDraftInteractionsArgs = {
   seekTo: (time: number, trackHistory?: boolean) => void;
   t: (key: string) => string;
   startDraft: (input: Omit<ManualDraft, "id" | "source">) => void;
+  onZoomToBox: (box: { startTime: number; endTime: number; freqLow: number; freqHigh: number }) => void;
   updateDraft: (id: string, patch: Partial<ManualDraft>, options?: { trackHistory?: boolean }) => void;
   selectDraft: (id: string | null) => void;
   pushHistory: (type: ActionType, summary: string, payload?: { time?: number; loopStart?: number | null; loopEnd?: number | null }) => void;
@@ -28,8 +32,11 @@ type UseDraftInteractionsArgs = {
 export function useDraftInteractions({
   activeFileId,
   tool,
+  zoomBoxMode,
   totalDuration,
   snapEnabled,
+  freqMin,
+  freqMax,
   effectiveMaxFreqRef,
   spectrogramRef,
   isDraggingSuggestion,
@@ -37,6 +44,7 @@ export function useDraftInteractions({
   seekTo,
   t,
   startDraft,
+  onZoomToBox,
   updateDraft,
   selectDraft,
   pushHistory,
@@ -45,6 +53,8 @@ export function useDraftInteractions({
   const [draftPreview, setDraftPreview] = useState<ManualDraft | null>(null);
   const [isDraggingDraft, setIsDraggingDraft] = useState(false);
   const [isResizingDraft, setIsResizingDraft] = useState(false);
+  const freqRange = Math.max(1, freqMax - freqMin);
+  const minFreqSpan = Math.min(MIN_DRAFT_FREQ_RANGE, freqRange);
 
   const draftPointerRef = useRef<{ audioId: string; startTime: number; startFreq: number } | null>(null);
   const draftUpdateRafRef = useRef<number | null>(null);
@@ -78,6 +88,7 @@ export function useDraftInteractions({
   const resizeRafRef = useRef<number | null>(null);
   const pendingResizePatchRef = useRef<{ id: string; patch: Partial<ManualDraft> } | null>(null);
   const hasResizedDraftRef = useRef(false);
+  const prevZoomBoxModeRef = useRef(zoomBoxMode);
 
   const handleScrubFromSpectrogram = useCallback(
     (clientX: number) => {
@@ -99,18 +110,17 @@ export function useDraftInteractions({
       const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
       const y = Math.max(0, Math.min(clientY - rect.top, rect.height));
       const time = (x / Math.max(rect.width, 1)) * totalDuration;
-      const mf = effectiveMaxFreqRef.current;
-      const freq = mf * (1 - y / Math.max(rect.height, 1));
+      const freq = freqMin + freqRange * (1 - y / Math.max(rect.height, 1));
       return { time, freq };
     },
-    [effectiveMaxFreqRef, spectrogramRef, totalDuration],
+    [freqMin, freqRange, spectrogramRef, totalDuration],
   );
 
   const handleDraftPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!activeFileId) return;
       if (isDraggingDraft || isResizingDraft || isDraggingSuggestion || isResizingSuggestion) return;
-      if (tool !== "box") {
+      if (tool !== "box" && !zoomBoxMode) {
         handleScrubFromSpectrogram(e.clientX);
         return;
       }
@@ -125,8 +135,8 @@ export function useDraftInteractions({
         description: t("manualDefaultDescription"),
         startTime: snapTime,
         endTime: snapTime + 0.05,
-        freqLow: Math.max(0, snapFreq - 100),
-        freqHigh: Math.min(effectiveMaxFreqRef.current, snapFreq + 100),
+        freqLow: Math.max(freqMin, snapFreq - 100),
+        freqHigh: Math.min(freqMax, snapFreq + 100),
         source: "user",
       };
       setDraftPreview(preview);
@@ -136,7 +146,8 @@ export function useDraftInteractions({
     },
     [
       activeFileId,
-      effectiveMaxFreqRef,
+      freqMin,
+      freqMax,
       handleScrubFromSpectrogram,
       isDraggingDraft,
       isDraggingSuggestion,
@@ -146,6 +157,7 @@ export function useDraftInteractions({
       snapEnabled,
       t,
       tool,
+      zoomBoxMode,
     ],
   );
 
@@ -176,12 +188,12 @@ export function useDraftInteractions({
         description: t("manualDefaultDescription"),
         startTime: Math.min(startTime, curTime),
         endTime: Math.max(startTime, curTime),
-        freqLow: Math.max(0, Math.min(startFreq, curFreq)),
-        freqHigh: Math.min(effectiveMaxFreqRef.current, Math.max(startFreq, curFreq)),
+        freqLow: Math.max(freqMin, Math.min(startFreq, curFreq)),
+        freqHigh: Math.min(freqMax, Math.max(startFreq, curFreq)),
         source: "user",
       });
     },
-    [effectiveMaxFreqRef, isDrawingDraft, pointerToDomain, scheduleDraftPreview, snapEnabled, t],
+    [freqMin, freqMax, isDrawingDraft, pointerToDomain, scheduleDraftPreview, snapEnabled, t],
   );
 
   const handleDraftPointerUp = useCallback(
@@ -190,22 +202,31 @@ export function useDraftInteractions({
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
       if (draftPreview) {
-        startDraft({
-          audioId: draftPreview.audioId,
-          label: draftPreview.label,
-          description: draftPreview.description,
-          startTime: draftPreview.startTime,
-          endTime: draftPreview.endTime,
-          freqLow: draftPreview.freqLow,
-          freqHigh: draftPreview.freqHigh,
-        });
+        if (zoomBoxMode) {
+          onZoomToBox({
+            startTime: draftPreview.startTime,
+            endTime: draftPreview.endTime,
+            freqLow: draftPreview.freqLow,
+            freqHigh: draftPreview.freqHigh,
+          });
+        } else {
+          startDraft({
+            audioId: draftPreview.audioId,
+            label: draftPreview.label,
+            description: draftPreview.description,
+            startTime: draftPreview.startTime,
+            endTime: draftPreview.endTime,
+            freqLow: draftPreview.freqLow,
+            freqHigh: draftPreview.freqHigh,
+          });
+        }
       }
       setDraftPreview(null);
       draftPointerRef.current = null;
       pendingPreviewRef.current = null;
       setIsDrawingDraft(false);
     },
-    [draftPreview, startDraft],
+    [draftPreview, onZoomToBox, startDraft, zoomBoxMode],
   );
 
   const scheduleDraftMove = useCallback(
@@ -264,22 +285,21 @@ export function useDraftInteractions({
       const boxDuration = Math.max(0.01, drag.endTime - drag.startTime);
       const boxFreqRange = Math.max(1, drag.freqHigh - drag.freqLow);
       const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-      const mf = effectiveMaxFreqRef.current;
-      const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
+      const freqDelta = (-dy / Math.max(rect.height, 1)) * freqRange;
 
       const maxStart = Math.max(0, totalDuration - boxDuration);
       let startTime = Math.max(0, Math.min(drag.startTime + timeDelta, maxStart));
-      let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, mf - boxFreqRange));
+      let freqLow = Math.max(freqMin, Math.min(drag.freqLow + freqDelta, freqMax - boxFreqRange));
 
       if (snapEnabled) {
         startTime = Math.round(startTime * 10) / 10;
         freqLow = Math.round(freqLow / 100) * 100;
         startTime = Math.max(0, Math.min(startTime, maxStart));
-        freqLow = Math.max(0, Math.min(freqLow, mf - boxFreqRange));
+        freqLow = Math.max(freqMin, Math.min(freqLow, freqMax - boxFreqRange));
       }
 
       const endTime = Math.min(totalDuration, startTime + boxDuration);
-      const freqHigh = Math.min(mf, freqLow + boxFreqRange);
+      const freqHigh = Math.min(freqMax, freqLow + boxFreqRange);
 
       scheduleDraftMove(drag.draftId, {
         startTime,
@@ -288,7 +308,7 @@ export function useDraftInteractions({
         freqHigh,
       });
     },
-    [effectiveMaxFreqRef, scheduleDraftMove, snapEnabled, spectrogramRef, totalDuration],
+    [freqMax, freqMin, freqRange, scheduleDraftMove, snapEnabled, spectrogramRef, totalDuration],
   );
 
   const handleDraftDragPointerUp = useCallback(
@@ -364,8 +384,7 @@ export function useDraftInteractions({
       const dx = e.clientX - resize.pointerStartX;
       const dy = e.clientY - resize.pointerStartY;
       const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-      const mf = effectiveMaxFreqRef.current;
-      const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
+      const freqDelta = (-dy / Math.max(rect.height, 1)) * freqRange;
 
       let nextStart = resize.startTime;
       let nextEnd = resize.endTime;
@@ -389,17 +408,17 @@ export function useDraftInteractions({
       nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
       nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
 
-      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-      nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-      if (nextHigh - nextLow < MIN_DRAFT_FREQ_RANGE) {
+      nextLow = Math.max(freqMin, Math.min(nextLow, freqMax - minFreqSpan));
+      nextHigh = Math.max(freqMin + minFreqSpan, Math.min(nextHigh, freqMax));
+      if (nextHigh - nextLow < minFreqSpan) {
         if (resize.handle === "nw" || resize.handle === "ne") {
-          nextHigh = nextLow + MIN_DRAFT_FREQ_RANGE;
+          nextHigh = nextLow + minFreqSpan;
         } else {
-          nextLow = nextHigh - MIN_DRAFT_FREQ_RANGE;
+          nextLow = nextHigh - minFreqSpan;
         }
       }
-      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
+      nextLow = Math.max(freqMin, Math.min(nextLow, freqMax - minFreqSpan));
+      nextHigh = Math.max(nextLow + minFreqSpan, Math.min(nextHigh, freqMax));
 
       if (snapEnabled) {
         nextStart = Math.round(nextStart * 10) / 10;
@@ -408,8 +427,8 @@ export function useDraftInteractions({
         nextHigh = Math.round(nextHigh / 100) * 100;
         nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
         nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-        nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-        nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
+        nextLow = Math.max(freqMin, Math.min(nextLow, freqMax - minFreqSpan));
+        nextHigh = Math.max(nextLow + minFreqSpan, Math.min(nextHigh, freqMax));
       }
 
       scheduleDraftResize(resize.draftId, {
@@ -419,7 +438,7 @@ export function useDraftInteractions({
         freqHigh: nextHigh,
       });
     },
-    [effectiveMaxFreqRef, scheduleDraftResize, snapEnabled, spectrogramRef, totalDuration],
+    [freqMax, freqMin, freqRange, minFreqSpan, scheduleDraftResize, snapEnabled, spectrogramRef, totalDuration],
   );
 
   const handleDraftResizePointerUp = useCallback(
@@ -439,6 +458,19 @@ export function useDraftInteractions({
       setIsResizingDraft(false);
     },
     [pushHistory],
+  );
+
+  useEffect(
+    () => {
+      if (prevZoomBoxModeRef.current && !zoomBoxMode) {
+        setDraftPreview(null);
+        draftPointerRef.current = null;
+        pendingPreviewRef.current = null;
+        setIsDrawingDraft(false);
+      }
+      prevZoomBoxModeRef.current = zoomBoxMode;
+    },
+    [zoomBoxMode],
   );
 
   useEffect(

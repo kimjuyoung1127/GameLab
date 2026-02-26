@@ -14,6 +14,8 @@ type UseSuggestionInteractionsArgs = {
   tool: DrawTool;
   totalDuration: number;
   snapEnabled: boolean;
+  freqMin: number;
+  freqMax: number;
   effectiveMaxFreqRef: React.RefObject<number>;
   spectrogramRef: React.RefObject<HTMLDivElement | null>;
   updateSuggestion: (id: string, patch: Partial<Suggestion>, options?: { trackHistory?: boolean }) => void;
@@ -31,6 +33,8 @@ export function useSuggestionInteractions({
   tool,
   totalDuration,
   snapEnabled,
+  freqMin,
+  freqMax,
   effectiveMaxFreqRef,
   spectrogramRef,
   updateSuggestion,
@@ -45,6 +49,8 @@ export function useSuggestionInteractions({
 }: UseSuggestionInteractionsArgs) {
   const [isDraggingSuggestion, setIsDraggingSuggestion] = useState(false);
   const [isResizingSuggestion, setIsResizingSuggestion] = useState(false);
+  const freqRange = Math.max(1, freqMax - freqMin);
+  const minFreqSpan = Math.min(MIN_DRAFT_FREQ_RANGE, freqRange);
 
   const dragSugRef = useRef<{
     suggestionId: string;
@@ -128,22 +134,21 @@ export function useSuggestionInteractions({
       const boxDuration = Math.max(0.01, drag.endTime - drag.startTime);
       const boxFreqRange = Math.max(1, drag.freqHigh - drag.freqLow);
       const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-      const mf = effectiveMaxFreqRef.current;
-      const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
+      const freqDelta = (-dy / Math.max(rect.height, 1)) * freqRange;
       const maxStart = Math.max(0, totalDuration - boxDuration);
       let startTime = Math.max(0, Math.min(drag.startTime + timeDelta, maxStart));
-      let freqLow = Math.max(0, Math.min(drag.freqLow + freqDelta, mf - boxFreqRange));
+      let freqLow = Math.max(freqMin, Math.min(drag.freqLow + freqDelta, freqMax - boxFreqRange));
       if (snapEnabled) {
         startTime = Math.round(startTime * 10) / 10;
         freqLow = Math.round(freqLow / 100) * 100;
         startTime = Math.max(0, Math.min(startTime, maxStart));
-        freqLow = Math.max(0, Math.min(freqLow, mf - boxFreqRange));
+        freqLow = Math.max(freqMin, Math.min(freqLow, freqMax - boxFreqRange));
       }
       const endTime = Math.min(totalDuration, startTime + boxDuration);
-      const freqHigh = Math.min(mf, freqLow + boxFreqRange);
+      const freqHigh = Math.min(freqMax, freqLow + boxFreqRange);
       scheduleSugMove(drag.suggestionId, { startTime, endTime, freqLow, freqHigh });
     },
-    [effectiveMaxFreqRef, scheduleSugMove, snapEnabled, spectrogramRef, totalDuration],
+    [freqMax, freqMin, freqRange, scheduleSugMove, snapEnabled, spectrogramRef, totalDuration],
   );
 
   const handleSugDragPointerUp = useCallback(
@@ -234,8 +239,7 @@ export function useSuggestionInteractions({
       const dx = e.clientX - resize.pointerStartX;
       const dy = e.clientY - resize.pointerStartY;
       const timeDelta = (dx / Math.max(rect.width, 1)) * totalDuration;
-      const mf = effectiveMaxFreqRef.current;
-      const freqDelta = (-dy / Math.max(rect.height, 1)) * mf;
+      const freqDelta = (-dy / Math.max(rect.height, 1)) * freqRange;
       let nextStart = resize.startTime;
       let nextEnd = resize.endTime;
       let nextLow = resize.freqLow;
@@ -252,14 +256,14 @@ export function useSuggestionInteractions({
       }
       nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
       nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-      nextHigh = Math.max(MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
-      if (nextHigh - nextLow < MIN_DRAFT_FREQ_RANGE) {
-        if (resize.handle === "nw" || resize.handle === "ne") nextHigh = nextLow + MIN_DRAFT_FREQ_RANGE;
-        else nextLow = nextHigh - MIN_DRAFT_FREQ_RANGE;
+      nextLow = Math.max(freqMin, Math.min(nextLow, freqMax - minFreqSpan));
+      nextHigh = Math.max(freqMin + minFreqSpan, Math.min(nextHigh, freqMax));
+      if (nextHigh - nextLow < minFreqSpan) {
+        if (resize.handle === "nw" || resize.handle === "ne") nextHigh = nextLow + minFreqSpan;
+        else nextLow = nextHigh - minFreqSpan;
       }
-      nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-      nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
+      nextLow = Math.max(freqMin, Math.min(nextLow, freqMax - minFreqSpan));
+      nextHigh = Math.max(nextLow + minFreqSpan, Math.min(nextHigh, freqMax));
       if (snapEnabled) {
         nextStart = Math.round(nextStart * 10) / 10;
         nextEnd = Math.round(nextEnd * 10) / 10;
@@ -267,8 +271,8 @@ export function useSuggestionInteractions({
         nextHigh = Math.round(nextHigh / 100) * 100;
         nextStart = Math.max(0, Math.min(nextStart, totalDuration - MIN_DRAFT_DURATION));
         nextEnd = Math.max(nextStart + MIN_DRAFT_DURATION, Math.min(nextEnd, totalDuration));
-        nextLow = Math.max(0, Math.min(nextLow, mf - MIN_DRAFT_FREQ_RANGE));
-        nextHigh = Math.max(nextLow + MIN_DRAFT_FREQ_RANGE, Math.min(nextHigh, mf));
+        nextLow = Math.max(freqMin, Math.min(nextLow, freqMax - minFreqSpan));
+        nextHigh = Math.max(nextLow + minFreqSpan, Math.min(nextHigh, freqMax));
       }
       scheduleSugResize(resize.suggestionId, {
         startTime: nextStart,
@@ -277,7 +281,7 @@ export function useSuggestionInteractions({
         freqHigh: nextHigh,
       });
     },
-    [effectiveMaxFreqRef, scheduleSugResize, snapEnabled, spectrogramRef, totalDuration],
+    [freqMax, freqMin, freqRange, minFreqSpan, scheduleSugResize, snapEnabled, spectrogramRef, totalDuration],
   );
 
   const handleSugResizePointerUp = useCallback(

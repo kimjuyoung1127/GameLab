@@ -373,3 +373,60 @@ decoded.sampleRate = 48,000 → maxFreq = 24kHz
 - FE만 변경 (BE 수정 없음)
 - 수정 파일 4개: `use-waveform.ts`, `page.tsx`, `SpectrogramPanel.tsx`, `ToolBar.tsx`
 - 기존 기능(드래프트, 제안 드래그/리사이즈, 북마크) 모두 `%` 기반이므로 호환 유지
+
+---
+
+## 12) 개발 예정 플랜 업데이트 (실제 반영 완료)
+
+> 11번 플랜 기준으로 실제 코드 반영 내용을 업데이트함. (2026-02-26)
+
+### A. 주파수 축 정확도 보정 (완료)
+- `frontend/src/lib/hooks/use-waveform.ts`
+  - `useWaveform(audioUrl, retryKey, targetSampleRate?)` 시그니처 확장
+  - `targetSampleRate`가 있으면 `AudioContext({ sampleRate })`로 decode
+- `frontend/src/app/(dashboard)/labeling/[id]/page.tsx`
+  - `activeFile.sampleRate` 문자열 파싱(`16kHz`, `16000` 대응)
+  - 파싱값을 `useWaveform`에 전달
+  - `freqMax <= effectiveMaxFreq` 클램프 유지
+
+### B. 확대 UX 개편 (완료)
+- `frontend/src/app/(dashboard)/labeling/[id]/components/SpectrogramPanel.tsx`
+  - `transform: scale()` 제거
+  - `overflow-x-auto` + `width: zoomLevel * 100%` 기반 가로 스크롤 확대로 전환
+  - 우측 HUD/힌트는 고정 오버레이 유지
+- `frontend/src/app/(dashboard)/labeling/[id]/components/ToolBar.tsx`
+- `frontend/src/lib/hooks/labeling/useLabelingHotkeys.ts`
+  - 줌 범위/스텝 통일: `1.0 ~ 10.0`, step `0.5`
+
+### C. 특정 위치 확대(Zoom Box) 기능 추가 (완료)
+- 트리거: `Shift+R` (기존 `R` 수동 라벨 박스는 유지)
+- `useDraftInteractions`에 확대 박스 모드 분기 추가
+  - 확대 박스는 저장 데이터(드래프트)로 생성하지 않음
+  - 드래그 완료 시 박스 영역으로 시간/주파수 동시 맞춤
+- 확대 후 박스 중심으로 자동 스크롤 포커싱
+- `Esc`로 Zoom Box 모드 취소
+
+### D. 줌 복원/리셋 단축키 보강 (완료)
+- `Shift+Z`
+  - 우선 직전 뷰포트(zoom/freq/scroll) 복원
+  - 복원 기록이 없으면 전체 편집 undo 수행
+- `Shift+0`
+  - 뷰 기본 상태 리셋(zoom 1x, freq 기본, scroll 0)
+
+### E. 줌 이후 박스 좌표 불일치 수정 (완료)
+- `frontend/src/app/(dashboard)/labeling/[id]/hooks/useDraftInteractions.ts`
+- `frontend/src/app/(dashboard)/labeling/[id]/hooks/useSuggestionInteractions.ts`
+  - 포인터 좌표 변환, 드래그/리사이즈 `freqDelta`, clamp 기준을
+    `effectiveMaxFreq` 기반에서 `freqMin~freqMax` 뷰 기준으로 통일
+  - 최소 주파수 폭은 `min(100Hz, 현재 뷰 폭)` 안전 처리
+- 결과: 줌 인/아웃 상태와 무관하게 박스 시작점/이동점이 커서와 일치
+
+### F. 안정성/문구 업데이트
+- `frontend/src/lib/hooks/use-spectrogram.ts`
+  - width/height 0 결과 방어 처리(흰 화면 방지)
+- `frontend/messages/ko.json`, `frontend/messages/en.json`
+  - `zoomBoxModeOn`, `zoomBoxHint`, `zoomBoxApplied`, `zoomBoxTooSmall`, `zoomRestored`, `viewReset`, `allChangesReverted` 추가
+
+### G. 검증
+- `cd frontend && npm run build` 통과
+- 타입체크 및 라우트 빌드 정상

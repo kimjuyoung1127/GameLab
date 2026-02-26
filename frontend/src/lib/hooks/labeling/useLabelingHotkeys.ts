@@ -32,6 +32,10 @@ type UseLabelingHotkeysParams = {
   selectedSuggestionId: string | null;
   selectSuggestion: (id: string | null) => void;
   setZoomLevel: (updater: (value: number) => number) => void;
+  setZoomBoxMode: (enabled: boolean) => void;
+  zoomBoxMode: boolean;
+  onUndoAll: () => void;
+  onResetView: () => void;
 };
 
 export function useLabelingHotkeys({
@@ -61,6 +65,10 @@ export function useLabelingHotkeys({
   selectedSuggestionId,
   selectSuggestion,
   setZoomLevel,
+  setZoomBoxMode,
+  zoomBoxMode,
+  onUndoAll,
+  onResetView,
 }: UseLabelingHotkeysParams) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -106,6 +114,16 @@ export function useLabelingHotkeys({
       }
 
       if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        if (e.code === "KeyZ") {
+          e.preventDefault();
+          onUndoAll();
+          return;
+        }
+        if (e.code === "Digit0" || e.code === "Numpad0") {
+          e.preventDefault();
+          onResetView();
+          return;
+        }
         if (e.key === "ArrowUp") {
           e.preventDefault();
           player.setVolume(Math.min(player.volume + 0.1, 1));
@@ -129,7 +147,13 @@ export function useLabelingHotkeys({
           setTool("eraser");
           break;
         case "r":
+          if (e.shiftKey) {
+            e.preventDefault();
+            setZoomBoxMode(true);
+            break;
+          }
           setTool("box");
+          setZoomBoxMode(false);
           break;
         case "a":
           if (!e.ctrlKey && !e.metaKey) setTool("select");
@@ -143,11 +167,11 @@ export function useLabelingHotkeys({
         case "+":
         case "=":
           e.preventDefault();
-          setZoomLevel((z) => Math.min(z + 0.25, 3.0));
+          setZoomLevel((z) => Math.min(z + 0.5, 10.0));
           break;
         case "-":
           e.preventDefault();
-          setZoomLevel((z) => Math.max(z - 0.25, 0.5));
+          setZoomLevel((z) => Math.max(z - 0.5, 1.0));
           break;
         case "[":
           e.preventDefault();
@@ -180,6 +204,12 @@ export function useLabelingHotkeys({
           else player.toggle();
           break;
         }
+        case "escape":
+          if (zoomBoxMode) {
+            e.preventDefault();
+            setZoomBoxMode(false);
+          }
+          break;
         case "tab": {
           e.preventDefault();
           const pendingSuggestions = suggestions.filter((s) => s.status === "pending");
@@ -247,5 +277,9 @@ export function useLabelingHotkeys({
     selectedSuggestionId,
     selectSuggestion,
     setZoomLevel,
+    setZoomBoxMode,
+    zoomBoxMode,
+    onUndoAll,
+    onResetView,
   ]);
 }

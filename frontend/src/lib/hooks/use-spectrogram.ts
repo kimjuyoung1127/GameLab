@@ -63,6 +63,13 @@ export function useSpectrogram(
       worker.onmessage = (e: MessageEvent<SpectrogramWorkerOutput>) => {
         if (computeId !== computeIdRef.current) return; // Stale result
         const out = e.data;
+        if (out.width <= 0 || out.height <= 0) {
+          setData(null);
+          setLoading(false);
+          worker.terminate();
+          workerRef.current = null;
+          return;
+        }
         const imageData = createImageData(
           new Uint8ClampedArray(out.buffer),
           out.width,
@@ -122,6 +129,10 @@ export function useSpectrogram(
           freqMax,
         });
         if (id !== computeIdRef.current) return;
+        if (result.width <= 0 || result.height <= 0) {
+          setData(null);
+          return;
+        }
         const imageData = createImageData(result.imageData, result.width, result.height);
         const actualFreqMin = (result.binMin / totalBins) * nyquist;
         const actualFreqMax = (result.binMax / totalBins) * nyquist;

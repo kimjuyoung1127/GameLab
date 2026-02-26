@@ -7,7 +7,11 @@ import type { WaveformData } from "@/types";
 
 const DOWNSAMPLE_POINTS = 1024;
 
-export function useWaveform(audioUrl: string | null | undefined, retryKey = 0) {
+export function useWaveform(
+  audioUrl: string | null | undefined,
+  retryKey = 0,
+  targetSampleRate?: number,
+) {
   const [data, setData] = useState<WaveformData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +31,15 @@ export function useWaveform(audioUrl: string | null | undefined, retryKey = 0) {
     setLoading(true);
 
     (async () => {
+      let audioCtx: AudioContext | null = null;
       try {
         const res = await fetch(audioUrl, { signal: ac.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = await res.arrayBuffer();
 
-        const audioCtx = new AudioContext();
+        audioCtx = targetSampleRate
+          ? new AudioContext({ sampleRate: targetSampleRate })
+          : new AudioContext();
         const decoded = await audioCtx.decodeAudioData(buf);
         const rawChannel = decoded.getChannelData(0);
         const peaks = downsample(rawChannel, DOWNSAMPLE_POINTS);
@@ -45,14 +52,15 @@ export function useWaveform(audioUrl: string | null | undefined, retryKey = 0) {
           sampleRate: decoded.sampleRate,
           channelData: channelDataCopy,
         });
-
-        await audioCtx.close();
       } catch (err: unknown) {
         if ((err as Error).name !== "AbortError") {
           setError((err as Error).message ?? "Waveform decode failed");
           setData(null);
         }
       } finally {
+        if (audioCtx && audioCtx.state !== "closed") {
+          await audioCtx.close().catch(() => {});
+        }
         setLoading(false);
       }
     })();
@@ -61,7 +69,7 @@ export function useWaveform(audioUrl: string | null | undefined, retryKey = 0) {
       ac.abort();
       abortRef.current = null;
     };
-  }, [audioUrl, retryKey]);
+  }, [audioUrl, retryKey, targetSampleRate]);
 
   return { data, loading, error };
 }

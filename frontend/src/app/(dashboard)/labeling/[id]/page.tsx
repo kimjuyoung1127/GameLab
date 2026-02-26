@@ -42,6 +42,8 @@ import { useTranslations } from "next-intl";
 /*  Spectrogram helpers                                                */
 /* ------------------------------------------------------------------ */
 const MAX_FREQ = 20_000; // Hz
+const MIN_ZOOM = 1.0;
+const MAX_ZOOM = 10.0;
 
 function parseDurationToSeconds(dur: string): number {
   const parts = dur.split(":").map(Number);
@@ -71,6 +73,23 @@ function normalizeAudioUrl(url: string | undefined): string | null {
   }
 }
 
+function parseSampleRateHz(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return undefined;
+
+  const khzMatch = normalized.match(/(\d+(?:\.\d+)?)\s*khz/);
+  if (khzMatch) {
+    const parsed = Number.parseFloat(khzMatch[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 1000) : undefined;
+  }
+
+  const hzMatch = normalized.match(/(\d+(?:\.\d+)?)/);
+  if (!hzMatch) return undefined;
+  const parsed = Number.parseFloat(hzMatch[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : undefined;
+}
+
 function suggestionBoxStyle(
   s: Suggestion | ManualDraft,
   totalDuration: number,
@@ -84,6 +103,13 @@ function suggestionBoxStyle(
   const heightPct = Math.min(100 - topPct, ((s.freqHigh - s.freqLow) / range) * 100);
   return { left: `${leftPct}%`, width: `${widthPct}%`, top: `${topPct}%`, height: `${heightPct}%` };
 }
+
+type ViewportSnapshot = {
+  zoomLevel: number;
+  freqMin: number;
+  freqMax: number;
+  scrollLeft: number;
+};
 
 const statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }> = {
   pending:   { border: "border-orange-400", bg: "bg-orange-400", tagBg: "bg-orange-400/90", label: "text-orange-400", dashed: true },
@@ -162,6 +188,7 @@ export default function LabelingWorkspacePage() {
   const [fileCompleteToast, setFileCompleteToast] = useState(false);
   const [audioRetryKey, setAudioRetryKey] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomBoxMode, setZoomBoxMode] = useState(false);
   const [fitToSuggestion, setFitToSuggestion] = useState(true);
   const [showFitToast, setShowFitToast] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
@@ -172,6 +199,8 @@ export default function LabelingWorkspacePage() {
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const viewportUndoRef = useRef<ViewportSnapshot[]>([]);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -179,11 +208,12 @@ export default function LabelingWorkspacePage() {
   const activeFileId = currentFileId ?? audioFiles[0]?.id ?? null;
   const activeFile = audioFiles.find((f) => f.id === activeFileId) ?? audioFiles[0];
   const parsedDuration = activeFile ? Math.max(parseDurationToSeconds(activeFile.duration), 1) : 600;
+  const targetSampleRate = parseSampleRateHz(activeFile?.sampleRate);
 
   /* ----- Audio player + Waveform hooks ----------------------------- */
   const audioUrl: string | null = normalizeAudioUrl(activeFile?.audioUrl);
   const player = useAudioPlayer(audioUrl, parsedDuration, audioRetryKey);
-  const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey);
+  const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey, targetSampleRate);
   const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData, freqMin, freqMax);
   const audioLoadError = player.error ?? waveformError;
 
@@ -193,6 +223,13 @@ export default function LabelingWorkspacePage() {
     effectiveMaxFreqRef.current = spectrogramData?.maxFrequency ?? MAX_FREQ;
   }, [spectrogramData]);
   const effectiveMaxFreq = spectrogramData?.maxFrequency ?? MAX_FREQ;
+
+  useEffect(() => {
+    const clampedMax = Math.min(Math.max(freqMax, 1), effectiveMaxFreq);
+    const clampedMin = Math.max(0, Math.min(freqMin, Math.max(clampedMax - 1, 0)));
+    if (clampedMin !== freqMin) setFreqMin(clampedMin);
+    if (clampedMax !== freqMax) setFreqMax(clampedMax);
+  }, [effectiveMaxFreq, freqMin, freqMax]);
 
   const totalDuration = player.duration || parsedDuration;
   const playbackPct = totalDuration > 0 ? (player.currentTime / totalDuration) * 100 : 0;
@@ -386,12 +423,115 @@ export default function LabelingWorkspacePage() {
     if (!selected) return;
     if (fitToSuggestion) {
       const segment = Math.max(selected.endTime - selected.startTime, 0.25);
-      const desiredZoom = Math.min(3, Math.max(1, totalDuration / (segment * 4)));
+      const desiredZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, totalDuration / (segment * 4)));
+      viewportUndoRef.current.push({
+        zoomLevel,
+        freqMin,
+        freqMax,
+        scrollLeft: scrollContainerRef.current?.scrollLeft ?? 0,
+      });
       setZoomLevel(desiredZoom);
       setShowFitToast(true);
     }
     seekTo((selected.startTime + selected.endTime) / 2, true);
-  }, [fitToSuggestion, seekTo, selectSuggestion, suggestions, totalDuration]);
+  }, [fitToSuggestion, freqMax, freqMin, seekTo, selectSuggestion, suggestions, totalDuration, zoomLevel]);
+
+  const handleZoomLevelChange = useCallback(
+    (updater: (current: number) => number) => {
+      viewportUndoRef.current.push({
+        zoomLevel,
+        freqMin,
+        freqMax,
+        scrollLeft: scrollContainerRef.current?.scrollLeft ?? 0,
+      });
+      setZoomLevel((current) => updater(current));
+    },
+    [freqMax, freqMin, zoomLevel],
+  );
+
+  const handleZoomToBox = useCallback(
+    (box: { startTime: number; endTime: number; freqLow: number; freqHigh: number }) => {
+      const rawDuration = box.endTime - box.startTime;
+      const rawFreqRange = box.freqHigh - box.freqLow;
+      if (rawDuration < 0.05 || rawFreqRange < 100) {
+        showToast(t("zoomBoxTooSmall"));
+        setZoomBoxMode(false);
+        return;
+      }
+      const boxDuration = Math.max(rawDuration, 0.01);
+      const desiredZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, totalDuration / boxDuration));
+      const nextFreqMin = Math.max(0, box.freqLow);
+      const nextFreqMax = Math.min(effectiveMaxFreq, box.freqHigh);
+      if (nextFreqMax - nextFreqMin < 100) {
+        showToast(t("zoomBoxTooSmall"));
+        setZoomBoxMode(false);
+        return;
+      }
+
+      viewportUndoRef.current.push({
+        zoomLevel,
+        freqMin,
+        freqMax,
+        scrollLeft: scrollContainerRef.current?.scrollLeft ?? 0,
+      });
+
+      setZoomLevel(desiredZoom);
+      setFreqMin(nextFreqMin);
+      setFreqMax(nextFreqMax);
+      setZoomBoxMode(false);
+      showToast(t("zoomBoxApplied"));
+
+      requestAnimationFrame(() => {
+        const container = scrollContainerRef.current;
+        if (!container || totalDuration <= 0) return;
+        const centerRatio = ((box.startTime + box.endTime) / 2) / totalDuration;
+        const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+        const target = centerRatio * container.scrollWidth - container.clientWidth / 2;
+        container.scrollLeft = Math.max(0, Math.min(target, maxScrollLeft));
+      });
+    },
+    [effectiveMaxFreq, freqMax, freqMin, showToast, t, totalDuration, zoomLevel],
+  );
+
+  const handleUndoAllEdits = useCallback(() => {
+    const viewportPrev = viewportUndoRef.current.pop();
+    if (viewportPrev) {
+      setZoomLevel(viewportPrev.zoomLevel);
+      setFreqMin(viewportPrev.freqMin);
+      setFreqMax(viewportPrev.freqMax);
+      setZoomBoxMode(false);
+      requestAnimationFrame(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+        container.scrollLeft = Math.max(0, Math.min(viewportPrev.scrollLeft, maxScrollLeft));
+      });
+      showToast(t("zoomRestored"));
+      return;
+    }
+    while (useAnnotationStore.getState().undoStack.length > 0) {
+      useAnnotationStore.getState().undo();
+    }
+    setZoomLevel(1);
+    setFreqMin(0);
+    setFreqMax(effectiveMaxFreq);
+    setZoomBoxMode(false);
+    showToast(t("allChangesReverted"));
+  }, [effectiveMaxFreq, showToast, t]);
+
+  const handleResetView = useCallback(() => {
+    setZoomLevel(1);
+    setFreqMin(0);
+    setFreqMax(effectiveMaxFreq);
+    setZoomBoxMode(false);
+    viewportUndoRef.current = [];
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      container.scrollLeft = 0;
+    });
+    showToast(t("viewReset"));
+  }, [effectiveMaxFreq, showToast, t]);
 
   const handleFileClick = useCallback((file: AudioFile) => {
     setCurrentFile(file.id);
@@ -437,6 +577,8 @@ export default function LabelingWorkspacePage() {
     tool,
     totalDuration,
     snapEnabled,
+    freqMin,
+    freqMax,
     effectiveMaxFreqRef,
     spectrogramRef,
     updateSuggestion,
@@ -464,8 +606,11 @@ export default function LabelingWorkspacePage() {
   } = useDraftInteractions({
     activeFileId,
     tool,
+    zoomBoxMode,
     totalDuration,
     snapEnabled,
+    freqMin,
+    freqMax,
     effectiveMaxFreqRef,
     spectrogramRef,
     isDraggingSuggestion,
@@ -473,6 +618,7 @@ export default function LabelingWorkspacePage() {
     seekTo,
     t: (key) => t(key),
     startDraft,
+    onZoomToBox: handleZoomToBox,
     updateDraft,
     selectDraft,
     pushHistory,
@@ -633,6 +779,8 @@ export default function LabelingWorkspacePage() {
     setFileCompleteToast(false);
     hasInteracted.current = false;
     completionHandled.current = false;
+    setZoomBoxMode(false);
+    viewportUndoRef.current = [];
   }, [activeFileId]);
 
   useEffect(() => {
@@ -640,6 +788,11 @@ export default function LabelingWorkspacePage() {
     const timer = setTimeout(() => setShowFitToast(false), 1200);
     return () => clearTimeout(timer);
   }, [showFitToast]);
+
+  useEffect(() => {
+    if (!zoomBoxMode) return;
+    showToast(t("zoomBoxModeOn"));
+  }, [zoomBoxMode, showToast, t]);
 
   useEffect(() => {
     if (!loopHudWarning) return;
@@ -679,7 +832,11 @@ export default function LabelingWorkspacePage() {
     selectedDraftId,
     selectedSuggestionId,
     selectSuggestion: handleSelectSuggestion,
-    setZoomLevel,
+    setZoomLevel: handleZoomLevelChange,
+    setZoomBoxMode,
+    zoomBoxMode,
+    onUndoAll: handleUndoAllEdits,
+    onResetView: handleResetView,
   });
 
   /* ================================================================ */
@@ -719,7 +876,7 @@ export default function LabelingWorkspacePage() {
             onToggleFit={() => setFitToSuggestion((prev) => !prev)}
             onUndo={undo}
             onRedo={redo}
-            onZoomLevelChange={setZoomLevel}
+            onZoomLevelChange={handleZoomLevelChange}
             confirmedCount={confirmedCount}
             totalCount={totalCount}
             sessionId={sessionId}
@@ -741,7 +898,9 @@ export default function LabelingWorkspacePage() {
             onDismissCompleteToast={() => setFileCompleteToast(false)}
             effectiveMaxFreq={effectiveMaxFreq}
             spectrogramRef={spectrogramRef}
+            scrollContainerRef={scrollContainerRef}
             tool={tool}
+            zoomBoxMode={zoomBoxMode}
             suggestions={suggestions}
             manualDrafts={manualDrafts}
             selectedSuggestionId={selectedSuggestionId}
@@ -770,7 +929,12 @@ export default function LabelingWorkspacePage() {
             suggestionBoxStyle={suggestionBoxStyle}
             freqMin={freqMin}
             freqMax={freqMax}
-            onFreqRangeChange={(min, max) => { setFreqMin(min); setFreqMax(max); }}
+            onFreqRangeChange={(min, max) => {
+              const nextMax = Math.min(Math.max(max, 1), effectiveMaxFreq);
+              const nextMin = Math.max(0, Math.min(min, Math.max(nextMax - 1, 0)));
+              setFreqMin(nextMin);
+              setFreqMax(nextMax);
+            }}
             statusColors={statusColors}
             draftPreview={draftPreview}
             playbackPct={playbackPct}
