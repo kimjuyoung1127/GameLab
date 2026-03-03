@@ -1,6 +1,6 @@
 ﻿# Code-Doc Integrity Report
 
-Last Run: 2026-03-03 13:20 KST (manual update)
+Last Run: 2026-03-03 14:05 KST (manual update)
 Result: pass (manual sync)
 
 ## Route Summary
@@ -15,6 +15,7 @@ Result: pass (manual sync)
 - manual_required: 0
 - labeling listening files linked in matrix: yes
 - hotkey policy doc-sync (`C/O/F/Shift+F`): yes
+- qa hotfix doc-sync (`e903563`,`a08d2fc`,`35cd849`): yes
 
 ## Unmanaged Routes (expected)
 - `/`

@@ -32,6 +32,11 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - slack daily summary: Ready
 
 ## Next Actions
-1. Run end-to-end manual regression on `/labeling/[id]` (keyboard, playback, export).
+1. Run final pass for label-chip position UX (bottom clipping auto-flip improvement).
 2. Execute one external scheduler DRY_RUN cycle for status artifacts.
 3. Flip `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1=true` after QA sign-off.
+
+## Recent QA Hotfixes (2026-03-03 KST)
+- segment playback mode visibility and stop/toggle control
+- numeric selection input delete/retype stabilization
+- numeric selection input commit timing fix (Enter/blur)
