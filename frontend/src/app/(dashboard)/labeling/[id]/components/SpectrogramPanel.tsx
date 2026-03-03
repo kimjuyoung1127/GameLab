@@ -521,6 +521,7 @@ export default function SpectrogramPanel({
               </div>
             </div>
 
+            <div className="absolute top-0 left-12 right-0 bottom-6">
             {suggestions.map((s) => {
               const sc = statusColors[s.status];
               const isSelected = s.id === selectedSuggestionId;
@@ -544,7 +545,7 @@ export default function SpectrogramPanel({
                     isSelected ? "ring-2 ring-white/30 shadow-lg shadow-white/10" : "hover:ring-1 hover:ring-white/20"
                   }`}
                   style={{
-                    left: `calc(48px + ${boxPos.left})`,
+                    left: boxPos.left,
                     top: boxPos.top,
                     width: boxPos.width,
                     height: boxPos.height,
@@ -599,7 +600,7 @@ export default function SpectrogramPanel({
                     isSelected ? "border-cyan-300 bg-cyan-300/10 ring-2 ring-cyan-100/50" : "border-cyan-400/80 bg-cyan-400/10 hover:border-cyan-300"
                   }`}
                   style={{
-                    left: `calc(48px + ${pos.left})`,
+                    left: pos.left,
                     top: pos.top,
                     width: pos.width,
                     height: pos.height,
@@ -630,7 +631,7 @@ export default function SpectrogramPanel({
                     zoomBoxMode ? "border-amber-200 bg-amber-300/15" : "border-cyan-200 bg-cyan-300/15"
                   }`}
                   style={{
-                    left: `calc(48px + ${pos.left})`,
+                    left: pos.left,
                     top: pos.top,
                     width: pos.width,
                     height: pos.height,
@@ -641,7 +642,7 @@ export default function SpectrogramPanel({
               );
             })()}
 
-            <div className="absolute top-0 bottom-6 w-px bg-white/60 z-30" style={{ left: `calc(48px + ${playbackPct}%)` }}>
+            <div className="absolute top-0 bottom-0 w-px bg-white/60 z-30" style={{ left: `${playbackPct}%` }}>
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
               <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/50 text-[9px] text-white/90 font-mono whitespace-nowrap">
                 {formatTimecode(player.currentTime)}
@@ -649,16 +650,16 @@ export default function SpectrogramPanel({
             </div>
 
             {loopState.start !== null && (
-              <div className="absolute top-0 bottom-6 w-px bg-warning/80 z-30" style={{ left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)` }} />
+              <div className="absolute top-0 bottom-0 w-px bg-warning/80 z-30" style={{ left: `${(loopState.start / totalDuration) * 100}%` }} />
             )}
             {loopState.end !== null && (
-              <div className="absolute top-0 bottom-6 w-px bg-warning/80 z-30" style={{ left: `calc(48px + ${(loopState.end / totalDuration) * 100}%)` }} />
+              <div className="absolute top-0 bottom-0 w-px bg-warning/80 z-30" style={{ left: `${(loopState.end / totalDuration) * 100}%` }} />
             )}
             {loopState.start !== null && loopState.end !== null && loopState.end > loopState.start && (
               <div
-                className="absolute top-0 bottom-6 bg-warning/10 border-y border-warning/30 z-20 pointer-events-none"
+                className="absolute top-0 bottom-0 bg-warning/10 border-y border-warning/30 z-20 pointer-events-none"
                 style={{
-                  left: `calc(48px + ${(loopState.start / totalDuration) * 100}%)`,
+                  left: `${(loopState.start / totalDuration) * 100}%`,
                   width: `${((loopState.end - loopState.start) / totalDuration) * 100}%`,
                 }}
               />
@@ -673,8 +674,8 @@ export default function SpectrogramPanel({
               return (
                 <div
                   key={`bm-${b.id}`}
-                  className={`absolute top-0 bottom-6 w-0.5 ${colors.line} z-25`}
-                  style={{ left: `calc(48px + ${leftPct}%)` }}
+                  className={`absolute top-0 bottom-0 w-0.5 ${colors.line} z-25`}
+                  style={{ left: `${leftPct}%` }}
                   onMouseEnter={() => setHoveredBookmarkId(b.id)}
                   onMouseLeave={() => setHoveredBookmarkId(null)}
                   onClick={(e) => handleBookmarkClick(e, b.id)}
@@ -705,6 +706,7 @@ export default function SpectrogramPanel({
                 </div>
               );
             })}
+            </div>
 
             <div className="absolute left-12 right-0 bottom-0 h-6 flex items-center justify-between px-2 pointer-events-none">
               {Array.from({ length: 6 }, (_, i) => {
