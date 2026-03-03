@@ -202,6 +202,7 @@ export default function LabelingWorkspacePage() {
   const [segmentExportError, setSegmentExportError] = useState<string | null>(null);
   const [freqMin, setFreqMin] = useState(0);
   const [freqMax, setFreqMax] = useState(MAX_FREQ);
+  const [freqAxisScale, setFreqAxisScale] = useState<"linear" | "log">("linear");
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
@@ -245,6 +246,8 @@ export default function LabelingWorkspacePage() {
   const playbackPct = totalDuration > 0 ? (player.currentTime / totalDuration) * 100 : 0;
   const {
     selection: listeningSelection,
+    setCustomSelection: setListeningSelection,
+    clearCustomSelection,
   } = useListeningSelection({
     enabled: spectroListeningEnabled,
     selectedSuggestionId,
@@ -873,6 +876,10 @@ export default function LabelingWorkspacePage() {
   }, [loopHudWarning]);
 
   useEffect(() => {
+    clearCustomSelection();
+  }, [clearCustomSelection, selectedSuggestionId, selectedDraftId]);
+
+  useEffect(() => {
     player.setLoopStart(loopState.start);
     player.setLoopEnd(loopState.end);
     player.setLoopEnabled(loopState.enabled);
@@ -1015,12 +1022,15 @@ export default function LabelingWorkspacePage() {
             }}
             listeningEnabled={spectroListeningEnabled}
             listeningSelection={listeningSelection}
+            onListeningSelectionChange={setListeningSelection}
             onPlayOriginalSelection={handlePlayOriginalSelection}
             onPlayFilteredSelection={handlePlayFilteredSelection}
             segmentPlaybackError={segmentPlayback.error?.message ?? null}
             segmentPlaybackActive={segmentPlayback.isPlaying}
             onDownloadFilteredSelection={handleDownloadFilteredSelection}
             segmentExportError={segmentExportError}
+            freqAxisScale={freqAxisScale}
+            onFreqAxisScaleChange={setFreqAxisScale}
             statusColors={statusColors}
             draftPreview={draftPreview}
             playbackPct={playbackPct}

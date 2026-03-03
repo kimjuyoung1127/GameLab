@@ -2,7 +2,7 @@
 "use client";
 
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Flag, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
@@ -23,6 +23,7 @@ import type { ListeningSelection } from "@/lib/audio/listening-types";
 import { bookmarkColors } from "./constants";
 
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
+type FrequencyAxisScale = "linear" | "log";
 
 type SpectrogramPanelProps = {
   waveformData: WaveformData | null;
@@ -71,12 +72,15 @@ type SpectrogramPanelProps = {
   onFreqRangeChange: (min: number, max: number) => void;
   listeningEnabled: boolean;
   listeningSelection: ListeningSelection | null;
+  onListeningSelectionChange: (selection: ListeningSelection) => void;
   onPlayOriginalSelection: () => void;
   onPlayFilteredSelection: () => void;
   onDownloadFilteredSelection: () => void;
   segmentPlaybackError: string | null;
   segmentPlaybackActive: boolean;
   segmentExportError: string | null;
+  freqAxisScale: FrequencyAxisScale;
+  onFreqAxisScaleChange: (scale: FrequencyAxisScale) => void;
   statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }>;
   draftPreview: ManualDraft | null;
   playbackPct: number;
@@ -155,18 +159,22 @@ export default function SpectrogramPanel({
   onFreqRangeChange,
   listeningEnabled,
   listeningSelection,
+  onListeningSelectionChange,
   onPlayOriginalSelection,
   onPlayFilteredSelection,
   onDownloadFilteredSelection,
   segmentPlaybackError,
   segmentPlaybackActive,
   segmentExportError,
+  freqAxisScale,
+  onFreqAxisScaleChange,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
 
   /* Post-it note bubble state */
   const [hoveredBookmarkId, setHoveredBookmarkId] = useState<string | null>(null);
   const [pinnedBookmarkId, setPinnedBookmarkId] = useState<string | null>(null);
+  const [hoverMetrics, setHoverMetrics] = useState<{ timeSec: number; freqHz: number; db: number } | null>(null);
 
   const handleBookmarkClick = useCallback((e: React.MouseEvent, bId: string) => {
     e.stopPropagation();
@@ -189,6 +197,56 @@ export default function SpectrogramPanel({
     edge_case: t("bookmarkEdge"),
     needs_analysis: t("bookmarkNeedsAnalysis"),
   };
+
+  const frequencyTicks = useMemo(() => {
+    if (freqAxisScale === "linear") {
+      const range = freqMax - freqMin;
+      return [freqMax, freqMin + range * 0.75, freqMin + range * 0.5, freqMin + range * 0.25, freqMin];
+    }
+    const safeMin = Math.max(1, freqMin || 1);
+    const safeMax = Math.max(safeMin + 1, freqMax);
+    return [0, 1, 2, 3, 4].map((idx) => {
+      const ratio = idx / 4;
+      return Math.exp(Math.log(safeMax) - ratio * (Math.log(safeMax) - Math.log(safeMin)));
+    });
+  }, [freqAxisScale, freqMax, freqMin]);
+
+  const handleSpectrogramPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    onDraftPointerMove(e);
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+    const xRatio = x / rect.width;
+    const yRatio = y / rect.height;
+
+    const timeSec = xRatio * totalDuration;
+    const freqHz =
+      freqAxisScale === "linear"
+        ? freqMax - yRatio * (freqMax - freqMin)
+        : Math.exp(
+            Math.log(Math.max(1, freqMax)) -
+              yRatio * (Math.log(Math.max(1, freqMax)) - Math.log(Math.max(1, freqMin || 1))),
+          );
+
+    let db = -90;
+    if (spectrogramData) {
+      const px = Math.min(spectrogramData.width - 1, Math.max(0, Math.floor(xRatio * spectrogramData.width)));
+      const py = Math.min(spectrogramData.height - 1, Math.max(0, Math.floor(yRatio * spectrogramData.height)));
+      const offset = (py * spectrogramData.width + px) * 4;
+      const rgba = spectrogramData.imageData.data;
+      const luminance = (rgba[offset] + rgba[offset + 1] + rgba[offset + 2]) / (255 * 3);
+      db = -90 + luminance * 80;
+    }
+
+    setHoverMetrics({ timeSec, freqHz, db });
+  }, [freqAxisScale, freqMax, freqMin, onDraftPointerMove, spectrogramData, totalDuration]);
+
+  const handleSpectrogramPointerLeave = useCallback((e?: React.PointerEvent<HTMLDivElement>) => {
+    onDraftPointerUp(e);
+    setHoverMetrics(null);
+  }, [onDraftPointerUp]);
 
   return (
     <>
@@ -251,6 +309,42 @@ export default function SpectrogramPanel({
                 </button>
               </div>
             </div>
+            {listeningSelection && (
+              <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={listeningSelection.timeStartSec.toFixed(2)}
+                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, timeStartSec: Number.parseFloat(e.target.value) || 0 })}
+                  className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
+                  aria-label="Selection start time"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={listeningSelection.timeEndSec.toFixed(2)}
+                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, timeEndSec: Number.parseFloat(e.target.value) || 0 })}
+                  className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
+                  aria-label="Selection end time"
+                />
+                <input
+                  type="number"
+                  step="1"
+                  value={Math.round(listeningSelection.freqLowHz)}
+                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, freqLowHz: Number.parseFloat(e.target.value) || 0 })}
+                  className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
+                  aria-label="Selection low frequency"
+                />
+                <input
+                  type="number"
+                  step="1"
+                  value={Math.round(listeningSelection.freqHighHz)}
+                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, freqHighHz: Number.parseFloat(e.target.value) || 0 })}
+                  className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
+                  aria-label="Selection high frequency"
+                />
+              </div>
+            )}
             {(segmentPlaybackError || segmentPlaybackActive || segmentExportError) && (
               <div className="mt-1 text-[10px]">
                 {segmentPlaybackError ? (
@@ -272,21 +366,23 @@ export default function SpectrogramPanel({
           >
 
             <div className="absolute left-0 top-0 bottom-6 w-12 flex flex-col justify-between py-4 z-10">
-              {(() => {
-                const range = freqMax - freqMin;
-                const steps = [freqMax, freqMin + range * 0.75, freqMin + range * 0.5, freqMin + range * 0.25, freqMin];
-                return steps.map((freq, i) => {
-                  const label =
-                    freq >= 1000 ? `${(freq / 1000).toFixed(freq % 1000 === 0 ? 0 : 1)}kHz` : `${Math.round(freq)}Hz`;
-                  return (
-                    <span key={i} className="text-[10px] text-text-muted/70 font-mono text-right pr-2 pointer-events-none">
-                      {label}
-                    </span>
-                  );
-                });
-              })()}
+              {frequencyTicks.map((freq, i) => {
+                const label =
+                  freq >= 1000 ? `${(freq / 1000).toFixed(freq % 1000 === 0 ? 0 : 1)}kHz` : `${Math.round(freq)}Hz`;
+                return (
+                  <span key={i} className="text-[10px] text-text-muted/70 font-mono text-right pr-2 pointer-events-none">
+                    {label}
+                  </span>
+                );
+              })}
               {/* Frequency range preset buttons */}
               <div className="absolute -left-0.5 bottom-0 translate-y-full pt-1 flex flex-col gap-0.5 pointer-events-auto z-20">
+                <button
+                  onClick={() => onFreqAxisScaleChange(freqAxisScale === "linear" ? "log" : "linear")}
+                  className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-surface/80 text-text-muted hover:bg-panel-light hover:text-text-secondary"
+                >
+                  Axis {freqAxisScale === "linear" ? "LIN" : "LOG"}
+                </button>
                 {([
                   { label: t("freqPresetFull"), min: 0, max: effectiveMaxFreq },
                   { label: t("freqPresetLow"), min: 0, max: 5000 },
@@ -314,9 +410,9 @@ export default function SpectrogramPanel({
             <div
               ref={spectrogramRef}
               onPointerDown={onDraftPointerDown}
-              onPointerMove={onDraftPointerMove}
+              onPointerMove={handleSpectrogramPointerMove}
               onPointerUp={onDraftPointerUp}
-              onPointerLeave={onDraftPointerUp}
+              onPointerLeave={handleSpectrogramPointerLeave}
               className={`absolute top-0 left-12 right-0 bottom-6 bg-black ${tool === "box" || zoomBoxMode ? "cursor-crosshair" : "cursor-pointer"}`}
             >
               <SpectrogramCanvas data={spectrogramData} loading={spectrogramLoading} className="absolute inset-0" />
@@ -571,6 +667,15 @@ export default function SpectrogramPanel({
               </div>
               {loopHudWarning && <p className="text-danger text-[9px]">{t("loopRequireBounds")}</p>}
             </div>
+
+            {hoverMetrics && (
+              <div className="absolute top-8 left-3 rounded-lg border border-white/10 bg-black/55 backdrop-blur-sm px-2 py-1.5 text-[10px] space-y-0.5 min-w-[160px]">
+                <div className="text-text-muted">Hover</div>
+                <div className="font-mono text-text-secondary">{hoverMetrics.timeSec.toFixed(3)}s</div>
+                <div className="font-mono text-text-secondary">{Math.round(hoverMetrics.freqHz)}Hz</div>
+                <div className="font-mono text-text-secondary">{hoverMetrics.db.toFixed(1)} dB</div>
+              </div>
+            )}
 
             <div className="absolute bottom-8 left-3 bg-black/55 text-[9px] text-text-muted px-2 py-1 rounded font-mono">
               {zoomBoxMode ? t("zoomBoxHint") : t("clickDragSeekHint")}
