@@ -44,6 +44,7 @@ import { useTranslations } from "next-intl";
 const MAX_FREQ = 20_000; // Hz
 const MIN_ZOOM = 1.0;
 const MAX_ZOOM = 10.0;
+const ENABLE_SPECTRO_LISTENING_V1 = process.env.NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1 === "true";
 
 function parseDurationToSeconds(dur: string): number {
   const parts = dur.split(":").map(Number);
@@ -178,6 +179,7 @@ export default function LabelingWorkspacePage() {
 
   const { checkAndUnlock, recentUnlock, clearRecent, load: loadAchievements } = useAchievementStore();
   const { showToast } = useUIStore();
+  const spectroListeningEnabled = ENABLE_SPECTRO_LISTENING_V1;
 
   /* ----- Local UI state ------------------------------------------- */
   const [fileFilter, setFileFilter] = useState("");
@@ -843,7 +845,10 @@ export default function LabelingWorkspacePage() {
   /*  RENDER                                                          */
   /* ================================================================ */
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-canvas text-text">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-canvas text-text"
+      data-listening-v1={spectroListeningEnabled ? "on" : "off"}
+    >
       <LabelingHeader
         mode={mode}
         score={score}
