@@ -120,6 +120,22 @@ Smart Spectro-Tagging — automation-first operating index.
 - barrel: `schemas.py` / `index.ts` / `endpoints.ts`
 - 변경 시 **be-fe-model-sync** 스킬 사용
 
+## Test Policy (영역별 테스트 전략)
+
+| 영역 | 테스트 수준 | 방법 | 이유 |
+|------|-----------|------|------|
+| BE 분석 엔진 (`services/analysis/`) | **TDD** | 실패 테스트 → 최소 구현 → 리팩터 | 입출력 명확, 버그 시 결과 오염 |
+| BE API 엔드포인트 (`api/`) | **통합 테스트** | 요청/응답 계약 검증 | BE↔FE 불일치 방지 |
+| FE 유틸/훅 (순수 로직) | **단위 테스트** | 상태 변환, 계산 로직 검증 | `action-queue`, `score-store` 등 |
+| FE 컴포넌트/UI | **빌드 검증** | `npm run build` 통과 | 자주 바뀜, 테스트 유지비용 > 효과 |
+
+### 테스트 규칙
+1. BE 분석 엔진 변경 시 반드시 테스트 먼저 작성 (Red → Green → Refactor)
+2. BE API 엔드포인트 추가/변경 시 통합 테스트 추가
+3. 구조 변경(리팩터)과 동작 변경(기능)은 별도 커밋으로 분리
+4. 모든 테스트 통과 전 커밋 금지 (`pre-commit-validate` 스킬 사용)
+5. FE 컴포넌트는 TDD 대상 아님 — 빌드 + 수동 회귀 체크로 충분
+
 ## Quick Commands
 - FE 빌드: `cd frontend && npm run build`
 - BE 테스트: `cd backend && python -m pytest tests/ -v`
