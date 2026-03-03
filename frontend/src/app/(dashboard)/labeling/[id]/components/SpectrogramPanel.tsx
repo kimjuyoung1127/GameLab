@@ -278,6 +278,16 @@ export default function SpectrogramPanel({
     ? `${listeningSelection.timeStartSec}-${listeningSelection.timeEndSec}-${listeningSelection.freqLowHz}-${listeningSelection.freqHighHz}`
     : "empty";
 
+  const commitOnEnter = useCallback(
+    (field: "start" | "end" | "low" | "high", e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      commitNumericInput(field, e.currentTarget.value);
+      e.currentTarget.blur();
+    },
+    [commitNumericInput],
+  );
+
   return (
     <>
       <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -353,12 +363,15 @@ export default function SpectrogramPanel({
                   type="number"
                   step="0.01"
                   defaultValue={listeningSelection.timeStartSec.toFixed(2)}
-                  onChange={(e) => commitNumericInput("start", e.target.value)}
+                  onKeyDown={(e) => commitOnEnter("start", e)}
                   onBlur={(e) => {
                     if (!listeningSelection) return;
-                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                    const parsed = Number.parseFloat(e.target.value);
+                    if (!Number.isFinite(parsed)) {
                       e.target.value = listeningSelection.timeStartSec.toFixed(2);
+                      return;
                     }
+                    commitNumericInput("start", e.target.value);
                   }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection start time"
@@ -368,12 +381,15 @@ export default function SpectrogramPanel({
                   type="number"
                   step="0.01"
                   defaultValue={listeningSelection.timeEndSec.toFixed(2)}
-                  onChange={(e) => commitNumericInput("end", e.target.value)}
+                  onKeyDown={(e) => commitOnEnter("end", e)}
                   onBlur={(e) => {
                     if (!listeningSelection) return;
-                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                    const parsed = Number.parseFloat(e.target.value);
+                    if (!Number.isFinite(parsed)) {
                       e.target.value = listeningSelection.timeEndSec.toFixed(2);
+                      return;
                     }
+                    commitNumericInput("end", e.target.value);
                   }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection end time"
@@ -383,12 +399,15 @@ export default function SpectrogramPanel({
                   type="number"
                   step="1"
                   defaultValue={Math.round(listeningSelection.freqLowHz)}
-                  onChange={(e) => commitNumericInput("low", e.target.value)}
+                  onKeyDown={(e) => commitOnEnter("low", e)}
                   onBlur={(e) => {
                     if (!listeningSelection) return;
-                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                    const parsed = Number.parseFloat(e.target.value);
+                    if (!Number.isFinite(parsed)) {
                       e.target.value = String(Math.round(listeningSelection.freqLowHz));
+                      return;
                     }
+                    commitNumericInput("low", e.target.value);
                   }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection low frequency"
@@ -398,12 +417,15 @@ export default function SpectrogramPanel({
                   type="number"
                   step="1"
                   defaultValue={Math.round(listeningSelection.freqHighHz)}
-                  onChange={(e) => commitNumericInput("high", e.target.value)}
+                  onKeyDown={(e) => commitOnEnter("high", e)}
                   onBlur={(e) => {
                     if (!listeningSelection) return;
-                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                    const parsed = Number.parseFloat(e.target.value);
+                    if (!Number.isFinite(parsed)) {
                       e.target.value = String(Math.round(listeningSelection.freqHighHz));
+                      return;
                     }
+                    commitNumericInput("high", e.target.value);
                   }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection high frequency"
