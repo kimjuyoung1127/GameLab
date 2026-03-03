@@ -102,7 +102,7 @@ export async function exportFilteredSelectionAsWav({
   const segment = channelData.slice(start, end);
   const offline = new OfflineAudioContext(1, segment.length, sampleRate);
   const buffer = offline.createBuffer(1, segment.length, sampleRate);
-  buffer.copyToChannel(segment, 0);
+  buffer.copyToChannel(new Float32Array(segment), 0);
 
   const source = offline.createBufferSource();
   source.buffer = buffer;

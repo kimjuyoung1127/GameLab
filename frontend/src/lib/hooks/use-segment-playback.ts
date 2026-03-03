@@ -142,7 +142,7 @@ export function useSegmentPlayback({
     async (segmentData: Float32Array, playbackRate: number) => {
       const ctx = await ensureAudioContext();
       const buffer = ctx.createBuffer(1, segmentData.length, sampleRate ?? 44_100);
-      buffer.copyToChannel(segmentData, 0);
+      buffer.copyToChannel(new Float32Array(segmentData), 0);
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;
