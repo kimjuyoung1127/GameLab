@@ -14,3 +14,16 @@ Source of truth for route-level execution status.
 ## Status Flow
 
 `Ready -> InProgress -> QA -> Done` (`Hold` for blocked work).
+
+## Locked Decisions (Spectrogram Listening)
+- Target route: `/labeling/[id]`
+- Feature flag: `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1` (default OFF)
+- Hotkeys:
+  - playback: `Space`
+  - original selection playback: `O`
+  - filtered selection playback: `F`
+  - confirm suggestion: `C` (moved from `O`)
+  - apply fix: `Shift+F` (moved from `F`)
+- Deferred:
+  - pitch-preserving playback
+  - pitch-shift listening assist

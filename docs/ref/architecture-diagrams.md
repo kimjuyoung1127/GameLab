@@ -259,6 +259,21 @@ graph TD
   LabelingId --> FLP
   LabelingId --> SP
   LabelingId --> AP
+
+---
+
+## 7. Labeling Workspace 확장 모듈 (2026-03-03 결정)
+
+- 신규 오디오 모듈 계층(프론트):
+  - `frontend/src/lib/audio/listening-types.ts`
+  - `frontend/src/lib/audio/segment-playback.ts`
+  - `frontend/src/lib/audio/wav-export.ts`
+- 적용 범위:
+  - `/labeling/[id]` 라우트 내부에만 통합
+- 런타임 제어:
+  - `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1` 플래그로 점진 활성화
+- 의도:
+  - 기존 `use-audio-player`와 독립된 선택구간 전용 청취/내보내기 경로 제공
   LabelingId --> PC
   LabelingId --> TB
   SP --> WC
