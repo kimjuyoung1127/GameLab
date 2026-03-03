@@ -6,8 +6,9 @@
 - Added leaderboard scope support (`daily|weekly|all_time`)
 - Added suggestion reward idempotency hook on labeling status patch
 - Added frontend gamification types/api/store
-- Added Mission Center UI block in labeling right panel
+- Removed Mission Center from labeling right panel (moved to profile-centric flow)
 - Added overview mission snapshot widget and leaderboard scope tabs
+- Replaced labeling header static `AR` badge with profile entry button (`/profile`)
 
 ## Validation
 - `python -m compileall backend/app`

@@ -1,6 +1,6 @@
 /** Header panel for labeling workspace with mode and score summary. */
 import Link from "next/link";
-import { AudioLines } from "lucide-react";
+import { AudioLines, UserCircle2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { LabelingMode } from "@/types";
 
@@ -78,9 +78,14 @@ export default function LabelingHeader({
 
           <div className="h-5 w-px bg-border-light hidden md:block" />
 
-          <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">
-            {t("arLabel")}
-          </div>
+          <Link
+            href="/profile"
+            aria-label={t("profileShortcutAria")}
+            title={t("profileShortcut")}
+            className="w-8 h-8 rounded-full bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-colors flex items-center justify-center"
+          >
+            <UserCircle2 className="w-4 h-4" />
+          </Link>
         </div>
       </header>
       {(sessionError || suggestionError) && (

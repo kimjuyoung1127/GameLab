@@ -1,4 +1,4 @@
-{
+﻿{
   "common": {
     "save": "저장",
     "cancel": "취소",
@@ -205,7 +205,8 @@
     "scoreLabel": "점수",
     "streakLabel": "연속",
     "streakUnit": "일",
-    "arLabel": "AR",
+    "profileShortcut": "프로필",
+    "profileShortcutAria": "프로필로 이동",
     "filterPlaceholder": "파일 검색...",
     "filterAll": "전체",
     "filterPending": "대기중",

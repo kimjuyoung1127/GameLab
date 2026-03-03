@@ -245,6 +245,47 @@ def _next_achievement(all_time_score: int) -> NextAchievement:
     return NextAchievement(id=None, remaining=0)
 
 
+def _compute_streak_days(user_id: str) -> int:
+    """Compute consecutive active days in KST from reward events."""
+    now_kst = _now_kst().date()
+    since = (_now_utc() - timedelta(days=60)).isoformat()
+    res = (
+        supabase.table("sst_reward_events")
+        .select("occurred_at")
+        .eq("user_id", user_id)
+        .gte("occurred_at", since)
+        .order("occurred_at", desc=True)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        return 0
+
+    active_dates: set = set()
+    for row in rows:
+        ts = row.get("occurred_at")
+        if not ts:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(KST)
+            active_dates.add(dt.date())
+        except ValueError:
+            continue
+
+    if not active_dates:
+        return 0
+
+    streak = 0
+    cursor = now_kst
+    # allow "yesterday start" when no activity today yet
+    if cursor not in active_dates:
+        cursor = cursor - timedelta(days=1)
+    while cursor in active_dates:
+        streak += 1
+        cursor = cursor - timedelta(days=1)
+    return streak
+
+
 def build_gamification_snapshot(user_id: str) -> GamificationSnapshotResponse:
     user_scores = _fetch_user_scores(user_id)
     today_score = user_scores["today_score"]
@@ -298,7 +339,7 @@ def build_gamification_snapshot(user_id: str) -> GamificationSnapshotResponse:
         today_score=today_score,
         week_score=week_score,
         all_time_score=all_time_score,
-        streak_days=0,
+        streak_days=_compute_streak_days(user_id),
         daily_goal=DAILY_GOAL_DEFAULT,
         daily_progress=daily_progress,
         rank_daily=_calc_rank(daily_sorted, user_id),

@@ -1,6 +1,6 @@
 ﻿# Code-Doc Integrity Report
 
-Last Run: 2026-03-03 16:40 KST (manual update)
+Last Run: 2026-03-03 18:25 KST (manual update)
 Result: pass (manual sync)
 
 ## Route Summary
@@ -18,6 +18,7 @@ Result: pass (manual sync)
 - qa hotfix doc-sync (`e903563`,`a08d2fc`,`35cd849`): yes
 - baseline rollback sync (`fa76c00`): yes
 - gamification v2 sync (api/types/store/ui): yes
+- labeling mission-center removal + profile entry switch: yes
 
 ## Unmanaged Routes (expected)
 - `/`

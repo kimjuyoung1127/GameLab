@@ -8,7 +8,6 @@ import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
 import { useAchievementStore } from "@/lib/store/achievement-store";
-import { useMissionStore } from "@/lib/store/mission-store";
 import { useUIStore } from "@/lib/store/ui-store";
 import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
 import { useWaveform } from "@/lib/hooks/use-waveform";
@@ -196,7 +195,6 @@ export default function LabelingWorkspacePage() {
   } = useSessionStore();
 
   const { checkAndUnlock, recentUnlock, clearRecent, load: loadAchievements } = useAchievementStore();
-  const { daily: dailyMissions, weekly: weeklyMissions, claimingIds: claimingMissionIds, load: loadMissions, claim: claimMissionReward } = useMissionStore();
   const { showToast } = useUIStore();
   const spectroListeningEnabled = ENABLE_SPECTRO_LISTENING_V1;
 
@@ -314,8 +312,7 @@ export default function LabelingWorkspacePage() {
   useEffect(() => {
     void fetchFromServer();
     void loadAchievements();
-    void loadMissions();
-  }, [fetchFromServer, loadAchievements, loadMissions]);
+  }, [fetchFromServer, loadAchievements]);
 
   /* ----- Achievement unlock toast --------------------------------- */
   useEffect(() => {
@@ -428,9 +425,8 @@ export default function LabelingWorkspacePage() {
       if (currentId) enqueueStatusUpdate(currentId, "confirmed");
       void checkAndUnlock();
       void refreshGamificationSnapshot();
-      void loadMissions();
     }
-  }, [suggestions, selectedSuggestionId, showToast, t, confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, checkAndUnlock, refreshGamificationSnapshot, loadMissions]);
+  }, [suggestions, selectedSuggestionId, showToast, t, confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, checkAndUnlock, refreshGamificationSnapshot]);
 
   const handleReject = useCallback(() => {
     hasInteracted.current = true;
@@ -451,19 +447,8 @@ export default function LabelingWorkspacePage() {
       if (currentId) enqueueStatusUpdate(currentId, "corrected");
       void checkAndUnlock();
       void refreshGamificationSnapshot();
-      void loadMissions();
     }
-  }, [applyFix, addScore, addFix, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock, refreshGamificationSnapshot, loadMissions]);
-
-  const handleClaimMission = useCallback((missionId: string) => {
-    void (async () => {
-      const claimed = await claimMissionReward(missionId);
-      if (claimed) {
-        showToast("Mission reward claimed");
-      }
-      await refreshGamificationSnapshot();
-    })();
-  }, [claimMissionReward, refreshGamificationSnapshot, showToast]);
+  }, [applyFix, addScore, addFix, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock, refreshGamificationSnapshot]);
 
   const seekTo = useCallback((time: number, trackHistory = false) => {
     player.seek(time);
@@ -550,29 +535,38 @@ export default function LabelingWorkspacePage() {
   );
 
   const handleUndoAllEdits = useCallback(() => {
-    const viewportPrev = viewportUndoRef.current.pop();
-    if (viewportPrev) {
-      setZoomLevel(viewportPrev.zoomLevel);
-      setFreqMin(viewportPrev.freqMin);
-      setFreqMax(viewportPrev.freqMax);
-      setZoomBoxMode(false);
-      requestAnimationFrame(() => {
-        const container = scrollContainerRef.current;
-        if (!container) return;
-        const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-        container.scrollLeft = Math.max(0, Math.min(viewportPrev.scrollLeft, maxScrollLeft));
-      });
-      showToast(t("zoomRestored"));
-      return;
-    }
+    const stack = viewportUndoRef.current;
+    const hadViewport = stack.length > 0;
+    // 모든 viewport 스냅샷을 한번에 되돌림 (첫 번째 = 줌 이전 원본 상태)
+    const viewportFirst = stack[0];
+    viewportUndoRef.current = [];
+
     while (useAnnotationStore.getState().undoStack.length > 0) {
       useAnnotationStore.getState().undo();
     }
-    setZoomLevel(1);
-    setFreqMin(0);
-    setFreqMax(effectiveMaxFreq);
+
+    if (hadViewport && viewportFirst) {
+      setZoomLevel(viewportFirst.zoomLevel);
+      setFreqMin(viewportFirst.freqMin);
+      setFreqMax(viewportFirst.freqMax);
+    } else {
+      setZoomLevel(1);
+      setFreqMin(0);
+      setFreqMax(effectiveMaxFreq);
+    }
     setZoomBoxMode(false);
-    showToast(t("allChangesReverted"));
+
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      if (hadViewport && viewportFirst) {
+        const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+        container.scrollLeft = Math.max(0, Math.min(viewportFirst.scrollLeft, maxScrollLeft));
+      } else {
+        container.scrollLeft = 0;
+      }
+    });
+    showToast(hadViewport ? t("zoomRestored") : t("allChangesReverted"));
   }, [effectiveMaxFreq, showToast, t]);
 
   const handleResetView = useCallback(() => {
@@ -1135,10 +1129,6 @@ export default function LabelingWorkspacePage() {
           onReject={handleReject}
           onApplyFix={handleApplyFix}
           onNextFile={handleNextFile}
-          dailyMissions={dailyMissions}
-          weeklyMissions={weeklyMissions}
-          claimingMissionIds={claimingMissionIds}
-          onClaimMission={handleClaimMission}
         >
           <BookmarksPanel
             bookmarks={bookmarks}

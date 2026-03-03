@@ -96,6 +96,7 @@ export const useScoreStore = create<ScoreState>()(
         if (snapshot) {
           set({
             score: snapshot.todayScore,
+            streak: snapshot.streakDays,
             allTimeScore: snapshot.allTimeScore,
             dailyGoal: snapshot.dailyGoal,
             dailyProgress: snapshot.dailyProgress,
@@ -116,6 +117,7 @@ export const useScoreStore = create<ScoreState>()(
         if (!snapshot) return;
         set({
           score: snapshot.todayScore,
+          streak: snapshot.streakDays,
           allTimeScore: snapshot.allTimeScore,
           dailyGoal: snapshot.dailyGoal,
           dailyProgress: snapshot.dailyProgress,
