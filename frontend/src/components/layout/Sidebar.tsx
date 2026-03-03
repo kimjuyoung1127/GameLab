@@ -96,7 +96,11 @@ export default function Sidebar({ activePath = "/" }: { activePath?: string }) {
       </div>
 
       {/* User */}
-      <div className="p-4 border-t border-border flex items-center gap-3">
+      <Link
+        href="/profile"
+        aria-label="Go to profile"
+        className="p-4 border-t border-border flex items-center gap-3 hover:bg-panel-light transition-colors"
+      >
         <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-white">
           {initials}
         </div>
@@ -104,7 +108,7 @@ export default function Sidebar({ activePath = "/" }: { activePath?: string }) {
           <p className="text-sm font-medium text-text">{displayName}</p>
           <p className="text-xs text-text-muted">{displayRole}</p>
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }

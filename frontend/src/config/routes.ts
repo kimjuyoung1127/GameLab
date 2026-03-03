@@ -1,5 +1,5 @@
 ﻿/** Managed route registry for docs/code integrity automation. */
-import { LayoutDashboard, Upload, List, Trophy, LucideIcon } from "lucide-react";
+import { LayoutDashboard, Upload, List, Trophy, UserCircle2, LucideIcon } from "lucide-react";
 
 export type ManagedRoute = {
   key: string;
@@ -18,6 +18,7 @@ export const MANAGED_ROUTES: ManagedRoute[] = [
   { key: "upload", href: "/upload", group: "dashboard", nav: true },
   { key: "sessions", href: "/sessions", group: "dashboard", nav: true },
   { key: "leaderboard", href: "/leaderboard", group: "dashboard", nav: true },
+  { key: "profile", href: "/profile", group: "dashboard", nav: true },
   { key: "labeling", href: "/labeling/[id]", group: "labeling", nav: false },
 ];
 
@@ -26,6 +27,7 @@ export const NAV_ROUTES: NavRoute[] = [
   { key: "upload", href: "/upload", group: "dashboard", nav: true, icon: Upload },
   { key: "sessions", href: "/sessions", group: "dashboard", nav: true, icon: List },
   { key: "leaderboard", href: "/leaderboard", group: "dashboard", nav: true, icon: Trophy },
+  { key: "profile", href: "/profile", group: "dashboard", nav: true, icon: UserCircle2 },
 ];
 
 export const HOTKEY_ROUTES: Record<string, string> = {

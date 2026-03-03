@@ -8,6 +8,7 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - Sprint 14 완료: 스펙트로그램 분석 도구 5개 기능
 - Gamification V2 구현 완료 (mission/reward/leaderboard scope tabs)
 - Labeling UI 집중화 적용: Mission Center 제거, 프로필 진입으로 통합
+- Profile 라우트 활성화: `/profile` 페이지 생성 및 사이드바 엔지니어 카드 클릭 이동 연결
 
 ## Sprint 14 — 스펙트로그램 분석 도구 강화 (완료)
 1. **FFT 설정 패널**: FFT Size(512/1024/2048/4096), 윈도우 함수(Hann/Hamming/Blackman), 동적 범위 슬라이더
@@ -74,7 +75,7 @@ Owner Doc: `CLAUDE.md` (root slim index)
 2. QA pass for gamification endpoints (`/api/gamification/*`) and leaderboard scope tabs.
 3. Validate mission claim/idempotency with real suggestion lifecycle data.
 4. E2E 테스트: Sprint 14 기능(FFT/커서/피치/속도/PNG) 수동 검증
-5. Profile(`/profile`) 중심으로 배지/미션/진행상황 UX 통합
+5. Profile(`/profile`) 중심으로 배지/미션/진행상황 UX 세부 고도화(빈 상태/반응형/정렬)
 
 ## Recent Hotfixes (2026-03-03 KST)
 - Shift+Z(Undo All): viewport 스냅샷 전체 한번에 되돌리기 (1단계씩 → 전체)
@@ -82,3 +83,4 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - R키 박스 선택: 오버레이 div pointer-events-none 추가로 이벤트 통과 수정
 - segment playback mode visibility and stop/toggle control
 - numeric selection input delete/retype stabilization
+- `/profile` 라우트 404 해소: 대시보드 프로필 페이지 생성 + 사이드바 사용자 카드 클릭 네비게이션 연결

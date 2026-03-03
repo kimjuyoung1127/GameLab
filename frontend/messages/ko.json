@@ -1,4 +1,4 @@
-﻿{
+{
   "common": {
     "save": "저장",
     "cancel": "취소",
@@ -21,6 +21,7 @@
     "upload": "업로드",
     "sessions": "세션 목록",
     "leaderboard": "순위표",
+    "profile": "마이페이지",
     "shortcuts": "단축키 안내",
     "shortcutsTooltip": "단축키 안내 (?)",
     "brandName": "SpectroTag",
