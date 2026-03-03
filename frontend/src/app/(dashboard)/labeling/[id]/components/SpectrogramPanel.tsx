@@ -553,12 +553,12 @@ export default function SpectrogramPanel({
                   }}
                   aria-label={`AI suggestion: ${labelDisplay.displayName} (${s.status})`}
                 >
-                  <div className={`absolute ${tagPlacement.className} ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap max-w-[140px] overflow-hidden`}>
+                  <div className={`absolute ${tagPlacement.className} ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap max-w-[140px] overflow-hidden border border-black/20 shadow-sm`}>
                     {s.status === "pending" && <Sparkles className="w-2.5 h-2.5" />}
                     {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
                     {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
                     {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
-                    <span title={labelDisplay.tooltip}>{labelDisplay.displayCode}</span>
+                    <span title={labelDisplay.tooltip} className="truncate">{labelDisplay.displayCode}</span>
                     {isEditable && <span className="text-[7px] opacity-70">{t("userSuggestionTag")}</span>}
                   </div>
                   {isSelected && !isEditable && (

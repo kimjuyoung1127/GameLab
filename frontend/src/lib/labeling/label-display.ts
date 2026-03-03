@@ -67,15 +67,18 @@ export function getTagPlacementStyle(params: {
 }): TagPlacementStyle {
   const nearBottom = params.topPct > 82 || params.topPct + params.heightPct > 92;
   const nearRight = params.leftPct + params.widthPct > 85;
+  const nearTop = params.topPct < 8;
 
-  if (nearBottom && nearRight) {
+  if ((nearBottom || nearTop) && nearRight) {
     return { placement: "inside-top-right", className: "top-1 right-1" };
   }
-  if (nearBottom) {
+  if (nearBottom || nearTop) {
     return { placement: "inside-top-left", className: "top-1 left-1" };
   }
   if (nearRight) {
-    return { placement: "top-right", className: "-top-5 right-0" };
+    // Keep tag strictly inside the spectrogram box to avoid player/HUD overlap.
+    return { placement: "top-right", className: "top-1 right-1" };
   }
-  return { placement: "top-left", className: "-top-5 left-0" };
+  // Default: inside top-left (not outside box) for consistent in-canvas landmark UX.
+  return { placement: "top-left", className: "top-1 left-1" };
 }

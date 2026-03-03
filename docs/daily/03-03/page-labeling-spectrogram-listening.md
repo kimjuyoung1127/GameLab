@@ -18,10 +18,14 @@
 - [x] suggestion label UX: code+friendly name split (`displayCode` + `displayName`)
 - [x] suggestion tag auto-flip placement near viewport edges
 - [x] Analysis panel switched to friendly name first, raw label as support
+- [x] landmark hardening: suggestion tag kept inside spectrogram canvas
+- [x] engine socket contract lock documented (swappable engine + fixed output schema)
 
 ## Validation
 - [x] `npm --prefix frontend run lint -- src/lib/hooks/labeling/useLabelingHotkeys.ts src/app/(dashboard)/labeling/[id]/page.tsx src/app/(dashboard)/labeling/[id]/components/SpectrogramPanel.tsx src/app/(dashboard)/labeling/[id]/components/AnalysisPanel.tsx src/components/layout/HotkeyHelp.tsx`
 - [x] `npm --prefix frontend run lint -- src/lib/audio/wav-export.ts src/lib/hooks/use-segment-playback.ts`
+- [x] `npm --prefix frontend run lint -- src/lib/labeling/label-display.ts src/app/(dashboard)/labeling/[id]/components/SpectrogramPanel.tsx`
+- [x] backend engine registry smoke check: `engines= ['rule_fallback', 'soundlab_v57']`
 
 ## Notes
 - Feature flag remains OFF by default:

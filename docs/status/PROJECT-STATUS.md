@@ -41,3 +41,13 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - numeric selection input delete/retype stabilization
 - numeric selection input commit timing fix (Enter/blur)
 - label UX update: auto-flip tag placement + code/friendly-name display model
+- landmark enforcement update: suggestion tag stays inside spectrogram canvas (no player/HUD overlap)
+
+## Engine Socket Contract (Locked 2026-03-03 KST)
+- Analysis engines are swappable via `ANALYSIS_ENGINE`.
+- Required output fields are fixed:
+  - `label`, `description`, `start_time`, `end_time`, `freq_low`, `freq_high`, `confidence`
+- Failure policy fixed:
+  - timeout/error => `rule_fallback` auto-switch with fallback logs
+- FE independence fixed:
+  - frontend consumes DTO only, no engine-name specific branching

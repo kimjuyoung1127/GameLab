@@ -63,3 +63,28 @@ upload -> AnalysisService.analyze()
   -> 실패 시 RuleFallbackEngine 자동 전환
   -> SuggestionDraft[] 반환 -> DB 저장
 ```
+
+## Engine Socket Contract (Locked 2026-03-03)
+
+The analysis engine layer is hot-swappable by `ANALYSIS_ENGINE`, but every engine MUST produce the same output contract.
+
+### Required Draft Fields
+- `label: str`
+- `description: str`
+- `start_time: float`
+- `end_time: float`
+- `freq_low: int | float`
+- `freq_high: int | float`
+- `confidence: int | float`
+
+### Integration Rules
+1. Implement `AnalysisEngine` interface.
+2. Register the engine in `registry.py` (`_ENGINES`).
+3. Switch with `settings.analysis_engine` (`ANALYSIS_ENGINE` env).
+4. Keep fallback behavior unchanged:
+   - timeout/error => `rule_fallback`
+   - log fallback activation with engine/file metadata.
+
+### FE Independence Rule
+- Frontend must remain engine-agnostic.
+- Frontend consumes only suggestion DTO fields and must not branch by engine name.
