@@ -19,6 +19,7 @@ import type {
   SpectrogramData,
   WaveformData,
 } from "@/types";
+import type { ListeningSelection } from "@/lib/audio/listening-types";
 import { bookmarkColors } from "./constants";
 
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
@@ -68,6 +69,12 @@ type SpectrogramPanelProps = {
   freqMin: number;
   freqMax: number;
   onFreqRangeChange: (min: number, max: number) => void;
+  listeningEnabled: boolean;
+  listeningSelection: ListeningSelection | null;
+  onPlayOriginalSelection: () => void;
+  onPlayFilteredSelection: () => void;
+  segmentPlaybackError: string | null;
+  segmentPlaybackActive: boolean;
   statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }>;
   draftPreview: ManualDraft | null;
   playbackPct: number;
@@ -144,6 +151,12 @@ export default function SpectrogramPanel({
   freqMin,
   freqMax,
   onFreqRangeChange,
+  listeningEnabled,
+  listeningSelection,
+  onPlayOriginalSelection,
+  onPlayFilteredSelection,
+  segmentPlaybackError,
+  segmentPlaybackActive,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
 
@@ -195,6 +208,47 @@ export default function SpectrogramPanel({
             <button onClick={onRetryAudio} className="px-2 py-1 rounded bg-danger/20 hover:bg-danger/30 transition-colors">
               Retry
             </button>
+          </div>
+        )}
+
+        {listeningEnabled && (
+          <div className="mx-3 mt-3 shrink-0 rounded-lg border border-border/60 bg-surface/70 px-3 py-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-text-muted">Selection</span>
+              {listeningSelection ? (
+                <span className="font-mono text-text-secondary">
+                  {listeningSelection.timeStartSec.toFixed(2)}s ~ {listeningSelection.timeEndSec.toFixed(2)}s |{" "}
+                  {Math.round(listeningSelection.freqLowHz)}Hz ~ {Math.round(listeningSelection.freqHighHz)}Hz
+                </span>
+              ) : (
+                <span className="text-text-muted">none</span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={onPlayOriginalSelection}
+                  disabled={!listeningSelection}
+                  className="px-2 py-1 rounded bg-panel-light hover:bg-border text-text-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  O Original
+                </button>
+                <button
+                  onClick={onPlayFilteredSelection}
+                  disabled={!listeningSelection}
+                  className="px-2 py-1 rounded bg-primary/25 hover:bg-primary/35 text-primary-light disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  F Filtered
+                </button>
+              </div>
+            </div>
+            {(segmentPlaybackError || segmentPlaybackActive) && (
+              <div className="mt-1 text-[10px]">
+                {segmentPlaybackError ? (
+                  <span className="text-danger">{segmentPlaybackError}</span>
+                ) : (
+                  <span className="text-accent">Segment playback active</span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -516,8 +570,11 @@ export default function SpectrogramPanel({
 
             <div className="absolute bottom-8 right-3 flex gap-1.5">
               {[
-                { key: "O", labelKey: "hintConfirm" },
+                { key: "C", labelKey: "hintConfirm" },
                 { key: "X", labelKey: "hintReject" },
+                { key: "O", labelKey: "hintPlayOriginal" },
+                { key: "F", labelKey: "hintPlayFiltered" },
+                { key: "Shift+F", labelKey: "hintApplyFixHotkey" },
                 { key: "R", labelKey: "hintBox" },
                 { key: "Ctrl+Z", labelKey: "hintUndo" },
                 { key: "Ctrl+Shift+Z", labelKey: "hintRedo" },

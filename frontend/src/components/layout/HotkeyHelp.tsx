@@ -16,9 +16,9 @@ export default function HotkeyHelp() {
     {
       title: t("labeling"),
       keys: [
-        { key: "O", desc: t("confirmSuggestion") },
+        { key: "C", desc: t("confirmSuggestion") },
         { key: "X", desc: t("rejectSuggestion") },
-        { key: "F", desc: t("applyFix") },
+        { key: "Shift+F", desc: t("applyFix") },
       ],
     },
     {
@@ -34,6 +34,8 @@ export default function HotkeyHelp() {
       title: t("playback"),
       keys: [
         { key: "Space", desc: t("playPause") },
+        { key: "O", desc: "Play selected original" },
+        { key: "F", desc: "Play selected filtered" },
         { key: "Shift+\u2191", desc: t("volumeUp") },
         { key: "Shift+\u2193", desc: t("volumeDown") },
         { key: "[ / ]", desc: t("playbackSpeed") },

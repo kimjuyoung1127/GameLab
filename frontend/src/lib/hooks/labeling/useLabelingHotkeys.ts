@@ -36,6 +36,9 @@ type UseLabelingHotkeysParams = {
   zoomBoxMode: boolean;
   onUndoAll: () => void;
   onResetView: () => void;
+  spectroListeningEnabled?: boolean;
+  onPlayOriginalSelection?: () => void;
+  onPlayFilteredSelection?: () => void;
 };
 
 export function useLabelingHotkeys({
@@ -69,6 +72,9 @@ export function useLabelingHotkeys({
   zoomBoxMode,
   onUndoAll,
   onResetView,
+  spectroListeningEnabled = false,
+  onPlayOriginalSelection,
+  onPlayFilteredSelection,
 }: UseLabelingHotkeysParams) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -137,7 +143,7 @@ export function useLabelingHotkeys({
       }
 
       switch (e.key.toLowerCase()) {
-        case "o":
+        case "c":
           if (mode === "review") handleConfirm();
           break;
         case "x":
@@ -162,7 +168,20 @@ export function useLabelingHotkeys({
           toggleSnap();
           break;
         case "f":
-          if (mode === "edit") handleApplyFix();
+          if (e.shiftKey) {
+            if (mode === "edit") handleApplyFix();
+            break;
+          }
+          if (spectroListeningEnabled) {
+            e.preventDefault();
+            onPlayFilteredSelection?.();
+          }
+          break;
+        case "o":
+          if (spectroListeningEnabled) {
+            e.preventDefault();
+            onPlayOriginalSelection?.();
+          }
           break;
         case "+":
         case "=":
@@ -281,5 +300,8 @@ export function useLabelingHotkeys({
     zoomBoxMode,
     onUndoAll,
     onResetView,
+    spectroListeningEnabled,
+    onPlayOriginalSelection,
+    onPlayFilteredSelection,
   ]);
 }

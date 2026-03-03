@@ -95,7 +95,7 @@ export default function AnalysisPanel({
               >
                 <Check className="w-3.5 h-3.5" />
                 {t("confirmButton")}
-                <kbd className="text-[9px] text-white/60 ml-1 bg-white/10 px-1 rounded">O</kbd>
+                <kbd className="text-[9px] text-white/60 ml-1 bg-white/10 px-1 rounded">C</kbd>
               </button>
             </div>
           </div>
@@ -121,7 +121,7 @@ export default function AnalysisPanel({
             >
               <Check className="w-3.5 h-3.5" />
               {t("applyFix")}
-              <kbd className="text-[9px] text-black/50 ml-1 bg-black/10 px-1 rounded">F</kbd>
+              <kbd className="text-[9px] text-black/50 ml-1 bg-black/10 px-1 rounded">Shift+F</kbd>
             </button>
           </div>
         </div>

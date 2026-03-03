@@ -13,7 +13,9 @@ import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
 import { useWaveform } from "@/lib/hooks/use-waveform";
 import { useSpectrogram } from "@/lib/hooks/use-spectrogram";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
+import { useSegmentPlayback } from "@/lib/hooks/use-segment-playback";
 import { useLabelingHotkeys } from "@/lib/hooks/labeling/useLabelingHotkeys";
+import { useListeningSelection } from "@/lib/hooks/labeling/useListeningSelection";
 import ActionHistoryPanel from "./components/ActionHistoryPanel";
 import AnalysisPanel from "./components/AnalysisPanel";
 import BookmarksPanel from "./components/BookmarksPanel";
@@ -218,6 +220,10 @@ export default function LabelingWorkspacePage() {
   const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey, targetSampleRate);
   const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData, freqMin, freqMax);
   const audioLoadError = player.error ?? waveformError;
+  const segmentPlayback = useSegmentPlayback({
+    channelData: waveformData?.channelData,
+    sampleRate: waveformData?.sampleRate,
+  });
 
   // Dynamic max frequency from spectrogram (Nyquist), fallback to 20kHz
   const effectiveMaxFreqRef = useRef(MAX_FREQ);
@@ -235,6 +241,16 @@ export default function LabelingWorkspacePage() {
 
   const totalDuration = player.duration || parsedDuration;
   const playbackPct = totalDuration > 0 ? (player.currentTime / totalDuration) * 100 : 0;
+  const {
+    selection: listeningSelection,
+  } = useListeningSelection({
+    enabled: spectroListeningEnabled,
+    selectedSuggestionId,
+    selectedDraftId,
+    suggestions,
+    manualDrafts,
+    maxFrequency: effectiveMaxFreq,
+  });
 
   /* ----- Autosave ------------------------------------------------- */
   useAutosave(activeFileId);
@@ -691,6 +707,26 @@ export default function LabelingWorkspacePage() {
     });
   }, [player.currentTime, pushHistory, setLoopState, loopState.start]);
 
+  const handlePlayOriginalSelection = useCallback(() => {
+    if (!spectroListeningEnabled || !listeningSelection) {
+      showToast("No selected region to play");
+      return;
+    }
+    void segmentPlayback.playOriginalSegment(listeningSelection, player.playbackRate);
+  }, [listeningSelection, player.playbackRate, segmentPlayback, showToast, spectroListeningEnabled]);
+
+  const handlePlayFilteredSelection = useCallback(() => {
+    if (!spectroListeningEnabled || !listeningSelection) {
+      showToast("No selected region to filter-play");
+      return;
+    }
+    void segmentPlayback.playFilteredSegment(
+      listeningSelection,
+      { order: 4, normalize: true, method: "biquad_chain" },
+      player.playbackRate,
+    );
+  }, [listeningSelection, player.playbackRate, segmentPlayback, showToast, spectroListeningEnabled]);
+
   const handleToggleLoop = useCallback(() => {
     if (loopState.start === null || loopState.end === null || loopState.end <= loopState.start) {
       showToast(t("loopRequireBounds"));
@@ -839,6 +875,9 @@ export default function LabelingWorkspacePage() {
     zoomBoxMode,
     onUndoAll: handleUndoAllEdits,
     onResetView: handleResetView,
+    spectroListeningEnabled,
+    onPlayOriginalSelection: handlePlayOriginalSelection,
+    onPlayFilteredSelection: handlePlayFilteredSelection,
   });
 
   /* ================================================================ */
@@ -940,6 +979,12 @@ export default function LabelingWorkspacePage() {
               setFreqMin(nextMin);
               setFreqMax(nextMax);
             }}
+            listeningEnabled={spectroListeningEnabled}
+            listeningSelection={listeningSelection}
+            onPlayOriginalSelection={handlePlayOriginalSelection}
+            onPlayFilteredSelection={handlePlayFilteredSelection}
+            segmentPlaybackError={segmentPlayback.error?.message ?? null}
+            segmentPlaybackActive={segmentPlayback.isPlaying}
             statusColors={statusColors}
             draftPreview={draftPreview}
             playbackPct={playbackPct}
