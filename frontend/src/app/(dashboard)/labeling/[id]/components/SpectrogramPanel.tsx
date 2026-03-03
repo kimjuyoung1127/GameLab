@@ -73,8 +73,10 @@ type SpectrogramPanelProps = {
   listeningSelection: ListeningSelection | null;
   onPlayOriginalSelection: () => void;
   onPlayFilteredSelection: () => void;
+  onDownloadFilteredSelection: () => void;
   segmentPlaybackError: string | null;
   segmentPlaybackActive: boolean;
+  segmentExportError: string | null;
   statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }>;
   draftPreview: ManualDraft | null;
   playbackPct: number;
@@ -155,8 +157,10 @@ export default function SpectrogramPanel({
   listeningSelection,
   onPlayOriginalSelection,
   onPlayFilteredSelection,
+  onDownloadFilteredSelection,
   segmentPlaybackError,
   segmentPlaybackActive,
+  segmentExportError,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
 
@@ -238,12 +242,21 @@ export default function SpectrogramPanel({
                 >
                   F Filtered
                 </button>
+                <button
+                  onClick={onDownloadFilteredSelection}
+                  disabled={!listeningSelection}
+                  className="px-2 py-1 rounded bg-accent/20 hover:bg-accent/30 text-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Download WAV
+                </button>
               </div>
             </div>
-            {(segmentPlaybackError || segmentPlaybackActive) && (
+            {(segmentPlaybackError || segmentPlaybackActive || segmentExportError) && (
               <div className="mt-1 text-[10px]">
                 {segmentPlaybackError ? (
                   <span className="text-danger">{segmentPlaybackError}</span>
+                ) : segmentExportError ? (
+                  <span className="text-danger">{segmentExportError}</span>
                 ) : (
                   <span className="text-accent">Segment playback active</span>
                 )}

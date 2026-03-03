@@ -16,6 +16,7 @@ import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { useSegmentPlayback } from "@/lib/hooks/use-segment-playback";
 import { useLabelingHotkeys } from "@/lib/hooks/labeling/useLabelingHotkeys";
 import { useListeningSelection } from "@/lib/hooks/labeling/useListeningSelection";
+import { downloadBlob, exportFilteredSelectionAsWav } from "@/lib/audio/wav-export";
 import ActionHistoryPanel from "./components/ActionHistoryPanel";
 import AnalysisPanel from "./components/AnalysisPanel";
 import BookmarksPanel from "./components/BookmarksPanel";
@@ -198,6 +199,7 @@ export default function LabelingWorkspacePage() {
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [loopHudWarning, setLoopHudWarning] = useState(false);
   const [highlightedBookmarkId, setHighlightedBookmarkId] = useState<string | null>(null);
+  const [segmentExportError, setSegmentExportError] = useState<string | null>(null);
   const [freqMin, setFreqMin] = useState(0);
   const [freqMax, setFreqMax] = useState(MAX_FREQ);
   const hasInteracted = useRef(false);
@@ -727,6 +729,38 @@ export default function LabelingWorkspacePage() {
     );
   }, [listeningSelection, player.playbackRate, segmentPlayback, showToast, spectroListeningEnabled]);
 
+  const handleDownloadFilteredSelection = useCallback(async () => {
+    if (!spectroListeningEnabled || !listeningSelection) {
+      setSegmentExportError("No selected region to export");
+      showToast("No selected region to export");
+      return;
+    }
+
+    try {
+      setSegmentExportError(null);
+      const result = await exportFilteredSelectionAsWav({
+        channelData: waveformData?.channelData,
+        sampleRate: waveformData?.sampleRate,
+        selection: listeningSelection,
+        baseFilename: activeFile?.filename ?? "audio",
+        normalize: true,
+      });
+      downloadBlob(result.blob, result.filename);
+      showToast(`Exported: ${result.filename}`);
+    } catch (err) {
+      const message = (err as Error).message || "Failed to export filtered segment";
+      setSegmentExportError(message);
+      showToast(message);
+    }
+  }, [
+    activeFile?.filename,
+    listeningSelection,
+    showToast,
+    spectroListeningEnabled,
+    waveformData?.channelData,
+    waveformData?.sampleRate,
+  ]);
+
   const handleToggleLoop = useCallback(() => {
     if (loopState.start === null || loopState.end === null || loopState.end <= loopState.start) {
       showToast(t("loopRequireBounds"));
@@ -985,6 +1019,8 @@ export default function LabelingWorkspacePage() {
             onPlayFilteredSelection={handlePlayFilteredSelection}
             segmentPlaybackError={segmentPlayback.error?.message ?? null}
             segmentPlaybackActive={segmentPlayback.isPlaying}
+            onDownloadFilteredSelection={handleDownloadFilteredSelection}
+            segmentExportError={segmentExportError}
             statusColors={statusColors}
             draftPreview={draftPreview}
             playbackPct={playbackPct}
