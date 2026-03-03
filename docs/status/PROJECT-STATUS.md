@@ -40,3 +40,4 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - segment playback mode visibility and stop/toggle control
 - numeric selection input delete/retype stabilization
 - numeric selection input commit timing fix (Enter/blur)
+- label UX update: auto-flip tag placement + code/friendly-name display model

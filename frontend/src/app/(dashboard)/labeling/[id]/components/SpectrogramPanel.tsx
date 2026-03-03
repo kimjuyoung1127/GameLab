@@ -20,6 +20,7 @@ import type {
   WaveformData,
 } from "@/types";
 import type { ListeningSelection } from "@/lib/audio/listening-types";
+import { getLabelDisplay, getTagPlacementStyle } from "@/lib/labeling/label-display";
 import { bookmarkColors } from "./constants";
 
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
@@ -201,6 +202,9 @@ export default function SpectrogramPanel({
     edge_case: t("bookmarkEdge"),
     needs_analysis: t("bookmarkNeedsAnalysis"),
   };
+  const activeSuggestionDisplay = activeSuggestion
+    ? getLabelDisplay(activeSuggestion.label, activeSuggestion.description)
+    : null;
 
   const frequencyTicks = useMemo(() => {
     if (freqAxisScale === "linear") {
@@ -522,6 +526,12 @@ export default function SpectrogramPanel({
               const isSelected = s.id === selectedSuggestionId;
               const isEditable = s.source === "user";
               const boxPos = suggestionBoxStyle(s, totalDuration, freqMin, freqMax);
+              const leftPct = Number.parseFloat(boxPos.left) || 0;
+              const widthPct = Number.parseFloat(boxPos.width) || 0;
+              const topPct = Number.parseFloat(boxPos.top) || 0;
+              const heightPct = Number.parseFloat(boxPos.height) || 0;
+              const tagPlacement = getTagPlacementStyle({ leftPct, widthPct, topPct, heightPct });
+              const labelDisplay = getLabelDisplay(s.label, s.description);
               return (
                 <button
                   key={s.id}
@@ -541,13 +551,14 @@ export default function SpectrogramPanel({
                     minWidth: "40px",
                     minHeight: "20px",
                   }}
+                  aria-label={`AI suggestion: ${labelDisplay.displayName} (${s.status})`}
                 >
-                  <div className={`absolute -top-5 left-0 ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap`}>
+                  <div className={`absolute ${tagPlacement.className} ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap max-w-[140px] overflow-hidden`}>
                     {s.status === "pending" && <Sparkles className="w-2.5 h-2.5" />}
                     {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
                     {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
                     {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
-                    <span title={s.label}>{s.label.slice(0, 18)}</span>
+                    <span title={labelDisplay.tooltip}>{labelDisplay.displayCode}</span>
                     {isEditable && <span className="text-[7px] opacity-70">{t("userSuggestionTag")}</span>}
                   </div>
                   {isSelected && !isEditable && (
@@ -801,8 +812,8 @@ export default function SpectrogramPanel({
 
       <div className="flex md:hidden items-center justify-between px-4 py-2 bg-panel border-t border-border shrink-0">
         <div className="text-xs text-text-muted">
-          {activeSuggestion ? (
-            <span>{t("suggestionFormat", { label: activeSuggestion.label, confidence: activeSuggestion.confidence })}</span>
+          {activeSuggestion && activeSuggestionDisplay ? (
+            <span>{t("suggestionFormat", { label: activeSuggestionDisplay.displayName, confidence: activeSuggestion.confidence })}</span>
           ) : (
             <span>{t("noSuggestionSelected")}</span>
           )}

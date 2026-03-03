@@ -2,6 +2,7 @@
 import { Check, ChevronRight, Filter, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { AudioFile, LabelingMode, Suggestion } from "@/types";
+import { getLabelDisplay } from "@/lib/labeling/label-display";
 
 type AnalysisPanelProps = {
   mode: LabelingMode;
@@ -33,6 +34,12 @@ export default function AnalysisPanel({
   children,
 }: AnalysisPanelProps) {
   const t = useTranslations("labeling");
+  const activeLabelDisplay = activeSuggestion
+    ? getLabelDisplay(activeSuggestion.label, activeSuggestion.description)
+    : null;
+  const rejectedLabelDisplay = rejectedSuggestion
+    ? getLabelDisplay(rejectedSuggestion.label, rejectedSuggestion.description)
+    : null;
 
   return (
     <aside className="hidden md:flex w-[320px] shrink-0 bg-panel border-l border-border flex-col overflow-y-auto">
@@ -63,7 +70,9 @@ export default function AnalysisPanel({
           <div className="bg-surface rounded-xl p-4">
             <div className="flex items-start justify-between mb-3">
               <div>
-                <h3 className="text-sm font-bold text-text">{activeSuggestion.label}</h3>
+                <h3 className="text-sm font-bold text-text">{activeLabelDisplay?.displayName ?? activeSuggestion.label}</h3>
+                <p className="text-[10px] text-text-muted mt-0.5 font-mono">{activeLabelDisplay?.displayCode ?? "AI-LABEL"}</p>
+                <p className="text-[10px] text-text-muted/80 mt-0.5">raw: {activeSuggestion.label}</p>
                 <p className="text-[10px] text-text-muted mt-0.5">{t("aiDetectedAnomaly")}</p>
                 <p className="text-[10px] text-text-muted mt-1">{t("aiActionGuide")}</p>
               </div>
@@ -111,8 +120,10 @@ export default function AnalysisPanel({
             </div>
 
             <p className="text-[11px] text-text-secondary leading-relaxed mb-2">
-              {t("rejectedPrefix")}<span className="text-text font-medium">{rejectedSuggestion.label}</span>
+              {t("rejectedPrefix")}
+              <span className="text-text font-medium">{rejectedLabelDisplay?.displayName ?? rejectedSuggestion.label}</span>
             </p>
+            <p className="text-[10px] text-text-muted/80 mb-2">raw: {rejectedSuggestion.label}</p>
             <p className="text-[11px] text-text-muted mb-4">{t("editInstruction")}</p>
 
             <button
