@@ -252,6 +252,32 @@ export default function SpectrogramPanel({
     setHoverMetrics(null);
   }, [onDraftPointerUp]);
 
+  const commitNumericInput = useCallback(
+    (field: "start" | "end" | "low" | "high", rawValue: string) => {
+      if (!listeningSelection) return;
+      const parsed = Number.parseFloat(rawValue);
+      if (!Number.isFinite(parsed)) return;
+      if (field === "start") {
+        onListeningSelectionChange({ ...listeningSelection, timeStartSec: parsed });
+        return;
+      }
+      if (field === "end") {
+        onListeningSelectionChange({ ...listeningSelection, timeEndSec: parsed });
+        return;
+      }
+      if (field === "low") {
+        onListeningSelectionChange({ ...listeningSelection, freqLowHz: parsed });
+        return;
+      }
+      onListeningSelectionChange({ ...listeningSelection, freqHighHz: parsed });
+    },
+    [listeningSelection, onListeningSelectionChange],
+  );
+
+  const selectionInputKey = listeningSelection
+    ? `${listeningSelection.timeStartSec}-${listeningSelection.timeEndSec}-${listeningSelection.freqLowHz}-${listeningSelection.freqHighHz}`
+    : "empty";
+
   return (
     <>
       <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -323,34 +349,62 @@ export default function SpectrogramPanel({
             {listeningSelection && (
               <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-1.5">
                 <input
+                  key={`start-${selectionInputKey}`}
                   type="number"
                   step="0.01"
-                  value={listeningSelection.timeStartSec.toFixed(2)}
-                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, timeStartSec: Number.parseFloat(e.target.value) || 0 })}
+                  defaultValue={listeningSelection.timeStartSec.toFixed(2)}
+                  onChange={(e) => commitNumericInput("start", e.target.value)}
+                  onBlur={(e) => {
+                    if (!listeningSelection) return;
+                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                      e.target.value = listeningSelection.timeStartSec.toFixed(2);
+                    }
+                  }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection start time"
                 />
                 <input
+                  key={`end-${selectionInputKey}`}
                   type="number"
                   step="0.01"
-                  value={listeningSelection.timeEndSec.toFixed(2)}
-                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, timeEndSec: Number.parseFloat(e.target.value) || 0 })}
+                  defaultValue={listeningSelection.timeEndSec.toFixed(2)}
+                  onChange={(e) => commitNumericInput("end", e.target.value)}
+                  onBlur={(e) => {
+                    if (!listeningSelection) return;
+                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                      e.target.value = listeningSelection.timeEndSec.toFixed(2);
+                    }
+                  }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection end time"
                 />
                 <input
+                  key={`low-${selectionInputKey}`}
                   type="number"
                   step="1"
-                  value={Math.round(listeningSelection.freqLowHz)}
-                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, freqLowHz: Number.parseFloat(e.target.value) || 0 })}
+                  defaultValue={Math.round(listeningSelection.freqLowHz)}
+                  onChange={(e) => commitNumericInput("low", e.target.value)}
+                  onBlur={(e) => {
+                    if (!listeningSelection) return;
+                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                      e.target.value = String(Math.round(listeningSelection.freqLowHz));
+                    }
+                  }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection low frequency"
                 />
                 <input
+                  key={`high-${selectionInputKey}`}
                   type="number"
                   step="1"
-                  value={Math.round(listeningSelection.freqHighHz)}
-                  onChange={(e) => onListeningSelectionChange({ ...listeningSelection, freqHighHz: Number.parseFloat(e.target.value) || 0 })}
+                  defaultValue={Math.round(listeningSelection.freqHighHz)}
+                  onChange={(e) => commitNumericInput("high", e.target.value)}
+                  onBlur={(e) => {
+                    if (!listeningSelection) return;
+                    if (!Number.isFinite(Number.parseFloat(e.target.value))) {
+                      e.target.value = String(Math.round(listeningSelection.freqHighHz));
+                    }
+                  }}
                   className="px-2 py-1 rounded bg-panel border border-border text-text-secondary font-mono"
                   aria-label="Selection high frequency"
                 />
