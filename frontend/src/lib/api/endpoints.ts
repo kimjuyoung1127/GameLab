@@ -5,6 +5,7 @@ import { sessionsEndpoints } from "./sessions";
 import { overviewEndpoints } from "./overview";
 import { labelingEndpoints } from "./labeling";
 import { leaderboardEndpoints, fetchMyScore } from "./leaderboard";
+import { gamificationEndpoints } from "./gamification";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -15,11 +16,13 @@ export const endpoints = {
   sessions: sessionsEndpoints,
   labeling: labelingEndpoints,
   leaderboard: leaderboardEndpoints.list,
+  leaderboardList: leaderboardEndpoints.listByScope,
   achievements: {
     list: `${API_BASE}/achievements`,
     me: `${API_BASE}/achievements/me`,
     unlock: `${API_BASE}/achievements/unlock`,
   },
+  gamification: gamificationEndpoints,
 } as const;
 
 export {

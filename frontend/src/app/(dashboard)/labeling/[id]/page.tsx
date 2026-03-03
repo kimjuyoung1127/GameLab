@@ -8,10 +8,11 @@ import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
 import { useAchievementStore } from "@/lib/store/achievement-store";
+import { useMissionStore } from "@/lib/store/mission-store";
 import { useUIStore } from "@/lib/store/ui-store";
 import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
 import { useWaveform } from "@/lib/hooks/use-waveform";
-import { useSpectrogram } from "@/lib/hooks/use-spectrogram";
+import { useSpectrogram, type SpectrogramFftOptions } from "@/lib/hooks/use-spectrogram";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { useSegmentPlayback } from "@/lib/hooks/use-segment-playback";
 import { useLabelingHotkeys } from "@/lib/hooks/labeling/useLabelingHotkeys";
@@ -167,7 +168,19 @@ export default function LabelingWorkspacePage() {
     deleteSuggestion,
   } = useAnnotationStore();
 
-  const { score, streak, addScore, addConfirm, addFix, incrementStreak, incrementDailyProgress, dailyGoal, dailyProgress, fetchFromServer } =
+  const {
+    score,
+    streak,
+    addScore,
+    addConfirm,
+    addFix,
+    incrementStreak,
+    incrementDailyProgress,
+    dailyGoal,
+    dailyProgress,
+    fetchFromServer,
+    refreshGamificationSnapshot,
+  } =
     useScoreStore();
 
   const t = useTranslations("labeling");
@@ -183,6 +196,7 @@ export default function LabelingWorkspacePage() {
   } = useSessionStore();
 
   const { checkAndUnlock, recentUnlock, clearRecent, load: loadAchievements } = useAchievementStore();
+  const { daily: dailyMissions, weekly: weeklyMissions, claimingIds: claimingMissionIds, load: loadMissions, claim: claimMissionReward } = useMissionStore();
   const { showToast } = useUIStore();
   const spectroListeningEnabled = ENABLE_SPECTRO_LISTENING_V1;
 
@@ -205,6 +219,7 @@ export default function LabelingWorkspacePage() {
   const [freqMin, setFreqMin] = useState(0);
   const [freqMax, setFreqMax] = useState(MAX_FREQ);
   const [freqAxisScale, setFreqAxisScale] = useState<"linear" | "log">("linear");
+  const [fftOptions, setFftOptions] = useState<SpectrogramFftOptions>({});
   const hasInteracted = useRef(false);
   const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
@@ -224,7 +239,7 @@ export default function LabelingWorkspacePage() {
   const audioUrl: string | null = normalizeAudioUrl(activeFile?.audioUrl);
   const player = useAudioPlayer(audioUrl, parsedDuration, audioRetryKey);
   const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey, targetSampleRate);
-  const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData, freqMin, freqMax);
+  const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData, freqMin, freqMax, fftOptions);
   const audioLoadError = player.error ?? waveformError;
   const segmentPlayback = useSegmentPlayback({
     channelData: waveformData?.channelData,
@@ -299,7 +314,8 @@ export default function LabelingWorkspacePage() {
   useEffect(() => {
     void fetchFromServer();
     void loadAchievements();
-  }, [fetchFromServer, loadAchievements]);
+    void loadMissions();
+  }, [fetchFromServer, loadAchievements, loadMissions]);
 
   /* ----- Achievement unlock toast --------------------------------- */
   useEffect(() => {
@@ -411,8 +427,10 @@ export default function LabelingWorkspacePage() {
       incrementDailyProgress();
       if (currentId) enqueueStatusUpdate(currentId, "confirmed");
       void checkAndUnlock();
+      void refreshGamificationSnapshot();
+      void loadMissions();
     }
-  }, [suggestions, selectedSuggestionId, showToast, t, confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, checkAndUnlock]);
+  }, [suggestions, selectedSuggestionId, showToast, t, confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, checkAndUnlock, refreshGamificationSnapshot, loadMissions]);
 
   const handleReject = useCallback(() => {
     hasInteracted.current = true;
@@ -432,8 +450,20 @@ export default function LabelingWorkspacePage() {
       incrementDailyProgress();
       if (currentId) enqueueStatusUpdate(currentId, "corrected");
       void checkAndUnlock();
+      void refreshGamificationSnapshot();
+      void loadMissions();
     }
-  }, [applyFix, addScore, addFix, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock]);
+  }, [applyFix, addScore, addFix, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock, refreshGamificationSnapshot, loadMissions]);
+
+  const handleClaimMission = useCallback((missionId: string) => {
+    void (async () => {
+      const claimed = await claimMissionReward(missionId);
+      if (claimed) {
+        showToast("Mission reward claimed");
+      }
+      await refreshGamificationSnapshot();
+    })();
+  }, [claimMissionReward, refreshGamificationSnapshot, showToast]);
 
   const seekTo = useCallback((time: number, trackHistory = false) => {
     player.seek(time);
@@ -715,40 +745,49 @@ export default function LabelingWorkspacePage() {
     });
   }, [player.currentTime, pushHistory, setLoopState, loopState.start]);
 
+  const {
+    isPlaying: segmentIsPlaying,
+    mode: segmentMode,
+    stop: segmentStop,
+    segmentCurrentTime,
+    playOriginalSegment,
+    playFilteredSegment,
+  } = segmentPlayback;
+
   const handlePlayOriginalSelection = useCallback(() => {
     if (!spectroListeningEnabled || !listeningSelection) {
-      showToast("No selected region to play");
+      showToast(t("listeningNoSelection"));
       return;
     }
-    if (segmentPlayback.isPlaying && segmentPlayback.mode === "original") {
-      segmentPlayback.stop();
-      showToast("Original segment playback stopped");
+    if (segmentIsPlaying && segmentMode === "original") {
+      segmentStop();
+      showToast(t("listeningOriginalStopped"));
       return;
     }
-    void segmentPlayback.playOriginalSegment(listeningSelection, player.playbackRate);
-  }, [listeningSelection, player.playbackRate, segmentPlayback, showToast, spectroListeningEnabled]);
+    void playOriginalSegment(listeningSelection, player.playbackRate);
+  }, [listeningSelection, player.playbackRate, segmentIsPlaying, segmentMode, segmentStop, playOriginalSegment, showToast, spectroListeningEnabled, t]);
 
   const handlePlayFilteredSelection = useCallback(() => {
     if (!spectroListeningEnabled || !listeningSelection) {
-      showToast("No selected region to filter-play");
+      showToast(t("listeningNoFilterSelection"));
       return;
     }
-    if (segmentPlayback.isPlaying && segmentPlayback.mode === "filtered") {
-      segmentPlayback.stop();
-      showToast("Filtered segment playback stopped");
+    if (segmentIsPlaying && segmentMode === "filtered") {
+      segmentStop();
+      showToast(t("listeningFilteredStopped"));
       return;
     }
-    void segmentPlayback.playFilteredSegment(
+    void playFilteredSegment(
       listeningSelection,
       { order: 4, normalize: true, method: "biquad_chain" },
       player.playbackRate,
     );
-  }, [listeningSelection, player.playbackRate, segmentPlayback, showToast, spectroListeningEnabled]);
+  }, [listeningSelection, player.playbackRate, segmentIsPlaying, segmentMode, segmentStop, playFilteredSegment, showToast, spectroListeningEnabled, t]);
 
   const handleDownloadFilteredSelection = useCallback(async () => {
     if (!spectroListeningEnabled || !listeningSelection) {
-      setSegmentExportError("No selected region to export");
-      showToast("No selected region to export");
+      setSegmentExportError(t("listeningExportNoSelection"));
+      showToast(t("listeningExportNoSelection"));
       return;
     }
 
@@ -762,9 +801,9 @@ export default function LabelingWorkspacePage() {
         normalize: true,
       });
       downloadBlob(result.blob, result.filename);
-      showToast(`Exported: ${result.filename}`);
+      showToast(t("listeningExported", { filename: result.filename }));
     } catch (err) {
-      const message = (err as Error).message || "Failed to export filtered segment";
+      const message = (err as Error).message || t("listeningExportFailed");
       setSegmentExportError(message);
       showToast(message);
     }
@@ -773,6 +812,7 @@ export default function LabelingWorkspacePage() {
     listeningSelection,
     showToast,
     spectroListeningEnabled,
+    t,
     waveformData?.channelData,
     waveformData?.sampleRate,
   ]);
@@ -984,6 +1024,7 @@ export default function LabelingWorkspacePage() {
             onSaveManualDrafts={handleSaveManualDrafts}
             pendingDraftCount={manualDrafts.length}
             bookmarkCount={bookmarks.length}
+            spectrogramRef={spectrogramRef}
           />
 
           <SpectrogramPanel
@@ -1041,13 +1082,16 @@ export default function LabelingWorkspacePage() {
             onPlayOriginalSelection={handlePlayOriginalSelection}
             onPlayFilteredSelection={handlePlayFilteredSelection}
             segmentPlaybackError={segmentPlayback.error?.message ?? null}
-            segmentPlaybackActive={segmentPlayback.isPlaying}
-            segmentPlaybackMode={segmentPlayback.mode}
-            onStopSegmentPlayback={segmentPlayback.stop}
+            segmentPlaybackActive={segmentIsPlaying}
+            segmentPlaybackMode={segmentMode}
+            segmentCurrentTime={segmentCurrentTime}
+            onStopSegmentPlayback={segmentStop}
             onDownloadFilteredSelection={handleDownloadFilteredSelection}
             segmentExportError={segmentExportError}
             freqAxisScale={freqAxisScale}
             onFreqAxisScaleChange={setFreqAxisScale}
+            fftOptions={fftOptions}
+            onFftOptionsChange={setFftOptions}
             statusColors={statusColors}
             draftPreview={draftPreview}
             playbackPct={playbackPct}
@@ -1091,6 +1135,10 @@ export default function LabelingWorkspacePage() {
           onReject={handleReject}
           onApplyFix={handleApplyFix}
           onNextFile={handleNextFile}
+          dailyMissions={dailyMissions}
+          weeklyMissions={weeklyMissions}
+          claimingMissionIds={claimingMissionIds}
+          onClaimMission={handleClaimMission}
         >
           <BookmarksPanel
             bookmarks={bookmarks}

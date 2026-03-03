@@ -33,6 +33,8 @@ export type SegmentPlaybackController = {
   isPlaying: boolean;
   mode: "original" | "filtered" | null;
   error: SegmentPlaybackError | null;
+  /** Current audio time (in seconds) during segment playback, for cursor sync. */
+  segmentCurrentTime: number | null;
   stop: () => void;
   playOriginalSegment: (selection: ListeningSelection, rate: number) => Promise<void>;
   playFilteredSegment: (
@@ -80,9 +82,36 @@ export function useSegmentPlayback({
 }: SegmentPlaybackParams): SegmentPlaybackController {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const playStartRef = useRef<{ wallTime: number; audioStart: number; rate: number } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [mode, setMode] = useState<"original" | "filtered" | null>(null);
   const [error, setError] = useState<SegmentPlaybackError | null>(null);
+  const [segmentCurrentTime, setSegmentCurrentTime] = useState<number | null>(null);
+
+  const stopCursorRaf = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    playStartRef.current = null;
+    setSegmentCurrentTime(null);
+  }, []);
+
+  const startCursorRaf = useCallback((audioStart: number, rate: number) => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    playStartRef.current = { wallTime: ctx.currentTime, audioStart, rate };
+
+    const tick = () => {
+      if (!playStartRef.current || !audioCtxRef.current) return;
+      const elapsed = audioCtxRef.current.currentTime - playStartRef.current.wallTime;
+      const currentAudioTime = playStartRef.current.audioStart + elapsed * playStartRef.current.rate;
+      setSegmentCurrentTime(currentAudioTime);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, []);
 
   const stop = useCallback(() => {
     if (sourceRef.current) {
@@ -94,9 +123,10 @@ export function useSegmentPlayback({
       sourceRef.current.disconnect();
       sourceRef.current = null;
     }
+    stopCursorRaf();
     setIsPlaying(false);
     setMode(null);
-  }, []);
+  }, [stopCursorRaf]);
 
   useEffect(() => () => {
     stop();
@@ -150,13 +180,14 @@ export function useSegmentPlayback({
       source.onended = () => {
         if (sourceRef.current === source) {
           sourceRef.current = null;
+          stopCursorRaf();
           setIsPlaying(false);
           setMode(null);
         }
       };
       return { ctx, source };
     },
-    [ensureAudioContext, sampleRate],
+    [ensureAudioContext, sampleRate, stopCursorRaf],
   );
 
   const playOriginalSegment = useCallback(
@@ -171,6 +202,7 @@ export function useSegmentPlayback({
         setIsPlaying(true);
         setMode("original");
         source.start();
+        startCursorRaf(selection.timeStartSec, rate);
       } catch (err) {
         const normalized: SegmentPlaybackError =
           err instanceof SegmentPlaybackException
@@ -180,7 +212,7 @@ export function useSegmentPlayback({
         setIsPlaying(false);
       }
     },
-    [createBufferSource, getSegmentData, stop],
+    [createBufferSource, getSegmentData, startCursorRaf, stop],
   );
 
   const playFilteredSegment = useCallback(
@@ -210,6 +242,7 @@ export function useSegmentPlayback({
         setIsPlaying(true);
         setMode("filtered");
         source.start();
+        startCursorRaf(selection.timeStartSec, rate);
       } catch (err) {
         const normalized: SegmentPlaybackError =
           err instanceof SegmentPlaybackException
@@ -219,13 +252,14 @@ export function useSegmentPlayback({
         setIsPlaying(false);
       }
     },
-    [createBufferSource, getSegmentData, stop],
+    [createBufferSource, getSegmentData, startCursorRaf, stop],
   );
 
   return {
     isPlaying,
     mode,
     error,
+    segmentCurrentTime,
     stop,
     playOriginalSegment,
     playFilteredSegment,

@@ -74,6 +74,18 @@ export default function PlayerControls({
         {player.playbackRate.toFixed(2)}x
       </button>
 
+      <button
+        onClick={player.togglePreservePitch}
+        title={t("preservePitchLabel")}
+        className={`text-[10px] font-bold px-1.5 py-1 rounded-md transition-colors ${
+          player.preservePitch
+            ? "bg-accent/20 text-accent"
+            : "bg-surface text-text-muted hover:bg-panel-light"
+        }`}
+      >
+        {player.preservePitch ? t("preservePitchOn") : t("preservePitchOff")}
+      </button>
+
       <button onClick={onSetLoopStart} className="p-1.5 rounded-md text-text-muted hover:text-text-secondary transition-colors" title={t("loopIn")}>
         <Flag className="w-3.5 h-3.5" />
       </button>

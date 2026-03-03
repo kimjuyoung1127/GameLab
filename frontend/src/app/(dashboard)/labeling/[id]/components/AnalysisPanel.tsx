@@ -2,6 +2,7 @@
 import { Check, ChevronRight, Filter, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { AudioFile, LabelingMode, Suggestion } from "@/types";
+import type { MissionItem } from "@/types/gamification";
 import { getLabelDisplay } from "@/lib/labeling/label-display";
 
 type AnalysisPanelProps = {
@@ -16,6 +17,10 @@ type AnalysisPanelProps = {
   onReject: () => void;
   onApplyFix: () => void;
   onNextFile: () => void;
+  dailyMissions?: MissionItem[];
+  weeklyMissions?: MissionItem[];
+  claimingMissionIds?: string[];
+  onClaimMission?: (missionId: string) => void;
   children?: React.ReactNode;
 };
 
@@ -31,6 +36,10 @@ export default function AnalysisPanel({
   onReject,
   onApplyFix,
   onNextFile,
+  dailyMissions = [],
+  weeklyMissions = [],
+  claimingMissionIds = [],
+  onClaimMission,
   children,
 }: AnalysisPanelProps) {
   const t = useTranslations("labeling");
@@ -64,6 +73,42 @@ export default function AnalysisPanel({
           )}
         </div>
       </div>
+
+      {(dailyMissions.length > 0 || weeklyMissions.length > 0) && (
+        <div className="px-4 py-3 border-b border-border">
+          <h3 className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-2">Mission Center</h3>
+          <div className="space-y-2">
+            {[...dailyMissions.slice(0, 2), ...weeklyMissions.slice(0, 1)].map((mission) => {
+              const progressPct = Math.min(100, Math.round((mission.progress / Math.max(1, mission.target)) * 100));
+              const canClaim = mission.state === "Completed";
+              const claiming = claimingMissionIds.includes(mission.missionId);
+              return (
+                <div key={mission.missionId} className="bg-surface rounded-lg p-2.5 border border-border">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold text-text truncate">{mission.title}</p>
+                    <span className="text-[10px] text-text-muted">{mission.scope.toUpperCase()}</span>
+                  </div>
+                  <p className="text-[10px] text-text-muted mt-1">
+                    {mission.progress}/{mission.target} • {mission.reward.points} pts
+                  </p>
+                  <div className="h-1.5 bg-panel rounded-full overflow-hidden mt-2">
+                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                  </div>
+                  {canClaim && onClaimMission && (
+                    <button
+                      onClick={() => onClaimMission(mission.missionId)}
+                      disabled={claiming}
+                      className="mt-2 w-full text-[11px] font-semibold rounded-md px-2 py-1.5 bg-primary text-white disabled:opacity-50"
+                    >
+                      {claiming ? "Claiming..." : "Claim Reward"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {mode === "review" && activeSuggestion && (
         <div className="p-4 border-b border-border">

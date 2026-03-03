@@ -34,12 +34,12 @@ export default function HotkeyHelp() {
       title: t("playback"),
       keys: [
         { key: "Space", desc: t("playPause") },
-        { key: "O", desc: "Play selected original" },
-        { key: "F", desc: "Play selected filtered" },
+        { key: "O", desc: t("playOriginal") },
+        { key: "F", desc: t("playFiltered") },
         { key: "Shift+\u2191", desc: t("volumeUp") },
         { key: "Shift+\u2193", desc: t("volumeDown") },
         { key: "[ / ]", desc: t("playbackSpeed") },
-        { key: "I / P / L", desc: "Loop in/out/toggle" },
+        { key: "I / P / L", desc: t("loopInOutToggle") },
       ],
     },
     {

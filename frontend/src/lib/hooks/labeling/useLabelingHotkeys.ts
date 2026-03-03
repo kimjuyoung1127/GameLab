@@ -194,7 +194,7 @@ export function useLabelingHotkeys({
           break;
         case "[":
           e.preventDefault();
-          player.setPlaybackRate(Math.max(player.playbackRate - 0.25, 0.5));
+          player.setPlaybackRate(Math.max(player.playbackRate - 0.25, 0.25));
           break;
         case "]":
           e.preventDefault();

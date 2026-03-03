@@ -7,6 +7,14 @@ import type { SpectrogramData, WaveformData } from "@/types";
 import type { SpectrogramWorkerOutput } from "@/lib/audio/spectrogram-worker";
 import { computeSpectrogram, DEFAULT_OPTIONS } from "@/lib/audio/spectrogram-renderer";
 
+/** User-configurable FFT settings (all optional, falls back to DEFAULT_OPTIONS). */
+export interface SpectrogramFftOptions {
+  fftSize?: number;
+  windowFn?: "hann" | "hamming" | "blackman";
+  minDb?: number;
+  maxDb?: number;
+}
+
 /** Safely create ImageData from pixel array (handles ArrayBufferLike TS quirk) */
 function createImageData(pixels: Uint8ClampedArray, w: number, h: number): ImageData {
   const data = new Uint8ClampedArray(pixels.length);
@@ -29,6 +37,7 @@ export function useSpectrogram(
   waveformData: WaveformData | null,
   freqMin?: number,
   freqMax?: number,
+  fftOptions?: SpectrogramFftOptions,
 ): UseSpectrogramResult {
   const [data, setData] = useState<SpectrogramData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -102,7 +111,17 @@ export function useSpectrogram(
       // Transfer channelData buffer to worker (zero-copy)
       const transferData = new Float32Array(channelData);
       worker.postMessage(
-        { channelData: transferData, sampleRate, freqMin, freqMax },
+        {
+          channelData: transferData,
+          sampleRate,
+          freqMin,
+          freqMax,
+          fftSize: fftOptions?.fftSize,
+          hopSize: fftOptions?.fftSize ? Math.max(1, Math.floor(fftOptions.fftSize / 4)) : undefined,
+          windowFn: fftOptions?.windowFn,
+          minDb: fftOptions?.minDb,
+          maxDb: fftOptions?.maxDb,
+        },
         [transferData.buffer],
       );
     } catch {
@@ -120,13 +139,21 @@ export function useSpectrogram(
       id: number,
     ) {
       try {
+        const mergedFftSize = fftOptions?.fftSize ?? DEFAULT_OPTIONS.fftSize;
         const nyquist = sr / 2;
-        const totalBins = DEFAULT_OPTIONS.fftSize >> 1;
+        const totalBins = mergedFftSize >> 1;
         const result = computeSpectrogram(cd, {
           ...DEFAULT_OPTIONS,
           sampleRate: sr,
           freqMin,
           freqMax,
+          ...(fftOptions?.fftSize != null && {
+            fftSize: fftOptions.fftSize,
+            hopSize: Math.max(1, Math.floor(fftOptions.fftSize / 4)),
+          }),
+          ...(fftOptions?.windowFn != null && { windowFn: fftOptions.windowFn }),
+          ...(fftOptions?.minDb != null && { minDb: fftOptions.minDb }),
+          ...(fftOptions?.maxDb != null && { maxDb: fftOptions.maxDb }),
         });
         if (id !== computeIdRef.current) return;
         if (result.width <= 0 || result.height <= 0) {
@@ -161,7 +188,7 @@ export function useSpectrogram(
         workerRef.current = null;
       }
     };
-  }, [waveformData, freqMin, freqMax]);
+  }, [waveformData, freqMin, freqMax, fftOptions?.fftSize, fftOptions?.windowFn, fftOptions?.minDb, fftOptions?.maxDb]);
 
   return { data, loading, error };
 }

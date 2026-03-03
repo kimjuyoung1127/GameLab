@@ -2,6 +2,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { fetchMyScore } from "@/lib/api/leaderboard";
+import { fetchGamificationSnapshot } from "@/lib/api/gamification";
+import type { GamificationSnapshot, RewardEvent } from "@/types/gamification";
 
 /* ------------------------------------------------------------------ */
 /*  Level system (pure frontend calculation)                           */
@@ -55,6 +57,7 @@ interface ScoreState {
   dailyGoal: number;
   dailyProgress: number;
   serverSynced: boolean;
+  snapshot: GamificationSnapshot | null;
   addScore: (points: number) => void;
   incrementStreak: () => void;
   resetStreak: () => void;
@@ -63,6 +66,8 @@ interface ScoreState {
   setDailyGoal: (goal: number) => void;
   incrementDailyProgress: () => void;
   fetchFromServer: () => Promise<void>;
+  refreshGamificationSnapshot: () => Promise<void>;
+  applyOptimisticReward: (event: Pick<RewardEvent, "points">) => void;
 }
 
 export const useScoreStore = create<ScoreState>()(
@@ -76,8 +81,9 @@ export const useScoreStore = create<ScoreState>()(
       dailyGoal: 20,
       dailyProgress: 0,
       serverSynced: false,
+      snapshot: null,
 
-      addScore: (points) => set((s) => ({ score: s.score + points })),
+      addScore: (points) => set((s) => ({ score: s.score + points, allTimeScore: s.allTimeScore + points })),
       incrementStreak: () => set((s) => ({ streak: s.streak + 1 })),
       resetStreak: () => set({ streak: 0 }),
       addConfirm: () => set((s) => ({ totalConfirmed: s.totalConfirmed + 1 })),
@@ -86,11 +92,43 @@ export const useScoreStore = create<ScoreState>()(
       incrementDailyProgress: () => set((s) => ({ dailyProgress: s.dailyProgress + 1 })),
 
       fetchFromServer: async () => {
+        const snapshot = await fetchGamificationSnapshot();
+        if (snapshot) {
+          set({
+            score: snapshot.todayScore,
+            allTimeScore: snapshot.allTimeScore,
+            dailyGoal: snapshot.dailyGoal,
+            dailyProgress: snapshot.dailyProgress,
+            snapshot,
+            serverSynced: true,
+          });
+          return;
+        }
+
         const data = await fetchMyScore();
         if (data) {
           set({ score: data.todayScore, allTimeScore: data.allTimeScore, serverSynced: true });
         }
       },
+
+      refreshGamificationSnapshot: async () => {
+        const snapshot = await fetchGamificationSnapshot();
+        if (!snapshot) return;
+        set({
+          score: snapshot.todayScore,
+          allTimeScore: snapshot.allTimeScore,
+          dailyGoal: snapshot.dailyGoal,
+          dailyProgress: snapshot.dailyProgress,
+          snapshot,
+          serverSynced: true,
+        });
+      },
+
+      applyOptimisticReward: ({ points }) =>
+        set((s) => ({
+          score: s.score + points,
+          allTimeScore: s.allTimeScore + points,
+        })),
     }),
     {
       name: "sst-score",
@@ -103,6 +141,7 @@ export const useScoreStore = create<ScoreState>()(
         allTimeScore: state.allTimeScore,
         dailyGoal: state.dailyGoal,
         dailyProgress: state.dailyProgress,
+        snapshot: state.snapshot,
       }),
       migrate: () => ({
         score: 0,
@@ -112,6 +151,7 @@ export const useScoreStore = create<ScoreState>()(
         allTimeScore: 0,
         dailyGoal: 20,
         dailyProgress: 0,
+        snapshot: null,
       }),
     }
   )

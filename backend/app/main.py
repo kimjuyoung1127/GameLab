@@ -18,6 +18,7 @@ from app.api.sessions.router import router as sessions_router
 from app.api.labeling.router import router as labeling_router
 from app.api.leaderboard.router import router as leaderboard_router
 from app.api.achievements.router import router as achievements_router
+from app.api.gamification.router import router as gamification_router
 
 app = FastAPI(
     title="Smart Spectro-Tagging API",
@@ -42,6 +43,7 @@ app.include_router(sessions_router)
 app.include_router(labeling_router)
 app.include_router(leaderboard_router)
 app.include_router(achievements_router)
+app.include_router(gamification_router)
 
 os.makedirs(settings.temp_upload_dir, exist_ok=True)
 

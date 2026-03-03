@@ -7,6 +7,13 @@ from app.models.sessions import SessionResponse, AudioFileResponse
 from app.models.labeling import SuggestionResponse, SuggestionStatusValue, UpdateSuggestionRequest
 from app.models.overview import OverviewMetrics
 from app.models.leaderboard import LeaderboardEntry
+from app.models.gamification import (
+    GamificationSnapshotResponse,
+    MissionProgressResponse,
+    MissionsResponse,
+    ClaimMissionResponse,
+    RewardEventResponse,
+)
 
 __all__ = [
     "CamelModel", "to_camel",
@@ -16,4 +23,9 @@ __all__ = [
     "SuggestionResponse", "SuggestionStatusValue", "UpdateSuggestionRequest",
     "OverviewMetrics",
     "LeaderboardEntry",
+    "GamificationSnapshotResponse",
+    "MissionProgressResponse",
+    "MissionsResponse",
+    "ClaimMissionResponse",
+    "RewardEventResponse",
 ]

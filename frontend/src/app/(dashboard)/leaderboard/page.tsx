@@ -8,6 +8,7 @@ import { ArrowLeft, Trophy, Lock } from "lucide-react";
 import type { User } from "@/types";
 import { endpoints } from "@/lib/api/endpoints";
 import { useAchievementStore } from "@/lib/store/achievement-store";
+import { authFetch } from "@/lib/api/auth-fetch";
 import styles from "./styles/page.module.css";
 
 export default function LeaderboardPage() {
@@ -15,7 +16,9 @@ export default function LeaderboardPage() {
   const t = useTranslations("leaderboard");
   const locale = useLocale();
   const { achievements, unlocked, load: loadAchievements, loaded } = useAchievementStore();
+  const [scope, setScope] = useState<"daily" | "weekly" | "all_time">("daily");
   const [users, setUsers] = useState<User[]>([]);
+  const [me, setMe] = useState<User | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -23,13 +26,21 @@ export default function LeaderboardPage() {
     const load = async () => {
       try {
         setApiError(null);
-        const res = await fetch(endpoints.leaderboard);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as User[];
-        if (!cancelled) setUsers(data);
+        const [listRes, meRes] = await Promise.all([
+          fetch(endpoints.leaderboardList(scope)),
+          authFetch(`${endpoints.leaderboard}/me?scope=${scope}`),
+        ]);
+        if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
+        const data = (await listRes.json()) as User[];
+        const meData = meRes.ok ? ((await meRes.json()) as User) : null;
+        if (!cancelled) {
+          setUsers(data);
+          setMe(meData);
+        }
       } catch (err) {
         if (!cancelled) {
           setUsers([]);
+          setMe(null);
           setApiError((err as Error).message || "Failed to load leaderboard");
         }
       }
@@ -39,7 +50,7 @@ export default function LeaderboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     if (!loaded) void loadAchievements();
@@ -62,6 +73,32 @@ export default function LeaderboardPage() {
       </header>
 
       <div className={styles.c008}>
+        <div className="mb-4 flex items-center gap-2">
+          {[
+            { key: "daily" as const, label: "Daily" },
+            { key: "weekly" as const, label: "Weekly" },
+            { key: "all_time" as const, label: "All-time" },
+          ].map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setScope(item.key)}
+              className={`px-3 py-1.5 text-xs rounded-md border ${
+                scope === item.key ? "bg-primary text-white border-primary" : "border-border text-text-muted"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {me && (
+          <div className="mb-4 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-xs text-text">
+            My Rank: #
+            {users.findIndex((u) => u.id === me.id) + 1 || "-"} • Score: {me.todayScore.toLocaleString()} • All-time:{" "}
+            {me.allTimeScore.toLocaleString()}
+          </div>
+        )}
+
         {apiError && (
           <div className={styles.c009}>
             {apiError}

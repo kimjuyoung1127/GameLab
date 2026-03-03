@@ -1,11 +1,13 @@
 /** Top toolbar with tools, zoom, undo/redo, save, export dropdown and file indicator. */
 "use client";
 
+import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, FileAudio, Redo2, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { DrawTool } from "@/types";
 import { endpoints } from "@/lib/api/endpoints";
+import { exportSpectrogramAsPng } from "@/lib/audio/spectrogram-export";
 import { tools, zoomTools } from "./constants";
 
 type ToolBarProps = {
@@ -25,6 +27,7 @@ type ToolBarProps = {
   onSaveManualDrafts: () => Promise<void>;
   pendingDraftCount: number;
   bookmarkCount: number;
+  spectrogramRef?: React.RefObject<HTMLDivElement | null>;
 };
 
 export default function ToolBar({
@@ -44,6 +47,7 @@ export default function ToolBar({
   onSaveManualDrafts,
   pendingDraftCount,
   bookmarkCount,
+  spectrogramRef,
 }: ToolBarProps) {
   const t = useTranslations("labeling");
   const [exportOpen, setExportOpen] = useState(false);
@@ -213,6 +217,18 @@ export default function ToolBar({
                 className="block w-full text-left px-3 py-1.5 text-[11px] text-accent hover:bg-panel-light transition-colors disabled:opacity-50"
               >
                 {t("exportLabeledJson")}
+              </button>
+              <div className="h-px bg-border-light mx-2 my-1" />
+              <button
+                onClick={() => {
+                  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+                  const base = activeFileName?.replace(/\.[^/.]+$/, "") ?? "spectrogram";
+                  exportSpectrogramAsPng(spectrogramRef?.current ?? null, `${base}_${ts}.png`);
+                  closeDropdown();
+                }}
+                className="block w-full text-left px-3 py-1.5 text-[11px] text-text-secondary hover:bg-panel-light hover:text-text transition-colors"
+              >
+                {t("exportPng")}
               </button>
             </div>
           )}

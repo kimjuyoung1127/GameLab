@@ -6,6 +6,7 @@ Owner Doc: `CLAUDE.md` (root slim index)
 ## Current Phase
 - Phase 2E (spectrogram listening MVP integrated)
 - Baseline pinned to commit `fa76c00` (2026-03-03 KST rollback sync)
+- Gamification V2 implementation in progress (mission/reward DB-backed flow)
 
 ## Spectrogram Listening Scope (Locked: 2026-03-03 KST)
 - Workspace target: `frontend/src/app/(dashboard)/labeling/[id]` only
@@ -33,9 +34,9 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - slack daily summary: Ready
 
 ## Next Actions
-1. Complete final QA pass for current listening MVP (`O/F`, stop/toggle, numeric input, WAV export).
-2. Execute one external scheduler DRY_RUN cycle for status artifacts.
-3. Keep `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1=false` by default and flip to `true` only after QA sign-off.
+1. Apply `scripts/sql-chunks/gamification_v2_core_tables.sql` to Supabase project.
+2. QA pass for gamification endpoints (`/api/gamification/*`) and leaderboard scope tabs.
+3. Validate mission claim/idempotency with real suggestion lifecycle data.
 
 ## Recent QA Hotfixes (2026-03-03 KST)
 - segment playback mode visibility and stop/toggle control

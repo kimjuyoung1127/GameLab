@@ -31,13 +31,14 @@ const EMPTY_METRICS: OverviewMetrics = {
 export default function OverviewPage() {
   const router = useRouter();
   const t = useTranslations("overview");
-  const { score, totalConfirmed, totalFixed } = useScoreStore();
+  const { score, totalConfirmed, totalFixed, snapshot, refreshGamificationSnapshot } = useScoreStore();
   const [metrics, setMetrics] = useState<OverviewMetrics>(EMPTY_METRICS);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    void refreshGamificationSnapshot();
 
     const load = async () => {
       try {
@@ -68,7 +69,7 @@ export default function OverviewPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshGamificationSnapshot]);
 
   const completedSessions = useMemo(
     () => sessions.filter((s) => s.status === "completed"),
@@ -196,6 +197,28 @@ export default function OverviewPage() {
           </div>
 
           <div className={styles.c030}>
+            {snapshot && (
+              <div className={styles.c031}>
+                <h2 className={styles.c032}>Mission Progress</h2>
+                <div className={styles.c021}>
+                  <div className={styles.c036}>
+                    <span className={styles.c028}>Daily</span>
+                    <span className={styles.c037}>
+                      {snapshot.dailyProgress}/{snapshot.dailyGoal}
+                    </span>
+                  </div>
+                  <div className={styles.c036}>
+                    <span className={styles.c028}>Weekly Score</span>
+                    <span className={styles.c039}>{snapshot.weekScore.toLocaleString()}</span>
+                  </div>
+                  <div className={styles.c036}>
+                    <span className={styles.c028}>Rank</span>
+                    <span className={styles.c019}>#{snapshot.rankDaily ?? "-"}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className={styles.c031}>
               <h2 className={styles.c032}>{t("quickActions")}</h2>
               <div className={styles.c033}>

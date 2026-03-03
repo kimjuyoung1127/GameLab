@@ -9,6 +9,7 @@ export interface AudioPlayerState {
   duration: number;
   volume: number;
   playbackRate: number;
+  preservePitch: boolean;
   loopEnabled: boolean;
   loopStart: number | null;
   loopEnd: number | null;
@@ -21,6 +22,7 @@ export interface AudioPlayerState {
   playRegion: (start: number, end: number) => void;
   setVolume: (v: number) => void;
   setPlaybackRate: (r: number) => void;
+  togglePreservePitch: () => void;
   setLoopStart: (time: number | null) => void;
   setLoopEnd: (time: number | null) => void;
   toggleLoop: () => void;
@@ -43,6 +45,7 @@ export function useAudioPlayer(
   const [canPlay, setCanPlay] = useState(false);
   const [volume, setVolumeState] = useState(0.75);
   const [playbackRate, setPlaybackRateState] = useState(1.0);
+  const [preservePitch, setPreservePitchState] = useState(true);
   const [loopEnabled, setLoopEnabledState] = useState(false);
   const [loopStart, setLoopStartState] = useState<number | null>(null);
   const [loopEnd, setLoopEndState] = useState<number | null>(null);
@@ -67,11 +70,21 @@ export function useAudioPlayer(
   }, []);
 
   const setPlaybackRate = useCallback((r: number) => {
-    const clamped = Math.max(0.5, Math.min(2.0, r));
+    const clamped = Math.max(0.25, Math.min(2.0, r));
     setPlaybackRateState(clamped);
     if (audioRef.current) {
       audioRef.current.playbackRate = clamped;
     }
+  }, []);
+
+  const togglePreservePitch = useCallback(() => {
+    setPreservePitchState((prev) => {
+      const next = !prev;
+      if (audioRef.current) {
+        audioRef.current.preservesPitch = next;
+      }
+      return next;
+    });
   }, []);
 
   const setLoopStart = useCallback((time: number | null) => {
@@ -129,6 +142,7 @@ export function useAudioPlayer(
     const audio = new Audio(audioUrl);
     audio.volume = volume;
     audio.playbackRate = playbackRate;
+    audio.preservesPitch = preservePitch;
     audioRef.current = audio;
 
     const onLoaded = () => {
@@ -156,7 +170,7 @@ export function useAudioPlayer(
       audio.removeEventListener("error", onError);
       audio.src = "";
     };
-  }, [audioUrl, playbackRate, resetPlayerState, retryKey, volume]);
+  }, [audioUrl, playbackRate, preservePitch, resetPlayerState, retryKey, volume]);
 
   useEffect(() => {
     if (!isPlaying || !audioRef.current) {
@@ -244,6 +258,7 @@ export function useAudioPlayer(
     duration,
     volume,
     playbackRate,
+    preservePitch,
     loopEnabled,
     loopStart,
     loopEnd,
@@ -256,6 +271,7 @@ export function useAudioPlayer(
     playRegion,
     setVolume,
     setPlaybackRate,
+    togglePreservePitch,
     setLoopStart,
     setLoopEnd,
     toggleLoop,

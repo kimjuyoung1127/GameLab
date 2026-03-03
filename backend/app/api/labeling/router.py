@@ -17,6 +17,7 @@ from app.models.labeling import (
     SuggestionStatusValue,
     UpdateSuggestionRequest,
 )
+from app.services.gamification.service import apply_suggestion_reward
 
 router = APIRouter(prefix="/api/labeling", tags=["labeling"])
 logger = logging.getLogger(__name__)
@@ -83,7 +84,19 @@ async def update_suggestion(
     if body.freq_high is not None:
         update_payload["freq_high"] = body.freq_high
 
+    previous_status = SuggestionStatusValue.pending.value
     try:
+        before_res = (
+            supabase.table("sst_suggestions")
+            .select("status")
+            .eq("id", suggestion_id)
+            .limit(1)
+            .execute()
+        )
+        before_rows = before_res.data or []
+        if before_rows:
+            previous_status = before_rows[0].get("status", SuggestionStatusValue.pending.value)
+
         res = (
             supabase.table("sst_suggestions")
             .update(update_payload)
@@ -99,7 +112,23 @@ async def update_suggestion(
         raise HTTPException(status_code=404, detail="Suggestion not found")
 
     if body.status is not None:
-        _update_user_score(body.status, current_user.id)
+        try:
+            granted = apply_suggestion_reward(
+                suggestion_id=suggestion_id,
+                previous_status=previous_status,
+                next_status=body.status.value,
+                user_id=current_user.id,
+            )
+            if granted > 0:
+                logger.info(
+                    "reward_granted suggestion=%s user=%s status=%s points=%d",
+                    suggestion_id,
+                    current_user.id,
+                    body.status.value,
+                    granted,
+                )
+        except Exception:
+            logger.exception("Failed to apply suggestion reward (non-fatal)", extra={"suggestion_id": suggestion_id})
 
     return _row_to_response(rows[0])
 
@@ -349,50 +378,3 @@ def _row_to_response(s: dict) -> SuggestionResponse:
         source=s.get("source", "ai"),
         created_by=s.get("created_by"),
     )
-
-
-_POINTS_CONFIRM = 10
-_POINTS_CORRECT = 20
-
-
-def _update_user_score(status: SuggestionStatusValue, user_id: str) -> None:
-    """Update sst_users score when a suggestion status changes (non-fatal)."""
-    if status not in (SuggestionStatusValue.confirmed, SuggestionStatusValue.corrected):
-        return
-
-    points = _POINTS_CONFIRM if status == SuggestionStatusValue.confirmed else _POINTS_CORRECT
-
-    try:
-        user_res = (
-            supabase.table("sst_users")
-            .select("today_score, all_time_score")
-            .eq("id", user_id)
-            .limit(1)
-            .execute()
-        )
-        rows = getattr(user_res, "data", None) or []
-        if not rows:
-            logger.warning("Score update: user %s not found", user_id)
-            return
-
-        current = rows[0]
-        new_today = current["today_score"] + points
-        new_all_time = current["all_time_score"] + points
-
-        (
-            supabase.table("sst_users")
-            .update({"today_score": new_today, "all_time_score": new_all_time})
-            .eq("id", user_id)
-            .execute()
-        )
-
-        logger.info(
-            "score_update user=%s status=%s points=+%d today=%d all_time=%d",
-            user_id,
-            status.value,
-            points,
-            new_today,
-            new_all_time,
-        )
-    except Exception:
-        logger.exception("Failed to update user score (non-fatal)")

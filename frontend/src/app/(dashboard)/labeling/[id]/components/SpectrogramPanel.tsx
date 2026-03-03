@@ -20,6 +20,7 @@ import type {
   WaveformData,
 } from "@/types";
 import type { ListeningSelection } from "@/lib/audio/listening-types";
+import type { SpectrogramFftOptions } from "@/lib/hooks/use-spectrogram";
 import { getLabelDisplay, getTagPlacementStyle } from "@/lib/labeling/label-display";
 import { bookmarkColors } from "./constants";
 
@@ -80,10 +81,13 @@ type SpectrogramPanelProps = {
   segmentPlaybackError: string | null;
   segmentPlaybackActive: boolean;
   segmentPlaybackMode: "original" | "filtered" | null;
+  segmentCurrentTime: number | null;
   onStopSegmentPlayback: () => void;
   segmentExportError: string | null;
   freqAxisScale: FrequencyAxisScale;
   onFreqAxisScaleChange: (scale: FrequencyAxisScale) => void;
+  fftOptions: SpectrogramFftOptions;
+  onFftOptionsChange: (options: SpectrogramFftOptions) => void;
   statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }>;
   draftPreview: ManualDraft | null;
   playbackPct: number;
@@ -169,10 +173,13 @@ export default function SpectrogramPanel({
   segmentPlaybackError,
   segmentPlaybackActive,
   segmentPlaybackMode,
+  segmentCurrentTime,
   onStopSegmentPlayback,
   segmentExportError,
   freqAxisScale,
   onFreqAxisScaleChange,
+  fftOptions,
+  onFftOptionsChange,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
 
@@ -180,6 +187,7 @@ export default function SpectrogramPanel({
   const [hoveredBookmarkId, setHoveredBookmarkId] = useState<string | null>(null);
   const [pinnedBookmarkId, setPinnedBookmarkId] = useState<string | null>(null);
   const [hoverMetrics, setHoverMetrics] = useState<{ timeSec: number; freqHz: number; db: number } | null>(null);
+  const [fftSettingsOpen, setFftSettingsOpen] = useState(false);
 
   const handleBookmarkClick = useCallback((e: React.MouseEvent, bId: string) => {
     e.stopPropagation();
@@ -260,20 +268,15 @@ export default function SpectrogramPanel({
     (field: "start" | "end" | "low" | "high", rawValue: string) => {
       if (!listeningSelection) return;
       const parsed = Number.parseFloat(rawValue);
-      if (!Number.isFinite(parsed)) return;
-      if (field === "start") {
-        onListeningSelectionChange({ ...listeningSelection, timeStartSec: parsed });
-        return;
-      }
-      if (field === "end") {
-        onListeningSelectionChange({ ...listeningSelection, timeEndSec: parsed });
-        return;
-      }
-      if (field === "low") {
-        onListeningSelectionChange({ ...listeningSelection, freqLowHz: parsed });
-        return;
-      }
-      onListeningSelectionChange({ ...listeningSelection, freqHighHz: parsed });
+      if (!Number.isFinite(parsed) || parsed < 0) return;
+      const updated = { ...listeningSelection };
+      if (field === "start") updated.timeStartSec = parsed;
+      else if (field === "end") updated.timeEndSec = parsed;
+      else if (field === "low") updated.freqLowHz = parsed;
+      else updated.freqHighHz = parsed;
+      if (updated.timeEndSec <= updated.timeStartSec) return;
+      if (updated.freqHighHz <= updated.freqLowHz) return;
+      onListeningSelectionChange(updated);
     },
     [listeningSelection, onListeningSelectionChange],
   );
@@ -312,7 +315,7 @@ export default function SpectrogramPanel({
           <div className="mx-3 mt-3 shrink-0 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger flex items-center justify-between gap-3">
             <span>{audioLoadError}</span>
             <button onClick={onRetryAudio} className="px-2 py-1 rounded bg-danger/20 hover:bg-danger/30 transition-colors">
-              Retry
+              {t("listeningRetry")}
             </button>
           </div>
         )}
@@ -320,14 +323,14 @@ export default function SpectrogramPanel({
         {listeningEnabled && (
           <div className="mx-3 mt-3 shrink-0 rounded-lg border border-border/60 bg-surface/70 px-3 py-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-text-muted">Selection</span>
+              <span className="text-text-muted">{t("listeningSelectionLabel")}</span>
               {listeningSelection ? (
                 <span className="font-mono text-text-secondary">
                   {listeningSelection.timeStartSec.toFixed(2)}s ~ {listeningSelection.timeEndSec.toFixed(2)}s |{" "}
                   {Math.round(listeningSelection.freqLowHz)}Hz ~ {Math.round(listeningSelection.freqHighHz)}Hz
                 </span>
               ) : (
-                <span className="text-text-muted">none</span>
+                <span className="text-text-muted">{t("listeningSelectionNone")}</span>
               )}
               <div className="ml-auto flex items-center gap-2">
                 <button
@@ -335,28 +338,28 @@ export default function SpectrogramPanel({
                   disabled={!listeningSelection}
                   className="px-2 py-1 rounded bg-panel-light hover:bg-border text-text-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {segmentPlaybackActive && segmentPlaybackMode === "original" ? "O Stop Original" : "O Original"}
+                  {segmentPlaybackActive && segmentPlaybackMode === "original" ? t("listeningBtnStopOriginal") : t("listeningBtnOriginal")}
                 </button>
                 <button
                   onClick={onPlayFilteredSelection}
                   disabled={!listeningSelection}
                   className="px-2 py-1 rounded bg-primary/25 hover:bg-primary/35 text-primary-light disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {segmentPlaybackActive && segmentPlaybackMode === "filtered" ? "F Stop Filtered" : "F Filtered"}
+                  {segmentPlaybackActive && segmentPlaybackMode === "filtered" ? t("listeningBtnStopFiltered") : t("listeningBtnFiltered")}
                 </button>
                 <button
                   onClick={onStopSegmentPlayback}
                   disabled={!segmentPlaybackActive}
                   className="px-2 py-1 rounded bg-danger/20 hover:bg-danger/30 text-danger disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Stop
+                  {t("listeningBtnStop")}
                 </button>
                 <button
                   onClick={onDownloadFilteredSelection}
                   disabled={!listeningSelection}
                   className="px-2 py-1 rounded bg-accent/20 hover:bg-accent/30 text-accent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Download WAV
+                  {t("listeningBtnDownloadWav")}
                 </button>
               </div>
             </div>
@@ -444,7 +447,7 @@ export default function SpectrogramPanel({
                   <span className="text-danger">{segmentExportError}</span>
                 ) : (
                   <span className="text-accent">
-                    Segment playback active: {segmentPlaybackMode === "original" ? "ORIGINAL" : "FILTERED"}
+                    {segmentPlaybackMode === "original" ? t("listeningActiveOriginal") : t("listeningActiveFiltered")}
                   </span>
                 )}
               </div>
@@ -474,7 +477,7 @@ export default function SpectrogramPanel({
                   onClick={() => onFreqAxisScaleChange(freqAxisScale === "linear" ? "log" : "linear")}
                   className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-surface/80 text-text-muted hover:bg-panel-light hover:text-text-secondary"
                 >
-                  Axis {freqAxisScale === "linear" ? "LIN" : "LOG"}
+                  {t("listeningAxisLabel", { scale: freqAxisScale === "linear" ? "LIN" : "LOG" })}
                 </button>
                 {([
                   { label: t("freqPresetFull"), min: 0, max: effectiveMaxFreq },
@@ -497,7 +500,82 @@ export default function SpectrogramPanel({
                     </button>
                   );
                 })}
+                <button
+                  onClick={() => setFftSettingsOpen((prev) => !prev)}
+                  className={`px-1.5 py-0.5 rounded text-[8px] font-mono transition-colors mt-0.5 ${
+                    fftSettingsOpen
+                      ? "bg-primary/30 text-primary-light"
+                      : "bg-surface/80 text-text-muted hover:bg-panel-light hover:text-text-secondary"
+                  }`}
+                >
+                  {t("fftSettingsToggle")}
+                </button>
               </div>
+              {/* FFT Settings Panel */}
+              {fftSettingsOpen && (
+                <div className="absolute left-0 bottom-0 translate-y-full mt-1 pointer-events-auto z-30 bg-panel border border-border rounded-lg shadow-lg px-3 py-2.5 min-w-[200px]" style={{ marginLeft: "52px" }}>
+                  <div className="text-[10px] text-text-muted uppercase tracking-wider font-medium mb-2">{t("fftSettingsTitle")}</div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] text-text-secondary">{t("fftSize")}</label>
+                      <select
+                        value={fftOptions.fftSize ?? 2048}
+                        onChange={(e) => onFftOptionsChange({ ...fftOptions, fftSize: Number(e.target.value) })}
+                        className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] text-text font-mono"
+                      >
+                        <option value={512}>512</option>
+                        <option value={1024}>1024</option>
+                        <option value={2048}>2048</option>
+                        <option value={4096}>4096</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] text-text-secondary">{t("fftWindow")}</label>
+                      <select
+                        value={fftOptions.windowFn ?? "hann"}
+                        onChange={(e) => onFftOptionsChange({ ...fftOptions, windowFn: e.target.value as "hann" | "hamming" | "blackman" })}
+                        className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] text-text font-mono"
+                      >
+                        <option value="hann">Hann</option>
+                        <option value="hamming">Hamming</option>
+                        <option value="blackman">Blackman</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] text-text-secondary">{t("fftMinDb")}</label>
+                      <input
+                        type="range"
+                        min={-120}
+                        max={-30}
+                        step={5}
+                        value={fftOptions.minDb ?? -90}
+                        onChange={(e) => onFftOptionsChange({ ...fftOptions, minDb: Number(e.target.value) })}
+                        className="w-16 h-1 accent-primary cursor-pointer"
+                      />
+                      <span className="text-[9px] font-mono text-text-muted w-8 text-right">{fftOptions.minDb ?? -90}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-[10px] text-text-secondary">{t("fftMaxDb")}</label>
+                      <input
+                        type="range"
+                        min={-30}
+                        max={0}
+                        step={5}
+                        value={fftOptions.maxDb ?? -10}
+                        onChange={(e) => onFftOptionsChange({ ...fftOptions, maxDb: Number(e.target.value) })}
+                        className="w-16 h-1 accent-primary cursor-pointer"
+                      />
+                      <span className="text-[9px] font-mono text-text-muted w-8 text-right">{fftOptions.maxDb ?? -10}</span>
+                    </div>
+                    <button
+                      onClick={() => onFftOptionsChange({})}
+                      className="w-full mt-1 px-2 py-1 rounded text-[10px] bg-surface hover:bg-panel-light text-text-muted transition-colors"
+                    >
+                      {t("fftResetDefaults")}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div
@@ -521,7 +599,7 @@ export default function SpectrogramPanel({
               </div>
             </div>
 
-            <div className="absolute top-0 left-12 right-0 bottom-6">
+            <div className="absolute top-0 left-12 right-0 bottom-6 pointer-events-none">
             {suggestions.map((s) => {
               const sc = statusColors[s.status];
               const isSelected = s.id === selectedSuggestionId;
@@ -541,7 +619,7 @@ export default function SpectrogramPanel({
                   onPointerMove={isEditable ? onSuggestionDragPointerMove : undefined}
                   onPointerUp={isEditable ? onSuggestionDragPointerUp : undefined}
                   onPointerCancel={isEditable ? onSuggestionDragPointerUp : undefined}
-                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 ${sc.border} ${sc.dashed ? "border-dashed" : ""} ${isEditable ? "cursor-move" : ""} ${
+                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 pointer-events-auto ${sc.border} ${sc.dashed ? "border-dashed" : ""} ${isEditable ? "cursor-move" : ""} ${
                     isSelected ? "ring-2 ring-white/30 shadow-lg shadow-white/10" : "hover:ring-1 hover:ring-white/20"
                   }`}
                   style={{
@@ -596,7 +674,7 @@ export default function SpectrogramPanel({
                   onPointerMove={onDraftDragPointerMove}
                   onPointerUp={onDraftDragPointerUp}
                   onPointerCancel={onDraftDragPointerUp}
-                  className={`absolute border-2 rounded-sm z-20 transition-all ${
+                  className={`absolute border-2 rounded-sm z-20 transition-all pointer-events-auto ${
                     isSelected ? "border-cyan-300 bg-cyan-300/10 ring-2 ring-cyan-100/50" : "border-cyan-400/80 bg-cyan-400/10 hover:border-cyan-300"
                   }`}
                   style={{
@@ -648,6 +726,15 @@ export default function SpectrogramPanel({
                 {formatTimecode(player.currentTime)}
               </div>
             </div>
+
+            {segmentCurrentTime !== null && totalDuration > 0 && (
+              <div className="absolute top-0 bottom-0 w-0.5 z-31 pointer-events-none" style={{ left: `${(segmentCurrentTime / totalDuration) * 100}%`, background: "#00ff88" }}>
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full" style={{ background: "#00ff88" }} />
+                <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-mono whitespace-nowrap" style={{ background: "rgba(0,255,136,0.2)", color: "#00ff88" }}>
+                  {formatTimecode(segmentCurrentTime)}
+                </div>
+              </div>
+            )}
 
             {loopState.start !== null && (
               <div className="absolute top-0 bottom-0 w-px bg-warning/80 z-30" style={{ left: `${(loopState.start / totalDuration) * 100}%` }} />
@@ -772,7 +859,7 @@ export default function SpectrogramPanel({
 
             {hoverMetrics && (
               <div className="absolute top-8 left-3 rounded-lg border border-white/10 bg-black/55 backdrop-blur-sm px-2 py-1.5 text-[10px] space-y-0.5 min-w-[160px]">
-                <div className="text-text-muted">Hover</div>
+                <div className="text-text-muted">{t("listeningHover")}</div>
                 <div className="font-mono text-text-secondary">{hoverMetrics.timeSec.toFixed(3)}s</div>
                 <div className="font-mono text-text-secondary">{Math.round(hoverMetrics.freqHz)}Hz</div>
                 <div className="font-mono text-text-secondary">{hoverMetrics.db.toFixed(1)} dB</div>
