@@ -31,6 +31,7 @@ class SegmentPlaybackException extends Error {
 
 export type SegmentPlaybackController = {
   isPlaying: boolean;
+  mode: "original" | "filtered" | null;
   error: SegmentPlaybackError | null;
   stop: () => void;
   playOriginalSegment: (selection: ListeningSelection, rate: number) => Promise<void>;
@@ -80,6 +81,7 @@ export function useSegmentPlayback({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [mode, setMode] = useState<"original" | "filtered" | null>(null);
   const [error, setError] = useState<SegmentPlaybackError | null>(null);
 
   const stop = useCallback(() => {
@@ -93,6 +95,7 @@ export function useSegmentPlayback({
       sourceRef.current = null;
     }
     setIsPlaying(false);
+    setMode(null);
   }, []);
 
   useEffect(() => () => {
@@ -148,6 +151,7 @@ export function useSegmentPlayback({
         if (sourceRef.current === source) {
           sourceRef.current = null;
           setIsPlaying(false);
+          setMode(null);
         }
       };
       return { ctx, source };
@@ -165,6 +169,7 @@ export function useSegmentPlayback({
         source.connect(ctx.destination);
         sourceRef.current = source;
         setIsPlaying(true);
+        setMode("original");
         source.start();
       } catch (err) {
         const normalized: SegmentPlaybackError =
@@ -203,6 +208,7 @@ export function useSegmentPlayback({
 
         sourceRef.current = source;
         setIsPlaying(true);
+        setMode("filtered");
         source.start();
       } catch (err) {
         const normalized: SegmentPlaybackError =
@@ -218,6 +224,7 @@ export function useSegmentPlayback({
 
   return {
     isPlaying,
+    mode,
     error,
     stop,
     playOriginalSegment,

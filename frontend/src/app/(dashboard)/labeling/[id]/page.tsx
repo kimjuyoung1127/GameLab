@@ -717,12 +717,22 @@ export default function LabelingWorkspacePage() {
       showToast("No selected region to play");
       return;
     }
+    if (segmentPlayback.isPlaying && segmentPlayback.mode === "original") {
+      segmentPlayback.stop();
+      showToast("Original segment playback stopped");
+      return;
+    }
     void segmentPlayback.playOriginalSegment(listeningSelection, player.playbackRate);
   }, [listeningSelection, player.playbackRate, segmentPlayback, showToast, spectroListeningEnabled]);
 
   const handlePlayFilteredSelection = useCallback(() => {
     if (!spectroListeningEnabled || !listeningSelection) {
       showToast("No selected region to filter-play");
+      return;
+    }
+    if (segmentPlayback.isPlaying && segmentPlayback.mode === "filtered") {
+      segmentPlayback.stop();
+      showToast("Filtered segment playback stopped");
       return;
     }
     void segmentPlayback.playFilteredSegment(
@@ -1027,6 +1037,8 @@ export default function LabelingWorkspacePage() {
             onPlayFilteredSelection={handlePlayFilteredSelection}
             segmentPlaybackError={segmentPlayback.error?.message ?? null}
             segmentPlaybackActive={segmentPlayback.isPlaying}
+            segmentPlaybackMode={segmentPlayback.mode}
+            onStopSegmentPlayback={segmentPlayback.stop}
             onDownloadFilteredSelection={handleDownloadFilteredSelection}
             segmentExportError={segmentExportError}
             freqAxisScale={freqAxisScale}

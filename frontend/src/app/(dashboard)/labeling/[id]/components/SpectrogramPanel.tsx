@@ -78,6 +78,8 @@ type SpectrogramPanelProps = {
   onDownloadFilteredSelection: () => void;
   segmentPlaybackError: string | null;
   segmentPlaybackActive: boolean;
+  segmentPlaybackMode: "original" | "filtered" | null;
+  onStopSegmentPlayback: () => void;
   segmentExportError: string | null;
   freqAxisScale: FrequencyAxisScale;
   onFreqAxisScaleChange: (scale: FrequencyAxisScale) => void;
@@ -165,6 +167,8 @@ export default function SpectrogramPanel({
   onDownloadFilteredSelection,
   segmentPlaybackError,
   segmentPlaybackActive,
+  segmentPlaybackMode,
+  onStopSegmentPlayback,
   segmentExportError,
   freqAxisScale,
   onFreqAxisScaleChange,
@@ -291,14 +295,21 @@ export default function SpectrogramPanel({
                   disabled={!listeningSelection}
                   className="px-2 py-1 rounded bg-panel-light hover:bg-border text-text-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  O Original
+                  {segmentPlaybackActive && segmentPlaybackMode === "original" ? "O Stop Original" : "O Original"}
                 </button>
                 <button
                   onClick={onPlayFilteredSelection}
                   disabled={!listeningSelection}
                   className="px-2 py-1 rounded bg-primary/25 hover:bg-primary/35 text-primary-light disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  F Filtered
+                  {segmentPlaybackActive && segmentPlaybackMode === "filtered" ? "F Stop Filtered" : "F Filtered"}
+                </button>
+                <button
+                  onClick={onStopSegmentPlayback}
+                  disabled={!segmentPlaybackActive}
+                  className="px-2 py-1 rounded bg-danger/20 hover:bg-danger/30 text-danger disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Stop
                 </button>
                 <button
                   onClick={onDownloadFilteredSelection}
@@ -352,7 +363,9 @@ export default function SpectrogramPanel({
                 ) : segmentExportError ? (
                   <span className="text-danger">{segmentExportError}</span>
                 ) : (
-                  <span className="text-accent">Segment playback active</span>
+                  <span className="text-accent">
+                    Segment playback active: {segmentPlaybackMode === "original" ? "ORIGINAL" : "FILTERED"}
+                  </span>
                 )}
               </div>
             )}
