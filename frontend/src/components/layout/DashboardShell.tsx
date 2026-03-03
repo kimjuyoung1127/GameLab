@@ -11,13 +11,7 @@ import Toast from "../ui/Toast";
 import UploadProgress from "../ui/UploadProgress";
 import { useScoreStore, getLevel } from "@/lib/store/score-store";
 import { useUIStore } from "@/lib/store/ui-store";
-
-const NAV_ROUTES: Record<string, string> = {
-  "1": "/overview",
-  "2": "/upload",
-  "3": "/sessions",
-  "4": "/leaderboard",
-};
+import { HOTKEY_ROUTES } from "@/config/routes";
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -51,7 +45,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     function handler(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
-      const route = NAV_ROUTES[e.key];
+      const route = HOTKEY_ROUTES[e.key];
       if (route) {
         e.preventDefault();
         router.push(route);

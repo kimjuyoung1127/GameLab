@@ -2,18 +2,12 @@
 "use client";
 import Link from "next/link";
 import { useTranslations, useLocale } from "next-intl";
-import { AudioLines, Keyboard, LayoutDashboard, List, Trophy, Upload } from "lucide-react";
+import { AudioLines, Keyboard } from "lucide-react";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { useUIStore } from "@/lib/store/ui-store";
 import { useScoreStore, getLevel } from "@/lib/store/score-store";
+import { NAV_ROUTES } from "@/config/routes";
 import LocaleSwitcher from "./LocaleSwitcher";
-
-const navConfig = [
-  { key: "overview" as const, href: "/overview", icon: LayoutDashboard },
-  { key: "upload" as const, href: "/upload", icon: Upload },
-  { key: "sessions" as const, href: "/sessions", icon: List },
-  { key: "leaderboard" as const, href: "/leaderboard", icon: Trophy },
-];
 
 export default function Sidebar({ activePath = "/" }: { activePath?: string }) {
   const { user } = useAuthStore();
@@ -48,7 +42,7 @@ export default function Sidebar({ activePath = "/" }: { activePath?: string }) {
 
       {/* Nav */}
       <nav className="flex-1 px-3 mt-4 space-y-1">
-        {navConfig.map((item) => {
+        {NAV_ROUTES.map((item) => {
           const isActive = activePath === item.href;
           return (
             <Link

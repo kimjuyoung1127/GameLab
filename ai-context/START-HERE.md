@@ -18,7 +18,8 @@
 ## Source of Truth
 - 최신 세션 상세: `ai-context/archive/2026-02-24/session-log-2026-02-24.md`
 - 누적 이력(12.2~13.9): `ai-context/archive/2026-02-23/full-project-archive.md`
-- 구조/아키텍처: `docs/architecture-diagrams.md`
+- 운영 상태: `docs/status/PROJECT-STATUS.md`
+- 구조/아키텍처: `docs/ref/architecture-diagrams.md`
 
 ## Logs and Archive Rules
 - 작업 중 기록: `ai-context/logs/`
