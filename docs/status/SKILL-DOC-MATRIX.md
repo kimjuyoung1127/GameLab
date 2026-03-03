@@ -9,7 +9,7 @@ Decision-complete mapping between page skills, code touch points, and required r
 | `page-upload-upgrade` | `/upload` | `frontend/src/app/(dashboard)/upload/page.tsx` | `docs/status/PROJECT-STATUS.md` | `feature-form-validation-and-submit`, `feature-error-and-retry-state` | upload and async progress |
 | `page-sessions-upgrade` | `/sessions` | `frontend/src/app/(dashboard)/sessions/page.tsx` | `docs/status/PROJECT-STATUS.md` | `feature-data-binding-and-loading`, `feature-analytics-and-tracking` | list/filter and route transition |
 | `page-leaderboard-upgrade` | `/leaderboard` | `frontend/src/app/(dashboard)/leaderboard/page.tsx` | `docs/status/PROJECT-STATUS.md` | `feature-ui-empty-and-skeleton`, `feature-data-binding-and-loading` | ranking and me-card parity |
-| `page-labeling-upgrade` | `/labeling/[id]` | `frontend/src/app/(dashboard)/labeling/[id]/page.tsx` | `docs/status/PROJECT-STATUS.md`, `docs/ref/schema.md` | `feature-navigation-and-gesture`, `feature-error-and-retry-state` | hotkeys/save/undo regression-free |
+| `page-labeling-upgrade` | `/labeling/[id]` | `frontend/src/app/(dashboard)/labeling/[id]/page.tsx`, `frontend/src/app/(dashboard)/labeling/[id]/components/SpectrogramPanel.tsx`, `frontend/src/lib/hooks/use-segment-playback.ts`, `frontend/src/lib/audio/wav-export.ts` | `docs/status/PROJECT-STATUS.md`, `docs/ref/schema.md`, `docs/ref/architecture-diagrams.md` | `feature-navigation-and-gesture`, `feature-error-and-retry-state` | hotkeys/save/undo regression-free + selection playback/export |
 
 ## Global Rules
 - Route truth source: `frontend/src/config/routes.ts`

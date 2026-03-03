@@ -9,7 +9,7 @@ Source of truth for route-level execution status.
 | `/upload` | Upload | Dashboard | P0 | InProgress | unassigned | `page-upload-upgrade` | `feature-form-validation-and-submit`, `feature-error-and-retry-state` | `docs/status/PROJECT-STATUS.md` | 2026-03-03 |
 | `/sessions` | Sessions | Dashboard | P0 | InProgress | unassigned | `page-sessions-upgrade` | `feature-data-binding-and-loading`, `feature-analytics-and-tracking` | `docs/status/PROJECT-STATUS.md` | 2026-03-03 |
 | `/leaderboard` | Leaderboard | Dashboard | P1 | Ready | unassigned | `page-leaderboard-upgrade` | `feature-ui-empty-and-skeleton`, `feature-data-binding-and-loading` | `docs/status/PROJECT-STATUS.md` | 2026-03-03 |
-| `/labeling/[id]` | Labeling Workspace | Labeling | P0 | InProgress | unassigned | `page-labeling-upgrade` | `feature-navigation-and-gesture`, `feature-error-and-retry-state` | `docs/status/PROJECT-STATUS.md`, `docs/ref/architecture-diagrams.md` | 2026-03-03 |
+| `/labeling/[id]` | Labeling Workspace | Labeling | P0 | QA | unassigned | `page-labeling-upgrade` | `feature-navigation-and-gesture`, `feature-error-and-retry-state` | `docs/status/PROJECT-STATUS.md`, `docs/ref/architecture-diagrams.md` | 2026-03-03 |
 
 ## Status Flow
 

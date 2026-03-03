@@ -4,7 +4,7 @@ Last Updated: 2026-03-03 (KST)
 Owner Doc: `CLAUDE.md` (root slim index)
 
 ## Current Phase
-- Phase 2D (deployment + labeling UX hardening)
+- Phase 2E (spectrogram listening MVP integrated)
 
 ## Spectrogram Listening Scope (Locked: 2026-03-03 KST)
 - Workspace target: `frontend/src/app/(dashboard)/labeling/[id]` only
@@ -32,6 +32,6 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - slack daily summary: Ready
 
 ## Next Actions
-1. Implement spectrogram listening Phases 1-5 with feature flag default OFF.
-2. Run frontend lint/build and manual playback regression checks.
-3. Sync integrity docs and daily logs after rollout.
+1. Run end-to-end manual regression on `/labeling/[id]` (keyboard, playback, export).
+2. Execute one external scheduler DRY_RUN cycle for status artifacts.
+3. Flip `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1=true` after QA sign-off.

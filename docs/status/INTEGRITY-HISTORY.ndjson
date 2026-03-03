@@ -1,1 +1,2 @@
 ﻿{"run_at":"2026-03-03T00:00:00+09:00","managed_count":6,"drift_count":0,"auto_fixed_count":0,"manual_required_count":0,"unmanaged_routes":["/","/auth/callback"],"errors":[]}
+{"run_at":"2026-03-03T13:20:00+09:00","managed_count":6,"drift_count":0,"auto_fixed_count":0,"manual_required_count":0,"unmanaged_routes":["/","/auth/callback"],"errors":[],"note":"spectrogram-listening rollout synced"}

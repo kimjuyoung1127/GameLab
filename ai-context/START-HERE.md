@@ -1,6 +1,6 @@
 ﻿# AI Context Start Here
 
-기준일: 2026-02-24 (KST)
+기준일: 2026-03-03 (KST)
 
 ## Active Docs (read in order)
 1. `ai-context/START-HERE.md`
@@ -11,12 +11,12 @@
 6. `ai-context/codex-review-guideline.md` (리뷰/리스크 점검 시)
 
 ## Current Status Snapshot
-- 현재 단계: **Phase 2D (배포 + 라벨링 UX 고도화)**
-- 최신 반영: 수동 라벨링 생성/저장 + 박스 이동/리사이즈 + 단축키 재정렬
-- 최신 커밋 기준: `5d0cd6b` (2026-02-24)
+- 현재 단계: **Phase 2E (스펙트로그램 선택 청취 MVP 통합)**
+- 최신 반영: 선택 구간 원본/필터 재생, 필터 WAV 내보내기, LIN/LOG 축 토글, Hover 메트릭
+- 최신 커밋 기준: `docs/status/PROJECT-STATUS.md` 우선
 
 ## Source of Truth
-- 최신 세션 상세: `ai-context/archive/2026-02-24/session-log-2026-02-24.md`
+- 최신 세션 상세: `ai-context/archive/2026-02-25/session-log-2026-02-25.md`
 - 누적 이력(12.2~13.9): `ai-context/archive/2026-02-23/full-project-archive.md`
 - 운영 상태: `docs/status/PROJECT-STATUS.md`
 - 구조/아키텍처: `docs/ref/architecture-diagrams.md`
