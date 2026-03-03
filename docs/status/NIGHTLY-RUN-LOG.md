@@ -21,3 +21,13 @@ Execution log for docs nightly organizer (22:00 Asia/Seoul).
   - weekly_created_or_updated: no
   - deleted_daily_count: 0
   - errors: none
+
+- run_at: 2026-03-04 00:10 KST
+  - dry_run: manual
+  - moved_ref_count: 0
+  - moved_status_count: 5 (PROJECT-STATUS, PAGE-UPGRADE-BOARD, SKILL-DOC-MATRIX, INTEGRITY-REPORT, INTEGRITY-HISTORY)
+  - moved_daily_count: 0
+  - weekly_created_or_updated: no
+  - deleted_daily_count: 0
+  - errors: none
+  - note: Sprint 14 docs sync (FFT/cursor/pitch/speed/PNG + hotfix sync)

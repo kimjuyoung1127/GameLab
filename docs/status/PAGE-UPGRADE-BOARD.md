@@ -16,15 +16,19 @@ Source of truth for route-level execution status.
 
 `Ready -> InProgress -> QA -> Done` (`Hold` for blocked work).
 
-## Locked Decisions (Spectrogram Listening)
+## Locked Decisions (Spectrogram Listening + Sprint 14)
 - Target route: `/labeling/[id]`
-- Feature flag: `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1` (default OFF)
 - Hotkeys:
   - playback: `Space`
   - original selection playback: `O`
   - filtered selection playback: `F`
   - confirm suggestion: `C` (moved from `O`)
   - apply fix: `Shift+F` (moved from `F`)
+- Sprint 14 완료 기능:
+  - FFT 설정 패널 (크기/윈도우/동적범위)
+  - 구간 재생 커서 동기화 (녹색 세로선)
+  - 피치 보존 모드 (HTMLAudioElement.preservesPitch) — 기존 deferred에서 구현 완료
+  - 0.25x~2.0x 재생 속도 범위
+  - PNG 스크린샷 내보내기
 - Deferred:
-  - pitch-preserving playback
-  - pitch-shift listening assist
+  - pitch-shift listening assist (저주파 모니터링)

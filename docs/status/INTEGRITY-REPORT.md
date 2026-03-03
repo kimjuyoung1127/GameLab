@@ -1,6 +1,6 @@
 ﻿# Code-Doc Integrity Report
 
-Last Run: 2026-03-03 23:15 KST (manual update)
+Last Run: 2026-03-04 00:10 KST (manual update)
 Result: pass (manual sync)
 
 ## Route Summary
@@ -14,12 +14,14 @@ Result: pass (manual sync)
 - required docs present: yes
 - manual_required: 0
 - labeling listening files linked in matrix: yes
-- hotkey policy doc-sync (`C/O/F/Shift+F`): yes
+- hotkey policy doc-sync (`C/O/F/Shift+F` + Sprint 14 hotkeys): yes
 - qa hotfix doc-sync (`e903563`,`a08d2fc`,`35cd849`): yes
 - baseline rollback sync (`fa76c00`): yes
 - gamification v2 sync (api/types/store/ui): yes
 - labeling mission-center removal + profile entry switch: yes
 - profile page route bootstrap + sidebar profile entry link: yes
+- sprint 14 sync (FFT settings/segment cursor/pitch preserve/0.25x speed/PNG export): yes
+- sprint 14 hotfix sync (Shift+Z undo-all/Ctrl+Shift+Z redo/R-key pointer-events): yes
 
 ## Unmanaged Routes (expected)
 - `/`
