@@ -5,6 +5,7 @@ Owner Doc: `CLAUDE.md` (root slim index)
 
 ## Current Phase
 - Phase 2E (spectrogram listening MVP integrated)
+- Baseline pinned to commit `fa76c00` (2026-03-03 KST rollback sync)
 
 ## Spectrogram Listening Scope (Locked: 2026-03-03 KST)
 - Workspace target: `frontend/src/app/(dashboard)/labeling/[id]` only
@@ -32,22 +33,12 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - slack daily summary: Ready
 
 ## Next Actions
-1. Run final pass for label-chip position UX (bottom clipping auto-flip improvement).
+1. Complete final QA pass for current listening MVP (`O/F`, stop/toggle, numeric input, WAV export).
 2. Execute one external scheduler DRY_RUN cycle for status artifacts.
-3. Flip `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1=true` after QA sign-off.
+3. Keep `NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1=false` by default and flip to `true` only after QA sign-off.
 
 ## Recent QA Hotfixes (2026-03-03 KST)
 - segment playback mode visibility and stop/toggle control
 - numeric selection input delete/retype stabilization
 - numeric selection input commit timing fix (Enter/blur)
-- label UX update: auto-flip tag placement + code/friendly-name display model
-- landmark enforcement update: suggestion tag stays inside spectrogram canvas (no player/HUD overlap)
-
-## Engine Socket Contract (Locked 2026-03-03 KST)
-- Analysis engines are swappable via `ANALYSIS_ENGINE`.
-- Required output fields are fixed:
-  - `label`, `description`, `start_time`, `end_time`, `freq_low`, `freq_high`, `confidence`
-- Failure policy fixed:
-  - timeout/error => `rule_fallback` auto-switch with fallback logs
-- FE independence fixed:
-  - frontend consumes DTO only, no engine-name specific branching
+- label UX experimental branch commits rolled back; status/docs aligned to baseline `fa76c00`

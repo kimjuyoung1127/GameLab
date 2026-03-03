@@ -1,4 +1,5 @@
 /** Header panel for labeling workspace with mode and score summary. */
+import Link from "next/link";
 import { AudioLines } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { LabelingMode } from "@/types";
@@ -7,6 +8,8 @@ type LabelingHeaderProps = {
   mode: LabelingMode;
   score: number;
   streak: number;
+  projectName: string;
+  appVersion?: string | null;
   sessionError: string | null;
   suggestionError: string | null;
 };
@@ -15,6 +18,8 @@ export default function LabelingHeader({
   mode,
   score,
   streak,
+  projectName,
+  appVersion,
   sessionError,
   suggestionError,
 }: LabelingHeaderProps) {
@@ -24,22 +29,24 @@ export default function LabelingHeader({
     <>
       <header className="h-14 shrink-0 bg-panel border-b border-border flex items-center justify-between px-3 md:px-5 overflow-x-auto">
         <div className="flex items-center gap-2 md:gap-4 shrink-0">
-          <div className="flex items-center gap-2.5">
+          <Link href="/overview" className="flex items-center gap-2.5 rounded-md hover:bg-panel-light px-1.5 py-1 transition-colors">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <AudioLines className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm font-bold text-text tracking-tight hidden sm:inline">{t("brandName")}</span>
-          </div>
+            <span className="text-sm font-bold text-text tracking-tight hidden sm:inline">SIGNALCRAFT</span>
+          </Link>
 
           <div className="h-5 w-px bg-border-light hidden md:block" />
 
           <span className="text-xs text-text-secondary hidden md:inline">
-            {t("project")} <span className="text-text font-medium">{t("projectName")}</span>
+            {t("project")} <span className="text-text font-medium">{projectName}</span>
           </span>
 
-          <span className="text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full hidden lg:inline">
-            {t("version")}
-          </span>
+          {appVersion ? (
+            <span className="text-[10px] font-bold bg-primary/20 text-primary-light px-2 py-0.5 rounded-full hidden lg:inline">
+              {appVersion}
+            </span>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-2 md:gap-5 shrink-0">

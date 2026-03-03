@@ -35,7 +35,7 @@ export default function Sidebar({ activePath = "/" }: { activePath?: string }) {
           <AudioLines className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-sm font-bold text-text">{t("brandName")}</h1>
+          <h1 className="text-sm font-bold text-text">SIGNALCRAFT</h1>
           <p className="text-[10px] text-text-muted">{t("brandTagline")}</p>
         </div>
       </Link>

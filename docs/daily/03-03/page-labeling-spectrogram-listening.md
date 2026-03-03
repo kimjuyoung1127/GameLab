@@ -40,3 +40,10 @@
 - Deferred:
   - pitch-preserving playback
   - low-frequency pitch-shift listening mode
+
+## Doc Sync (2026-03-03 KST)
+- baseline reset confirmed to `fa76c00` (before Label UX improvement plan branch)
+- synced:
+  - `docs/status/PROJECT-STATUS.md`
+  - `docs/status/INTEGRITY-REPORT.md`
+  - `docs/status/INTEGRITY-HISTORY.ndjson`

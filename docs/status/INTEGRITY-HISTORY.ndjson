@@ -1,4 +1,4 @@
 ﻿{"run_at":"2026-03-03T00:00:00+09:00","managed_count":6,"drift_count":0,"auto_fixed_count":0,"manual_required_count":0,"unmanaged_routes":["/","/auth/callback"],"errors":[]}
 {"run_at":"2026-03-03T13:20:00+09:00","managed_count":6,"drift_count":0,"auto_fixed_count":0,"manual_required_count":0,"unmanaged_routes":["/","/auth/callback"],"errors":[],"note":"spectrogram-listening rollout synced"}
 {"run_at":"2026-03-03T14:05:00+09:00","managed_count":6,"drift_count":0,"auto_fixed_count":0,"manual_required_count":0,"unmanaged_routes":["/","/auth/callback"],"errors":[],"note":"qa-hotfix-doc-sync e903563/a08d2fc/35cd849"}
-{"run_at":"2026-03-03T15:10:00+09:00","managed_count":6,"drift_count":0,"auto_fixed_count":0,"manual_required_count":0,"unmanaged_routes":["/","/auth/callback"],"errors":[],"note":"landmark-in-canvas + engine-socket-contract lock"}
+{"run_at":"2026-03-03T14:10:00+09:00","managed_count":6,"drift_count":0,"auto_fixed_count":0,"manual_required_count":0,"unmanaged_routes":["/","/auth/callback"],"errors":[],"note":"baseline rollback sync to fa76c00 and status docs re-aligned"}

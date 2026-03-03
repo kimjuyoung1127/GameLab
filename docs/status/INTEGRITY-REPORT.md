@@ -1,6 +1,6 @@
 ﻿# Code-Doc Integrity Report
 
-Last Run: 2026-03-03 15:10 KST (manual update)
+Last Run: 2026-03-03 14:10 KST (manual update)
 Result: pass (manual sync)
 
 ## Route Summary
@@ -16,8 +16,7 @@ Result: pass (manual sync)
 - labeling listening files linked in matrix: yes
 - hotkey policy doc-sync (`C/O/F/Shift+F`): yes
 - qa hotfix doc-sync (`e903563`,`a08d2fc`,`35cd849`): yes
-- landmark UX rule (`in-canvas tag only`) synced: yes
-- engine socket contract docs synced: yes
+- baseline rollback sync (`fa76c00`): yes
 
 ## Unmanaged Routes (expected)
 - `/`

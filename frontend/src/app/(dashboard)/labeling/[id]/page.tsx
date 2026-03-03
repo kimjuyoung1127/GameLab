@@ -48,6 +48,7 @@ const MAX_FREQ = 20_000; // Hz
 const MIN_ZOOM = 1.0;
 const MAX_ZOOM = 10.0;
 const ENABLE_SPECTRO_LISTENING_V1 = process.env.NEXT_PUBLIC_ENABLE_SPECTRO_LISTENING_V1 === "true";
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION?.trim() || null;
 
 function parseDurationToSeconds(dur: string): number {
   const parts = dur.split(":").map(Number);
@@ -172,6 +173,7 @@ export default function LabelingWorkspacePage() {
   const t = useTranslations("labeling");
 
   const {
+    currentSession,
     files,
     currentFileId,
     setCurrentFile,
@@ -214,6 +216,7 @@ export default function LabelingWorkspacePage() {
   const sessionId = Array.isArray(params.id) ? params.id[0] : params.id;
   const activeFileId = currentFileId ?? audioFiles[0]?.id ?? null;
   const activeFile = audioFiles.find((f) => f.id === activeFileId) ?? audioFiles[0];
+  const headerProjectName = currentSession?.name || activeFile?.filename || "Unnamed Session";
   const parsedDuration = activeFile ? Math.max(parseDurationToSeconds(activeFile.duration), 1) : 600;
   const targetSampleRate = parseSampleRateHz(activeFile?.sampleRate);
 
@@ -943,6 +946,8 @@ export default function LabelingWorkspacePage() {
         mode={mode}
         score={score}
         streak={streak}
+        projectName={headerProjectName}
+        appVersion={APP_VERSION}
         sessionError={sessionError}
         suggestionError={suggestionError}
       />
