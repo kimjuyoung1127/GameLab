@@ -24,6 +24,8 @@ type ToolBarProps = {
   totalCount: number;
   sessionId: string;
   activeFileName?: string;
+  autoAdvance: boolean;
+  onToggleAutoAdvance: () => void;
   onSaveManualDrafts: () => Promise<void>;
   pendingDraftCount: number;
   bookmarkCount: number;
@@ -44,6 +46,8 @@ export default function ToolBar({
   totalCount,
   sessionId,
   activeFileName,
+  autoAdvance,
+  onToggleAutoAdvance,
   onSaveManualDrafts,
   pendingDraftCount,
   bookmarkCount,
@@ -140,6 +144,16 @@ export default function ToolBar({
         }`}
       >
         {t("fitShort")}
+      </button>
+
+      <button
+        onClick={onToggleAutoAdvance}
+        title={t("autoAdvanceTitle")}
+        className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
+          autoAdvance ? "bg-accent/20 text-accent" : "bg-surface text-text-muted hover:text-text-secondary"
+        }`}
+      >
+        {t("autoAdvance")}
       </button>
 
       <div className="h-5 w-px bg-border-light mx-1" />

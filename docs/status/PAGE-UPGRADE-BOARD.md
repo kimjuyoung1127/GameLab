@@ -30,5 +30,11 @@ Source of truth for route-level execution status.
   - 피치 보존 모드 (HTMLAudioElement.preservesPitch) — 기존 deferred에서 구현 완료
   - 0.25x~2.0x 재생 속도 범위
   - PNG 스크린샷 내보내기
+- Sprint 14.1 진행 중 (2026-03-05):
+  - 신뢰도 컬러 강도 (confidence 구간별 색상)
+  - 제안 상태 필터 칩 (전체/대기/확인/수정)
+  - 순차 자동 이동 + AUTO 토글
+  - fitToSuggestion 기본값 OFF
+  - 제안 클립보드 복사 (Copy 아이콘 → 포맷 텍스트)
 - Deferred:
   - pitch-shift listening assist (저주파 모니터링)

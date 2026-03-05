@@ -1,8 +1,9 @@
 /** Right-side analysis panel with cards, metadata, bookmarks/history and next action. */
-import { Check, ChevronRight, Filter, Sparkles, Wrench, X } from "lucide-react";
+import { Check, ChevronRight, Copy, Filter, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { AudioFile, LabelingMode, Suggestion } from "@/types";
+import type { AudioFile, LabelingMode, Suggestion, SuggestionStatus } from "@/types";
 import { getLabelDisplay } from "@/lib/labeling/label-display";
+import { useUIStore } from "@/lib/store/ui-store";
 
 type AnalysisPanelProps = {
   mode: LabelingMode;
@@ -16,6 +17,8 @@ type AnalysisPanelProps = {
   onReject: () => void;
   onApplyFix: () => void;
   onNextFile: () => void;
+  statusFilter: SuggestionStatus | "all";
+  onStatusFilterChange: (filter: SuggestionStatus | "all") => void;
   children?: React.ReactNode;
 };
 
@@ -31,36 +34,75 @@ export default function AnalysisPanel({
   onReject,
   onApplyFix,
   onNextFile,
+  statusFilter,
+  onStatusFilterChange,
   children,
 }: AnalysisPanelProps) {
   const t = useTranslations("labeling");
   const activeLabelDisplay = activeSuggestion
     ? getLabelDisplay(activeSuggestion.label, activeSuggestion.description)
     : null;
+
+  const confidenceColor = activeSuggestion
+    ? activeSuggestion.confidence >= 80 ? "bg-accent" : activeSuggestion.confidence >= 50 ? "bg-warning" : "bg-danger"
+    : "bg-primary";
+  const confidenceTextColor = activeSuggestion
+    ? activeSuggestion.confidence >= 80 ? "text-accent" : activeSuggestion.confidence >= 50 ? "text-warning" : "text-danger"
+    : "text-primary-light";
   const rejectedLabelDisplay = rejectedSuggestion
     ? getLabelDisplay(rejectedSuggestion.label, rejectedSuggestion.description)
     : null;
+
+  const handleCopy = async () => {
+    if (!activeSuggestion || !activeLabelDisplay) return;
+    const text = [
+      `[${activeLabelDisplay.displayCode}] ${activeLabelDisplay.displayName} — ${activeSuggestion.confidence}%`,
+      `Time: ${activeSuggestion.startTime.toFixed(3)}s – ${activeSuggestion.endTime.toFixed(3)}s`,
+      `Freq: ${activeSuggestion.freqLow.toFixed(0)} Hz – ${activeSuggestion.freqHigh.toFixed(0)} Hz`,
+      `Description: ${activeSuggestion.description}`,
+      `Status: ${activeSuggestion.status}`,
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      useUIStore.getState().showToast(t("copySuccess"));
+    } catch { /* clipboard not available */ }
+  };
 
   return (
     <aside className="hidden md:flex w-[320px] shrink-0 bg-panel border-l border-border flex-col overflow-y-auto">
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-primary-light" />
         <h2 className="text-xs font-bold text-text uppercase tracking-wider">{t("aiAnalysis")}</h2>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => onStatusFilterChange("all")}
+            className={`text-[9px] font-bold px-2 py-0.5 rounded-full transition-colors ${statusFilter === "all" ? "bg-primary/30 text-primary-light ring-1 ring-primary/50" : "bg-panel-light text-text-muted hover:text-text-secondary"}`}
+          >
+            {t("filterAll")}
+          </button>
           {pendingCount > 0 && (
-            <span className="text-[9px] font-bold bg-orange-400/20 text-orange-400 px-2 py-0.5 rounded-full">
+            <button
+              onClick={() => onStatusFilterChange("pending")}
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-full transition-colors ${statusFilter === "pending" ? "bg-orange-400/30 text-orange-400 ring-1 ring-orange-400/50" : "bg-orange-400/20 text-orange-400 hover:bg-orange-400/30"}`}
+            >
               {t("pendingCount", { count: pendingCount })}
-            </span>
+            </button>
           )}
           {confirmedCount > 0 && (
-            <span className="text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full">
+            <button
+              onClick={() => onStatusFilterChange("confirmed")}
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-full transition-colors ${statusFilter === "confirmed" ? "bg-accent/30 text-accent ring-1 ring-accent/50" : "bg-accent/20 text-accent hover:bg-accent/30"}`}
+            >
               {t("confirmedCount", { count: confirmedCount })}
-            </span>
+            </button>
           )}
           {totalCount - pendingCount - confirmedCount > 0 && (
-            <span className="text-[9px] font-bold bg-danger/20 text-danger px-2 py-0.5 rounded-full">
+            <button
+              onClick={() => onStatusFilterChange("corrected")}
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-full transition-colors ${statusFilter === "corrected" ? "bg-danger/30 text-danger ring-1 ring-danger/50" : "bg-danger/20 text-danger hover:bg-danger/30"}`}
+            >
               {t("fixedCount", { count: totalCount - pendingCount - confirmedCount })}
-            </span>
+            </button>
           )}
         </div>
       </div>
@@ -76,15 +118,22 @@ export default function AnalysisPanel({
                 <p className="text-[10px] text-text-muted mt-0.5">{t("aiDetectedAnomaly")}</p>
                 <p className="text-[10px] text-text-muted mt-1">{t("aiActionGuide")}</p>
               </div>
-              <div className="text-right">
-                <span className="text-2xl font-black text-primary-light tabular-nums">
+              <div className="text-right flex flex-col items-end gap-1">
+                <span className={`text-2xl font-black tabular-nums ${confidenceTextColor}`}>
                   {t("confidence", { confidence: activeSuggestion.confidence })}
                 </span>
+                <button
+                  onClick={handleCopy}
+                  title={t("copySuggestion")}
+                  className="p-1 rounded text-text-muted hover:text-text-secondary hover:bg-panel-light transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 
             <div className="h-1.5 bg-panel rounded-full overflow-hidden mb-3">
-              <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${activeSuggestion.confidence}%` }} />
+              <div className={`h-full ${confidenceColor} rounded-full transition-all duration-500`} style={{ width: `${activeSuggestion.confidence}%` }} />
             </div>
 
             <p className="text-[11px] text-text-secondary leading-relaxed mb-4">{activeSuggestion.description}</p>

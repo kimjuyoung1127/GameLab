@@ -10,7 +10,9 @@ import type {
   LoopState,
   ManualDraft,
   Suggestion,
+  SuggestionStatus,
 } from "@/types";
+import { useUIStore } from "./ui-store";
 
 const MAX_HISTORY_ITEMS = 20;
 
@@ -25,6 +27,7 @@ interface AnnotationState {
   bookmarks: LabelingBookmark[];
   history: ActionHistoryItem[];
   selectedSuggestionId: string | null;
+  statusFilter: SuggestionStatus | "all";
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
 
@@ -68,6 +71,7 @@ interface AnnotationState {
     payload?: ActionHistoryItem["payload"],
   ) => void;
   clearHistory: () => void;
+  setStatusFilter: (filter: SuggestionStatus | "all") => void;
   loadSuggestions: (items: Suggestion[]) => void;
   restoreSuggestions: (suggestions: Suggestion[]) => void;
 }
@@ -94,6 +98,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   bookmarks: [],
   history: [],
   selectedSuggestionId: null,
+  statusFilter: "all",
   undoStack: [],
   redoStack: [],
 
@@ -211,11 +216,18 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     const updated = suggestions.map((s) =>
       s.id === selectedSuggestionId ? { ...s, status: "confirmed" as const } : s,
     );
-    const nextPending = updated.find((s) => s.status === "pending" && s.id !== selectedSuggestionId);
+    const { autoAdvance } = useUIStore.getState();
+    let nextId: string | null = null;
+    if (autoAdvance) {
+      const currentIdx = updated.findIndex((s) => s.id === selectedSuggestionId);
+      const after = updated.slice(currentIdx + 1).find((s) => s.status === "pending");
+      const before = updated.slice(0, currentIdx).find((s) => s.status === "pending");
+      nextId = (after ?? before)?.id ?? null;
+    }
 
     set({
       suggestions: updated,
-      selectedSuggestionId: nextPending?.id ?? null,
+      selectedSuggestionId: nextId,
       undoStack: [...state.undoStack, prev],
       redoStack: [],
     });
@@ -248,7 +260,10 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     const updated = suggestions.map((s) =>
       s.id === selectedSuggestionId ? { ...s, status: "corrected" as const } : s,
     );
-    const nextPending = updated.find((s) => s.status === "pending");
+    const fixIdx = updated.findIndex((s) => s.id === selectedSuggestionId);
+    const afterFix = updated.slice(fixIdx + 1).find((s) => s.status === "pending");
+    const beforeFix = updated.slice(0, fixIdx).find((s) => s.status === "pending");
+    const nextPending = afterFix ?? beforeFix;
     set({
       suggestions: updated,
       mode: "review",
@@ -332,6 +347,8 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       history: [item, ...state.history].slice(0, MAX_HISTORY_ITEMS),
     }));
   },
+
+  setStatusFilter: (filter) => set({ statusFilter: filter }),
 
   clearHistory: () => set({ history: [] }),
 

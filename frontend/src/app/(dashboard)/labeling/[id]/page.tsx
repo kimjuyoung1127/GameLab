@@ -165,6 +165,8 @@ export default function LabelingWorkspacePage() {
     selectSuggestion,
     updateSuggestion,
     deleteSuggestion,
+    statusFilter,
+    setStatusFilter,
   } = useAnnotationStore();
 
   const {
@@ -195,7 +197,7 @@ export default function LabelingWorkspacePage() {
   } = useSessionStore();
 
   const { checkAndUnlock, recentUnlock, clearRecent, load: loadAchievements } = useAchievementStore();
-  const { showToast } = useUIStore();
+  const { showToast, autoAdvance, toggleAutoAdvance } = useUIStore();
   const spectroListeningEnabled = ENABLE_SPECTRO_LISTENING_V1;
 
   /* ----- Local UI state ------------------------------------------- */
@@ -208,7 +210,7 @@ export default function LabelingWorkspacePage() {
   const [audioRetryKey, setAudioRetryKey] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [zoomBoxMode, setZoomBoxMode] = useState(false);
-  const [fitToSuggestion, setFitToSuggestion] = useState(true);
+  const [fitToSuggestion, setFitToSuggestion] = useState(false);
   const [showFitToast, setShowFitToast] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
   const [loopHudWarning, setLoopHudWarning] = useState(false);
@@ -297,6 +299,7 @@ export default function LabelingWorkspacePage() {
   const pendingCount = suggestions.filter((s) => s.status === "pending").length;
   const confirmedCount = suggestions.filter((s) => s.status === "confirmed").length;
   const totalCount = suggestions.length;
+  const displaySuggestions = statusFilter === "all" ? suggestions : suggestions.filter((s) => s.status === statusFilter);
   const loopRangeLabel =
     loopState.start !== null && loopState.end !== null && loopState.end > loopState.start
       ? `${formatTimecode(loopState.start)} ~ ${formatTimecode(loopState.end)}`
@@ -1015,6 +1018,8 @@ export default function LabelingWorkspacePage() {
             totalCount={totalCount}
             sessionId={sessionId}
             activeFileName={activeFile?.filename}
+            autoAdvance={autoAdvance}
+            onToggleAutoAdvance={toggleAutoAdvance}
             onSaveManualDrafts={handleSaveManualDrafts}
             pendingDraftCount={manualDrafts.length}
             bookmarkCount={bookmarks.length}
@@ -1036,7 +1041,7 @@ export default function LabelingWorkspacePage() {
             scrollContainerRef={scrollContainerRef}
             tool={tool}
             zoomBoxMode={zoomBoxMode}
-            suggestions={suggestions}
+            suggestions={displaySuggestions}
             manualDrafts={manualDrafts}
             selectedSuggestionId={selectedSuggestionId}
             selectedDraftId={selectedDraftId}
@@ -1129,6 +1134,8 @@ export default function LabelingWorkspacePage() {
           onReject={handleReject}
           onApplyFix={handleApplyFix}
           onNextFile={handleNextFile}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
         >
           <BookmarksPanel
             bookmarks={bookmarks}

@@ -265,6 +265,7 @@
                      "okButton":  "OK",
                      "ngButton":  "NG",
                      "aiAnalysis":  "AI Analysis",
+                     "filterAll": "All",
                      "pendingCount":  "{count} pending",
                      "confirmedCount":  "{count} ok",
                      "fixedCount":  "{count} fixed",
@@ -297,6 +298,8 @@
                      "saveAndNext":  "Save \u0026 Next File",
                      "fitToSuggestion": "Auto-fit to selected suggestion",
                      "fitShort": "FIT",
+                     "autoAdvance": "AUTO",
+                     "autoAdvanceTitle": "Auto-advance to next suggestion after confirm",
                      "waveformLoading": "Loading waveform...",
                      "loopIn": "Set loop start (I)",
                      "loopOut": "Set loop end (P)",
@@ -391,7 +394,9 @@
                      "preservePitchLabel":  "Pitch Lock",
                      "preservePitchOn":  "ON",
                      "preservePitchOff":  "OFF",
-                     "exportPng":  "PNG Screenshot"
+                     "exportPng":  "PNG Screenshot",
+                     "copySuggestion": "Copy suggestion info",
+                     "copySuccess": "Copied to clipboard"
                  },
     "hotkeys":  {
                     "title":  "Keyboard Shortcuts",

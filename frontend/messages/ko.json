@@ -265,6 +265,7 @@
     "okButton": "OK",
     "ngButton": "NG",
     "aiAnalysis": "AI 분석",
+    "filterAll": "전체",
     "pendingCount": "{count}개 대기",
     "confirmedCount": "{count}개 확인",
     "fixedCount": "{count}개 수정",
@@ -297,6 +298,8 @@
     "saveAndNext": "저장 후 다음 파일",
     "fitToSuggestion": "선택 제안 자동 맞춤",
     "fitShort": "맞춤",
+    "autoAdvance": "AUTO",
+    "autoAdvanceTitle": "확정 후 다음 제안으로 자동 이동",
     "waveformLoading": "웨이브폼 로딩 중...",
     "loopIn": "루프 시작 설정 (I)",
     "loopOut": "루프 끝 설정 (P)",
@@ -391,7 +394,9 @@
     "preservePitchLabel": "피치 보존",
     "preservePitchOn": "ON",
     "preservePitchOff": "OFF",
-    "exportPng": "PNG 스크린샷"
+    "exportPng": "PNG 스크린샷",
+    "copySuggestion": "제안 정보 복사",
+    "copySuccess": "클립보드에 복사됨"
   },
   "hotkeys": {
     "title": "단축키 안내",

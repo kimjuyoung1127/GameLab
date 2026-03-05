@@ -4,8 +4,9 @@ Last Updated: 2026-03-03 (KST)
 Owner Doc: `CLAUDE.md` (root slim index)
 
 ## Current Phase
-- Phase 2E (spectrogram listening + 분석 도구 강화)
+- Phase 2E 완료 → Phase 2F (라벨링 워크플로우 최적화)
 - Sprint 14 완료: 스펙트로그램 분석 도구 5개 기능
+- Sprint 14.1 진행 중: 라벨링 워크플로우 최적화 3종
 - Gamification V2 구현 완료 (mission/reward/leaderboard scope tabs)
 - Labeling UI 집중화 적용: Mission Center 제거, 프로필 진입으로 통합
 - Profile 라우트 활성화: `/profile` 페이지 생성 및 사이드바 엔지니어 카드 클릭 이동 연결
@@ -16,6 +17,13 @@ Owner Doc: `CLAUDE.md` (root slim index)
 3. **피치 보존 모드**: 재생 속도 변경 시 음높이 유지 토글 (HTMLAudioElement.preservesPitch)
 4. **0.25x 재생 속도 확장**: 최소 속도 0.5x → 0.25x 하한 확장
 5. **PNG 스크린샷 내보내기**: 스펙트로그램 canvas → PNG 다운로드 (ToolBar 내보내기 메뉴)
+
+## Sprint 14.1 — 라벨링 워크플로우 최적화 (진행 중, 2026-03-05)
+1. **신뢰도 컬러 강도**: confidence 구간별 프로그레스 바/텍스트 색상 (80%+ 초록, 50~79% 주황, <50% 빨강)
+2. **제안 상태 필터 칩**: AnalysisPanel 헤더에 클릭 가능한 전체/대기/확인/수정 필터 → 스펙트로그램 표시 필터링
+3. **순차 자동 이동**: C키 확정 시 현재 위치 다음 pending으로 이동 (배열 첫 번째 → 순차 탐색) + AUTO 토글
+4. **fitToSuggestion 기본값 OFF**: 제안 클릭 시 자동 줌 비활성화 (FIT 버튼으로 수동 켜기)
+5. **제안 클립보드 복사**: 선택 제안의 라벨/시간/주파수/설명/상태를 포맷 텍스트로 복사 (Copy 아이콘)
 
 ## Spectrogram Listening Scope (Locked: 2026-03-03 KST)
 - Workspace target: `frontend/src/app/(dashboard)/labeling/[id]` only
@@ -71,11 +79,10 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - slack daily summary: Ready
 
 ## Next Actions
-1. Apply `scripts/sql-chunks/gamification_v2_core_tables.sql` to Supabase project.
-2. QA pass for gamification endpoints (`/api/gamification/*`) and leaderboard scope tabs.
-3. Validate mission claim/idempotency with real suggestion lifecycle data.
-4. E2E 테스트: Sprint 14 기능(FFT/커서/피치/속도/PNG) 수동 검증
-5. Profile(`/profile`) 중심으로 배지/미션/진행상황 UX 세부 고도화(빈 상태/반응형/정렬)
+1. Sprint 14.1 추가 기능 구현 (다음 배치)
+2. Apply `scripts/sql-chunks/gamification_v2_core_tables.sql` to Supabase project.
+3. QA pass for gamification endpoints (`/api/gamification/*`) and leaderboard scope tabs.
+4. Profile(`/profile`) 중심으로 배지/미션/진행상황 UX 세부 고도화(빈 상태/반응형/정렬)
 
 ## Recent Hotfixes (2026-03-03 KST)
 - Shift+Z(Undo All): viewport 스냅샷 전체 한번에 되돌리기 (1단계씩 → 전체)
