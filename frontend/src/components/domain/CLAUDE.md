@@ -10,3 +10,6 @@
 ## Dependencies
 - @/types/*
 - @/lib/hooks/* as needed
+
+## Subagent Hook
+- Before creating a new domain feature folder or expanding one across multiple routes, run `subagent-pattern-collect` in `feature-module` mode.

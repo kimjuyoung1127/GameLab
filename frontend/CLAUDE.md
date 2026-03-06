@@ -47,3 +47,12 @@ npm run build    # 프로덕션 빌드
 - BE 모델 변경 시 FE 타입도 **반드시 동시 수정**
 - 필드명은 CamelCase (BE의 CamelModel과 일치)
 - barrel re-export: `types/index.ts`, `lib/api/endpoints.ts`
+
+## Subagent Process Hooks
+- Before creating a new route or broadening an existing page scope, run `subagent-pattern-collect` in `route-page` mode.
+- Before adding a new domain module under `frontend/src/components/domain`, run `subagent-pattern-collect` in `feature-module` mode.
+- Use local rule chain docs in this order:
+  1. `frontend/CLAUDE.md`
+  2. `frontend/src/components/domain/CLAUDE.md`
+  3. `frontend/src/components/domain/*/CLAUDE.md`
+- Keep data access in hooks/api libs and keep view components focused on presentation.

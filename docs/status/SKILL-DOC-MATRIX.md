@@ -16,3 +16,11 @@ Decision-complete mapping between page skills, code touch points, and required r
 - Route truth source: `frontend/src/config/routes.ts`
 - Keep board route set equal to matrix route set.
 - If required docs are missing, report as `manual_required`.
+
+## Ops Skills
+
+| ops_skill | purpose | sections | related_scope |
+|---|---|---|---|
+| `pre-commit-validate` | Validate build/test/encoding before commit. | `Trigger`, `Read First`, `Do`, `Validation` | commit gate |
+| `subagent-doc-check` | Split consistency checks into code facts, docs facts, and rule-chain facts before comparing drift. | `Trigger`, `Read First`, `Procedure`, `Validation`, `Output` | repo-wide docs/status integrity |
+| `subagent-pattern-collect` | Gather route/module/data-contract patterns before implementation. | `Trigger`, `Read First`, `Procedure`, `Validation`, `Output` | repo-wide implementation planning |

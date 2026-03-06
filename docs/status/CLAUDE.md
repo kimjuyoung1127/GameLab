@@ -13,3 +13,10 @@ Operational status board and automation artifacts.
 
 ## Stability Rule
 - Keep file names stable for external automation.
+
+## Subagent Consistency Rule
+- During repo-wide consistency checks, treat these as a linked set:
+  - `PROJECT-STATUS.md`
+  - `PAGE-UPGRADE-BOARD.md`
+  - `SKILL-DOC-MATRIX.md`
+- If the check spans code + docs + local rules, run `subagent-doc-check` first.

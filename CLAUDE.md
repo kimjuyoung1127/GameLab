@@ -3,7 +3,7 @@
 Smart Spectro-Tagging — automation-first operating index.
 
 ## Repo Boundary
-- Write Repo: `C:\Users\ezen601\Desktop\Jason\GameLab`
+- Write Repo: `C:\Users\gmdqn\gamelab\GameLab`
 
 ## Context Loading Order (새 세션 시작 시)
 1. **이 파일** — 전체 구조 + 규칙 + 스킬/자동화 인덱스
@@ -144,3 +144,30 @@ Smart Spectro-Tagging — automation-first operating index.
 
 ## Completion Format
 - Scope / Files / Validation / Daily Sync / Risks / Next Recommendations
+
+## Subagent Rules (Process Transplant)
+- Use subagent-style exploration when work requires:
+  - code vs docs/status vs local `CLAUDE.md` rule-chain comparison
+  - reading three or more file groups before comparing or summarizing
+  - collecting existing implementation patterns before adding a route, domain module, or data-contract change
+- Keep split fixed when subagent exploration is used:
+  - `SubA`: code facts
+  - `SubB`: docs/status facts
+  - `SubC`: local `CLAUDE.md` rule-chain facts
+- Keep direct mutation in the main agent. Subagent-style work is only for discovery, comparison, and pattern collection.
+- Skip subagent exploration for:
+  - single-file edits
+  - simple git operations
+  - straightforward implementation that does not need repo-wide comparison
+- Prefer dedicated ops skills:
+  - `.claude/skills/gamelab-guide/ops/subagent-doc-check/SKILL.md`
+  - `.claude/skills/gamelab-guide/ops/subagent-pattern-collect/SKILL.md`
+- Reusable prompt patterns live in:
+  - `memory/subagent-patterns.md`
+
+## Automation Prompts (Process Transplant)
+- `skill-doc-integrity`: `.claude/automations/skill-doc-integrity.prompt.md` (03:00 KST)
+- `code-doc-align`: `.claude/automations/code-doc-align.prompt.md` (03:30 KST)
+- `architecture-diagrams-sync`: `.claude/automations/architecture-diagrams-sync.prompt.md` (04:00 KST)
+- `automation-health-monitor`: `.claude/automations/automation-health-monitor.prompt.md` (09:30 KST)
+- `docs-nightly-organizer`: `.claude/automations/docs-nightly-organizer.prompt.md` (22:00 KST)

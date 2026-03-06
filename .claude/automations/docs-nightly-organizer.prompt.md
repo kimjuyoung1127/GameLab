@@ -7,7 +7,7 @@
 - 실행 로그를 docs/status/NIGHTLY-RUN-LOG.md에 append
 
 프로젝트 루트:
-- PROJECT_ROOT (예: C:\Users\ezen601\Desktop\Jason\GameLab)
+- PROJECT_ROOT (예: C:\Users\gmdqn\gamelab\GameLab)
 
 입력:
 - docs/ref/**
