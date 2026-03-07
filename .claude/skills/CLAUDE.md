@@ -35,3 +35,15 @@ GameLab skill assets for Claude Code interactive development.
 - `SubB`: docs/status facts
 - `SubC`: local `CLAUDE.md` rule-chain facts
 - Subagent-style work is discovery only; direct edits stay in the main agent.
+
+## Full Inventory
+- `hotkey-sync` -> `gamelab-guide/core/hotkey-sync/`
+- `be-fe-model-sync` -> `gamelab-guide/mirror/be-fe-model-sync/`
+- `i18n-string-add` -> `gamelab-guide/i18n/i18n-string-add/`
+- `new-engine-register` -> `gamelab-guide/analysis/new-engine-register/`
+- `pre-commit-validate` -> `gamelab-guide/ops/pre-commit-validate/`
+- `subagent-doc-check` -> `gamelab-guide/ops/subagent-doc-check/`
+- `subagent-pattern-collect` -> `gamelab-guide/ops/subagent-pattern-collect/`
+- `labeling-feature-add` -> `page-skills/feature/labeling-feature-add/`
+- `new-domain-endpoint` -> `page-skills/page/new-domain-endpoint/`
+- `sprint-docs-sync` -> `meta/sprint-docs-sync/`

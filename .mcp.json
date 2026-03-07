@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "notebooklm": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "notebooklm-mcp@latest"
+      ]
+    },
     "supabase": {
       "command": "npx",
       "args": [

@@ -1,0 +1,368 @@
+{
+  "baseline": {
+    "repo_claude_skill_count": {
+      "before": 10
+    },
+    "repo_claude_frontmatter": {
+      "before": "10/10"
+    },
+    "repo_claude_indexed": {
+      "before": "8/10"
+    },
+    "project_local_valid": {
+      "before": "1/16"
+    },
+    "mcp_server_count": {
+      "before": 1
+    },
+    "notebook_library_count": {
+      "before": 0
+    }
+  },
+  "after": {
+    "repo_claude_skill_count": 10,
+    "repo_claude_frontmatter": "10/10",
+    "repo_claude_indexed": "10/10",
+    "repo_shared_skill_count": 7,
+    "codex_global_skill_count": 1,
+    "project_local_valid": "17/17",
+    "all_scopes_valid": "18/18",
+    "utf8_decode_errors": 0,
+    "mcp_server_count": 2,
+    "notebook_library_count": 1,
+    "notebook_registered": true,
+    "notebook_sync_success": false,
+    "warning_count": 39,
+    "manual_intervention_count": 1,
+    "duplicate_trigger_count": 0
+  },
+  "audits": [
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\gamelab-guide\\analysis\\new-engine-register\\SKILL.md",
+      "name": "new-engine-register",
+      "description": "새 분석 엔진 등록 — new engine, 엔진 추가, analysis engine, 분석 엔진, 알고리즘 추가",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: service.py"
+      ],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": true,
+      "triggers": [
+        "사용자가 \"new engine\", \"새 엔진\", \"analysis engine\", \"분석 엔진 추가\", \"알고리즘 추가\"를 요청할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\gamelab-guide\\core\\hotkey-sync\\SKILL.md",
+      "name": "hotkey-sync",
+      "description": "단축키 추가/변경/삭제 시 5개 파일 동기화 — hotkey add, hotkey change, 단축키 추가, 핫키 변경, 키바인딩",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": false,
+      "triggers": [
+        "사용자가 \"hotkey\", \"단축키\", \"shortcut\", \"키바인딩\" 관련 요청을 하거나, 아래 5개 파일 중 하나를 수정할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\gamelab-guide\\i18n\\i18n-string-add\\SKILL.md",
+      "name": "i18n-string-add",
+      "description": "새 UI 문자열 ko/en 동시 추가 — i18n, 번역, translation, 다국어, string add, 문자열 추가",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": false,
+      "triggers": [
+        "사용자가 \"i18n\", \"번역\", \"translation\", \"문자열 추가\", \"다국어\"를 요청하거나, 새 UI 텍스트가 필요한 기능을 추가할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\gamelab-guide\\mirror\\be-fe-model-sync\\SKILL.md",
+      "name": "be-fe-model-sync",
+      "description": "BE 모델 변경 시 FE 타입/API 클라이언트 1:1 동기화 — model sync, 모델 동기화, type mirror, 타입 미러, 필드 추가",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": false,
+      "triggers": [
+        "사용자가 \"model change\", \"모델 변경\", \"add field\", \"필드 추가\", \"type sync\", \"타입 동기화\"를 요청하거나, `backend/app/models/*.py` 파일을 수정할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\gamelab-guide\\ops\\pre-commit-validate\\SKILL.md",
+      "name": "pre-commit-validate",
+      "description": "커밋 전 5단계 검증 실행 — pre-commit, 커밋 전, validate, 검증, build check, 빌드 확인",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": true,
+      "triggers": [
+        "사용자가 \"commit\", \"커밋\", \"pre-commit\", \"검증\"을 요청하거나, git commit을 생성하려 할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\gamelab-guide\\ops\\subagent-doc-check\\SKILL.md",
+      "name": "subagent-doc-check",
+      "description": "Subagent-style consistency check for GameLab code facts, docs/status facts, and local CLAUDE.md rule chains before deciding what to update.",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": true,
+      "triggers": [
+        "\"문서 정합성 체크\"",
+        "\"code-doc drift 점검\"",
+        "\"status sync 전에 전체 비교\"",
+        "\"코드, 문서, CLAUDE 규칙을 같이 맞춰야 함\""
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\gamelab-guide\\ops\\subagent-pattern-collect\\SKILL.md",
+      "name": "subagent-pattern-collect",
+      "description": "Collect GameLab implementation patterns through subagent-style exploration before adding routes, domain modules, or data-contract changes.",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": true,
+      "triggers": [
+        "\"새 route 만들기 전에 패턴 수집\"",
+        "\"기존 구조부터 찾아줘\"",
+        "\"schema/type/doc 계약 패턴 모아줘\"",
+        "\"어디를 따라야 하는지 먼저 확인\""
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\meta\\sprint-docs-sync\\SKILL.md",
+      "name": "sprint-docs-sync",
+      "description": "스프린트 완료 후 문서 일괄 동기화 — sprint docs, 문서 동기화, status update, 스프린트 완료, docs sync",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": true,
+      "triggers": [
+        "사용자가 \"sprint complete\", \"스프린트 완료\", \"docs sync\", \"문서 동기화\"를 요청하거나, 주요 기능 머지 후 문서 갱신이 필요할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\page-skills\\feature\\labeling-feature-add\\SKILL.md",
+      "name": "labeling-feature-add",
+      "description": "라벨링 워크스페이스 기능 추가 — labeling feature, 라벨링 기능, spectrogram, 스펙트로그램, annotation, 어노테이션",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: components/",
+        "unresolved example path: hooks/"
+      ],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": false,
+      "triggers": [
+        "사용자가 \"labeling feature\", \"라벨링 기능\", \"spectrogram\", \"스펙트로그램\", \"annotation\"을 요청하거나, `/labeling/[id]` 관련 변경을 요구할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_claude",
+      "file": ".claude\\skills\\page-skills\\page\\new-domain-endpoint\\SKILL.md",
+      "name": "new-domain-endpoint",
+      "description": "새 도메인 API 엔드포인트 풀스택 생성 — new endpoint, API 추가, 도메인 추가, full-stack endpoint, 엔드포인트 생성",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: labeling.ts",
+        "unresolved example path: __init__.py"
+      ],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": false,
+      "triggers": [
+        "사용자가 \"new endpoint\", \"새 API\", \"도메인 추가\", \"엔드포인트 생성\"을 요청하거나, 새 BE 라우트 + FE 클라이언트가 필요할 때 활성화."
+      ]
+    },
+    {
+      "skill_set": "repo_shared",
+      "file": "skills\\ai-session-ops\\SKILL.md",
+      "name": "ai-session-ops",
+      "description": "AI 세션 운영 규칙. 세션 시작/종료 절차, 문서 읽기 순서, 세션 로그, 완료 보고, 토큰 절약 전략, 스프린트 핸드오프, 다중 에이전트 역할 분리를 적용. AI와 협업하는 모든 프로젝트에서 사용.",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: logs/YYYY-MM-DD-session-log.md",
+        "unresolved example path: worklog.md",
+        "unresolved example path: review-log.md",
+        "unresolved example path: 경로/파일.ts"
+      ],
+      "indexed": true,
+      "root_claude_ref": false,
+      "matrix_ref": false,
+      "triggers": [
+        "AI 세션 운영 규칙. 세션 시작/종료 절차, 문서 읽기 순서, 세션 로그, 완료 보고, 토큰 절약 전략, 스프린트 핸드오프, 다중 에이전트 역할 분리를 적용. AI와 협업하는 모든 프로젝트에서 사용."
+      ]
+    },
+    {
+      "skill_set": "repo_shared",
+      "file": "skills\\code-quality-guard\\SKILL.md",
+      "name": "code-quality-guard",
+      "description": "코드 품질 가드. 파일 헤더 주석, 인코딩/줄바꿈, CLAUDE.md 폴더 컨벤션, 커밋 전 체크리스트, 스타일 분리, 하드코딩 정책을 적용. 새 프로젝트 시작 시 또는 코드 품질 규칙을 점검할 때 사용.",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: styles/",
+        "unresolved example path: styles/Dashboard.module.css",
+        "unresolved example path: @/lib/api/sessions",
+        "unresolved example path: ../../lib/api/sessions"
+      ],
+      "indexed": true,
+      "root_claude_ref": false,
+      "matrix_ref": false,
+      "triggers": [
+        "코드 품질 가드. 파일 헤더 주석, 인코딩/줄바꿈, CLAUDE.md 폴더 컨벤션, 커밋 전 체크리스트, 스타일 분리, 하드코딩 정책을 적용. 새 프로젝트 시작 시 또는 코드 품질 규칙을 점검할 때 사용."
+      ]
+    },
+    {
+      "skill_set": "repo_shared",
+      "file": "skills\\code-review-protocol\\SKILL.md",
+      "name": "code-review-protocol",
+      "description": "코드 리뷰 프로토콜. 심각도 기반 리뷰 형식, 머지 판단 기준, 필수 점검 항목, 리뷰 로그 누적, 셀프 리뷰 체크리스트를 적용. 코드 리뷰 또는 PR 검토 시 사용.",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: review-log.md"
+      ],
+      "indexed": true,
+      "root_claude_ref": false,
+      "matrix_ref": false,
+      "triggers": [
+        "코드 리뷰 프로토콜. 심각도 기반 리뷰 형식, 머지 판단 기준, 필수 점검 항목, 리뷰 로그 누적, 셀프 리뷰 체크리스트를 적용. 코드 리뷰 또는 PR 검토 시 사용."
+      ]
+    },
+    {
+      "skill_set": "repo_shared",
+      "file": "skills\\frontend-design\\SKILL.md",
+      "name": "frontend-design",
+      "description": "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": false,
+      "matrix_ref": false,
+      "triggers": [
+        "Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics."
+      ]
+    },
+    {
+      "skill_set": "repo_shared",
+      "file": "skills\\fullstack-mirror-arch\\SKILL.md",
+      "name": "fullstack-mirror-arch",
+      "description": "풀스택 미러 아키텍처 규칙. BE↔FE 1:1 타입 동기화, 레이어 의존 규칙, barrel re-export, API 클라이언트 패턴, 상태관리 분리 규칙을 적용. 풀스택 프로젝트 설계 시 사용.",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: models/session.py",
+        "unresolved example path: types/session.ts",
+        "unresolved example path: api/session/router.py",
+        "unresolved example path: lib/api/session.ts",
+        "unresolved example path: views.py",
+        "unresolved example path: services.py",
+        "unresolved example path: models.py",
+        "unresolved example path: settings.py",
+        "unresolved example path: @/lib/api/session"
+      ],
+      "indexed": true,
+      "root_claude_ref": false,
+      "matrix_ref": false,
+      "triggers": [
+        "풀스택 미러 아키텍처 규칙. BE↔FE 1:1 타입 동기화, 레이어 의존 규칙, barrel re-export, API 클라이언트 패턴, 상태관리 분리 규칙을 적용. 풀스택 프로젝트 설계 시 사용."
+      ]
+    },
+    {
+      "skill_set": "repo_shared",
+      "file": "skills\\gptapp-dev\\SKILL.md",
+      "name": "gptapp-dev",
+      "description": "ChatGPT MCP App 개발 스킬. gptappdocs 참조하여 MCP 서버, 위젯, 도구를 구현.",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: setupyourserver.md",
+        "unresolved example path: definetools.md",
+        "unresolved example path: buildyourchatgptui.md",
+        "unresolved example path: designcomponents.md",
+        "unresolved example path: managestate.md",
+        "unresolved example path: authenticateusers.md",
+        "unresolved example path: securityprivacy.md",
+        "unresolved example path: reference.md",
+        "unresolved example path: testyourintegration.md",
+        "unresolved example path: uxprinciples.md",
+        "unresolved example path: deployyourapp.md",
+        "unresolved example path: submityourapp.md",
+        "unresolved example path: appsubmissionguidelines.md",
+        "unresolved example path: momnetizeyourapp.md"
+      ],
+      "indexed": true,
+      "root_claude_ref": false,
+      "matrix_ref": false,
+      "triggers": [
+        "ChatGPT MCP App 개발 스킬. gptappdocs 참조하여 MCP 서버, 위젯, 도구를 구현."
+      ]
+    },
+    {
+      "skill_set": "repo_shared",
+      "file": "skills\\notebooklm-research\\SKILL.md",
+      "name": "notebooklm-research",
+      "description": "Source-grounded research workflow for NotebookLM URLs, notebook-backed documentation queries, and MCP-driven follow-up analysis. Use when a task includes a NotebookLM URL, asks to query notebook contents, register a notebook, or persist grounded notes before implementation.",
+      "valid": true,
+      "errors": [],
+      "warnings": [],
+      "indexed": true,
+      "root_claude_ref": true,
+      "matrix_ref": true,
+      "triggers": [
+        "User provides a NotebookLM URL.",
+        "User asks to \"query NotebookLM\", \"use notebook docs\", or \"research this notebook before coding\".",
+        "The task needs source-grounded answers before implementation."
+      ]
+    },
+    {
+      "skill_set": "codex_global",
+      "file": "C:\\Users\\gmdqn\\.codex\\skills\\pdf\\SKILL.md",
+      "name": "pdf",
+      "description": "Use when tasks involve reading, creating, or reviewing PDF files where rendering and layout matter; prefer visual checks by rendering pages (Poppler) and use Python tools such as `reportlab`, `pdfplumber`, and `pypdf` for generation and extraction.",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "unresolved example path: tmp/pdfs/",
+        "unresolved example path: output/pdf/"
+      ],
+      "indexed": null,
+      "root_claude_ref": false,
+      "matrix_ref": false,
+      "triggers": [
+        "Use when tasks involve reading, creating, or reviewing PDF files where rendering and layout matter; prefer visual checks by rendering pages (Poppler) and use Python tools such as `reportlab`, `pdfplumber`, and `pypdf` for generation and extraction."
+      ]
+    }
+  ],
+  "duplicate_triggers": {}
+}

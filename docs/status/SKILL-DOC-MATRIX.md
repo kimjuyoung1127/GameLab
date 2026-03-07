@@ -24,3 +24,11 @@ Decision-complete mapping between page skills, code touch points, and required r
 | `pre-commit-validate` | Validate build/test/encoding before commit. | `Trigger`, `Read First`, `Do`, `Validation` | commit gate |
 | `subagent-doc-check` | Split consistency checks into code facts, docs facts, and rule-chain facts before comparing drift. | `Trigger`, `Read First`, `Procedure`, `Validation`, `Output` | repo-wide docs/status integrity |
 | `subagent-pattern-collect` | Gather route/module/data-contract patterns before implementation. | `Trigger`, `Read First`, `Procedure`, `Validation`, `Output` | repo-wide implementation planning |
+
+## Support Skills
+
+| support_skill | purpose | sections | related_scope |
+|---|---|---|---|
+| `new-engine-register` | Register or extend analysis engine modules without mirror drift. | `Trigger`, `Read First`, `Do`, `Validation` | backend analysis changes |
+| `sprint-docs-sync` | Sync status and sprint-facing documents after meaningful implementation changes. | `Trigger`, `Read First`, `Do`, `Validation` | docs/status maintenance |
+| `notebooklm-research` | Query NotebookLM through MCP, register notebooks, and persist grounded research notes. | `Trigger`, `Read First`, `Do`, `Validation`, `Output` | source-grounded research |

@@ -18,6 +18,12 @@ docs/status/SKILL-DOC-MATRIX.md
 .claude/skills/CLAUDE.md
   -> skill index registration
 
+skills/**/SKILL.md
+  -> shared cross-client skill files
+
+skills/CLAUDE.md
+  -> shared skill index registration
+
 docs/status/PAGE-UPGRADE-BOARD.md
   -> page_skill and support_skills references
 ```
@@ -45,7 +51,8 @@ docs/status/PAGE-UPGRADE-BOARD.md
 
 ### Step 2 - Scan disk skills
 1. Read `.claude/skills/**/SKILL.md`.
-2. Build `disk_skill_names`.
+2. Read `skills/**/SKILL.md`.
+3. Build `disk_skill_names`.
 3. Compute:
    - `MISSING_SKILL = matrix_skills - disk_skill_names`
    - `UNTRACKED_SKILL = disk_skill_names - matrix_skills`

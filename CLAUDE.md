@@ -171,3 +171,8 @@ Smart Spectro-Tagging — automation-first operating index.
 - `architecture-diagrams-sync`: `.claude/automations/architecture-diagrams-sync.prompt.md` (04:00 KST)
 - `automation-health-monitor`: `.claude/automations/automation-health-monitor.prompt.md` (09:30 KST)
 - `docs-nightly-organizer`: `.claude/automations/docs-nightly-organizer.prompt.md` (22:00 KST)
+
+## Shared Skills
+- Cross-client shared skills live under `skills/`.
+- Shared skill index: `skills/CLAUDE.md`
+- Use `skills/notebooklm-research/SKILL.md` when a task includes a NotebookLM URL, notebook-backed research, or source-grounded cross-checking before implementation.
