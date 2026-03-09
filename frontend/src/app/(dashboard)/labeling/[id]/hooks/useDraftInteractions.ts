@@ -16,7 +16,6 @@ type UseDraftInteractionsArgs = {
   snapEnabled: boolean;
   freqMin: number;
   freqMax: number;
-  effectiveMaxFreqRef: React.RefObject<number>;
   spectrogramRef: React.RefObject<HTMLDivElement | null>;
   isDraggingSuggestion: boolean;
   isResizingSuggestion: boolean;
@@ -37,7 +36,6 @@ export function useDraftInteractions({
   snapEnabled,
   freqMin,
   freqMax,
-  effectiveMaxFreqRef,
   spectrogramRef,
   isDraggingSuggestion,
   isResizingSuggestion,
@@ -89,6 +87,13 @@ export function useDraftInteractions({
   const pendingResizePatchRef = useRef<{ id: string; patch: Partial<ManualDraft> } | null>(null);
   const hasResizedDraftRef = useRef(false);
   const prevZoomBoxModeRef = useRef(zoomBoxMode);
+
+  const resetDraftDrawingState = useCallback(() => {
+    setDraftPreview(null);
+    draftPointerRef.current = null;
+    pendingPreviewRef.current = null;
+    setIsDrawingDraft(false);
+  }, []);
 
   const handleScrubFromSpectrogram = useCallback(
     (clientX: number) => {
@@ -221,12 +226,9 @@ export function useDraftInteractions({
           });
         }
       }
-      setDraftPreview(null);
-      draftPointerRef.current = null;
-      pendingPreviewRef.current = null;
-      setIsDrawingDraft(false);
+      resetDraftDrawingState();
     },
-    [draftPreview, onZoomToBox, startDraft, zoomBoxMode],
+    [draftPreview, onZoomToBox, resetDraftDrawingState, startDraft, zoomBoxMode],
   );
 
   const scheduleDraftMove = useCallback(
@@ -462,15 +464,20 @@ export function useDraftInteractions({
 
   useEffect(
     () => {
+      let resetTimer: ReturnType<typeof setTimeout> | null = null;
       if (prevZoomBoxModeRef.current && !zoomBoxMode) {
-        setDraftPreview(null);
-        draftPointerRef.current = null;
-        pendingPreviewRef.current = null;
-        setIsDrawingDraft(false);
+        resetTimer = setTimeout(() => {
+          resetDraftDrawingState();
+        }, 0);
       }
       prevZoomBoxModeRef.current = zoomBoxMode;
+      return () => {
+        if (resetTimer !== null) {
+          clearTimeout(resetTimer);
+        }
+      };
     },
-    [zoomBoxMode],
+    [resetDraftDrawingState, zoomBoxMode],
   );
 
   useEffect(

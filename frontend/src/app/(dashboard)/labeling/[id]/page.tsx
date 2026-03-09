@@ -247,10 +247,6 @@ export default function LabelingWorkspacePage() {
   });
 
   // Dynamic max frequency from spectrogram (Nyquist), fallback to 20kHz
-  const effectiveMaxFreqRef = useRef(MAX_FREQ);
-  useEffect(() => {
-    effectiveMaxFreqRef.current = spectrogramData?.maxFrequency ?? MAX_FREQ;
-  }, [spectrogramData]);
   const effectiveMaxFreq = spectrogramData?.maxFrequency ?? MAX_FREQ;
 
   useEffect(() => {
@@ -632,7 +628,6 @@ export default function LabelingWorkspacePage() {
     snapEnabled,
     freqMin,
     freqMax,
-    effectiveMaxFreqRef,
     spectrogramRef,
     updateSuggestion,
     selectSuggestion,
@@ -664,7 +659,6 @@ export default function LabelingWorkspacePage() {
     snapEnabled,
     freqMin,
     freqMax,
-    effectiveMaxFreqRef,
     spectrogramRef,
     isDraggingSuggestion,
     isResizingSuggestion,

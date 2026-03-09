@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { BookmarkType, LabelingBookmark } from "@/types";
 import { bookmarkColors } from "./constants";

@@ -29,11 +29,20 @@ export function useUploadPolling(
 
   // Stable refs to avoid stale closures in setInterval
   const jobsRef = useRef(jobs);
-  jobsRef.current = jobs;
   const updateJobRef = useRef(updateJob);
-  updateJobRef.current = updateJob;
   const showToastRef = useRef(showToast);
-  showToastRef.current = showToast;
+
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
+
+  useEffect(() => {
+    updateJobRef.current = updateJob;
+  }, [updateJob]);
+
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
 
   const activeCount = jobs.filter(
     (j) => j.status === "queued" || j.status === "processing",

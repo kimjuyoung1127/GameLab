@@ -182,7 +182,6 @@ export function useSpectrogram(
     }
 
     return () => {
-      computeIdRef.current++;
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;

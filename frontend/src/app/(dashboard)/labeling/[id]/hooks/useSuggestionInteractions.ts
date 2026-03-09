@@ -16,7 +16,6 @@ type UseSuggestionInteractionsArgs = {
   snapEnabled: boolean;
   freqMin: number;
   freqMax: number;
-  effectiveMaxFreqRef: React.RefObject<number>;
   spectrogramRef: React.RefObject<HTMLDivElement | null>;
   updateSuggestion: (id: string, patch: Partial<Suggestion>, options?: { trackHistory?: boolean }) => void;
   selectSuggestion: (id: string | null) => void;
@@ -35,7 +34,6 @@ export function useSuggestionInteractions({
   snapEnabled,
   freqMin,
   freqMax,
-  effectiveMaxFreqRef,
   spectrogramRef,
   updateSuggestion,
   selectSuggestion,

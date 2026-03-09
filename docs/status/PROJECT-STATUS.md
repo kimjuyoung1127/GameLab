@@ -1,12 +1,12 @@
 ﻿# GameLab Project Status
 
-Last Updated: 2026-03-03 (KST)
+Last Updated: 2026-03-09 (KST)
 Owner Doc: `CLAUDE.md` (root slim index)
 
 ## Current Phase
 - Phase 2E 완료 → Phase 2F (라벨링 워크플로우 최적화)
 - Sprint 14 완료: 스펙트로그램 분석 도구 5개 기능
-- Sprint 14.1 진행 중: 라벨링 워크플로우 최적화 3종
+- Sprint 14.1 구현 완료, AUTO 일관성/단위 테스트/빌드 검증 반영
 - Gamification V2 구현 완료 (mission/reward/leaderboard scope tabs)
 - Labeling UI 집중화 적용: Mission Center 제거, 프로필 진입으로 통합
 - Profile 라우트 활성화: `/profile` 페이지 생성 및 사이드바 엔지니어 카드 클릭 이동 연결
@@ -18,12 +18,13 @@ Owner Doc: `CLAUDE.md` (root slim index)
 4. **0.25x 재생 속도 확장**: 최소 속도 0.5x → 0.25x 하한 확장
 5. **PNG 스크린샷 내보내기**: 스펙트로그램 canvas → PNG 다운로드 (ToolBar 내보내기 메뉴)
 
-## Sprint 14.1 — 라벨링 워크플로우 최적화 (진행 중, 2026-03-05)
+## Sprint 14.1 — 라벨링 워크플로우 최적화 (구현 완료 + 검증 보강, 2026-03-09)
 1. **신뢰도 컬러 강도**: confidence 구간별 프로그레스 바/텍스트 색상 (80%+ 초록, 50~79% 주황, <50% 빨강)
 2. **제안 상태 필터 칩**: AnalysisPanel 헤더에 클릭 가능한 전체/대기/확인/수정 필터 → 스펙트로그램 표시 필터링
-3. **순차 자동 이동**: C키 확정 시 현재 위치 다음 pending으로 이동 (배열 첫 번째 → 순차 탐색) + AUTO 토글
+3. **순차 자동 이동**: C키 확정/수정 적용 모두 현재 위치 기준 다음 pending 순차 탐색 + AUTO OFF 시 apply-fix 현재 제안 유지
 4. **fitToSuggestion 기본값 OFF**: 제안 클릭 시 자동 줌 비활성화 (FIT 버튼으로 수동 켜기)
 5. **제안 클립보드 복사**: 선택 제안의 라벨/시간/주파수/설명/상태를 포맷 텍스트로 복사 (Copy 아이콘)
+6. **Store 단위 테스트 + 정적 검증**: `vitest` 도입, AUTO 상태 전이 6개 테스트 추가, `lint/test/build` 통과
 
 ## Spectrogram Listening Scope (Locked: 2026-03-03 KST)
 - Workspace target: `frontend/src/app/(dashboard)/labeling/[id]` only
@@ -79,12 +80,15 @@ Owner Doc: `CLAUDE.md` (root slim index)
 - slack daily summary: Ready
 
 ## Next Actions
-1. Sprint 14.1 추가 기능 구현 (다음 배치)
+1. Sprint 14.1 수동 QA + 라벨링 상호작용 폴리시 점검
 2. Apply `scripts/sql-chunks/gamification_v2_core_tables.sql` to Supabase project.
 3. QA pass for gamification endpoints (`/api/gamification/*`) and leaderboard scope tabs.
 4. Profile(`/profile`) 중심으로 배지/미션/진행상황 UX 세부 고도화(빈 상태/반응형/정렬)
 
-## Recent Hotfixes (2026-03-03 KST)
+## Recent Hotfixes (2026-03-09 KST)
+- AUTO semantics sync: `Apply Fix`도 `AUTO` 토글을 따르도록 정렬 (`AUTO OFF` 시 현재 corrected suggestion 유지)
+- frontend quality recovery: labeling/upload 훅 lint 오류 해소 + `BookmarksPanel`/`useSpectrogram` 경고 제거
+- Vitest 도입: labeling annotation store 상태 전이 테스트 6개 추가
 - Shift+Z(Undo All): viewport 스냅샷 전체 한번에 되돌리기 (1단계씩 → 전체)
 - Ctrl+Shift+Z(Redo): Shift 누를 때 대문자 Z 매칭 수정
 - R키 박스 선택: 오버레이 div pointer-events-none 추가로 이벤트 통과 수정

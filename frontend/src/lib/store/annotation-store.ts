@@ -16,6 +16,18 @@ import { useUIStore } from "./ui-store";
 
 const MAX_HISTORY_ITEMS = 20;
 
+function findNextPendingSuggestionId(
+  suggestions: Suggestion[],
+  currentSuggestionId: string,
+) {
+  const currentIdx = suggestions.findIndex((suggestion) => suggestion.id === currentSuggestionId);
+  if (currentIdx === -1) return null;
+
+  const after = suggestions.slice(currentIdx + 1).find((suggestion) => suggestion.status === "pending");
+  const before = suggestions.slice(0, currentIdx).find((suggestion) => suggestion.status === "pending");
+  return (after ?? before)?.id ?? null;
+}
+
 interface AnnotationState {
   mode: LabelingMode;
   tool: DrawTool;
@@ -217,13 +229,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       s.id === selectedSuggestionId ? { ...s, status: "confirmed" as const } : s,
     );
     const { autoAdvance } = useUIStore.getState();
-    let nextId: string | null = null;
-    if (autoAdvance) {
-      const currentIdx = updated.findIndex((s) => s.id === selectedSuggestionId);
-      const after = updated.slice(currentIdx + 1).find((s) => s.status === "pending");
-      const before = updated.slice(0, currentIdx).find((s) => s.status === "pending");
-      nextId = (after ?? before)?.id ?? null;
-    }
+    const nextId = autoAdvance ? findNextPendingSuggestionId(updated, selectedSuggestionId) : null;
 
     set({
       suggestions: updated,
@@ -260,14 +266,14 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     const updated = suggestions.map((s) =>
       s.id === selectedSuggestionId ? { ...s, status: "corrected" as const } : s,
     );
-    const fixIdx = updated.findIndex((s) => s.id === selectedSuggestionId);
-    const afterFix = updated.slice(fixIdx + 1).find((s) => s.status === "pending");
-    const beforeFix = updated.slice(0, fixIdx).find((s) => s.status === "pending");
-    const nextPending = afterFix ?? beforeFix;
+    const { autoAdvance } = useUIStore.getState();
+    const nextSuggestionId = autoAdvance
+      ? findNextPendingSuggestionId(updated, selectedSuggestionId)
+      : selectedSuggestionId;
     set({
       suggestions: updated,
       mode: "review",
-      selectedSuggestionId: nextPending?.id ?? null,
+      selectedSuggestionId: nextSuggestionId,
       undoStack: [...state.undoStack, prev],
       redoStack: [],
     });
