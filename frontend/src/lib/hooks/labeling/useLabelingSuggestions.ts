@@ -1,16 +1,17 @@
-/** Suggestion loading hook with retry and per-file progress aggregation. */
+/** 제안 로딩 훅: 재시도 + 파일별 진행률 집계, authFetch 기반. */
 "use client";
 
 import { useEffect, useState } from "react";
+import { authFetch } from "@/lib/api/auth-fetch";
 import { loadSavedProgress } from "@/lib/hooks/use-autosave";
 import { endpoints } from "@/lib/api/endpoints";
-import type { AISuggestion } from "@/types";
+import type { Suggestion } from "@/types";
 
 type UseLabelingSuggestionsParams = {
   sessionId: string;
   activeFileId: string | null;
-  loadSuggestions: (items: AISuggestion[]) => void;
-  restoreSuggestions: (items: AISuggestion[]) => void;
+  loadSuggestions: (items: Suggestion[]) => void;
+  restoreSuggestions: (items: Suggestion[]) => void;
 };
 
 export function useLabelingSuggestions({
@@ -29,9 +30,10 @@ export function useLabelingSuggestions({
 
     const loadSuggestionData = async (retryCount = 0): Promise<void> => {
       try {
-        const res = await fetch(endpoints.labeling.suggestions(sessionId));
+        const res = await authFetch(endpoints.labeling.suggestions(sessionId));
         if (!res.ok) throw new Error("Failed to load suggestions");
-        const all = (await res.json()) as AISuggestion[];
+        const allRaw = (await res.json()) as Suggestion[];
+        const all = allRaw.map((s) => ({ ...s, source: s.source ?? "ai", createdBy: s.createdBy ?? null } as Suggestion));
         const filtered = all.filter((s) => s.audioId === activeFileId);
 
         if (filtered.length === 0 && retryCount < 5 && !cancelled) {

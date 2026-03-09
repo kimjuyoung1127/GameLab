@@ -1,4 +1,5 @@
-"""Labeling API: suggestion list, status updates, and CSV/JSON export."""
+"""Labeling API: suggestion list, status updates, CSV/JSON export, LLM assist."""
+import asyncio
 import csv
 import io
 import json as json_module
@@ -6,16 +7,27 @@ import logging
 from datetime import datetime, timezone
 from typing import List
 
+from fastapi.responses import Response
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.core.auth import CurrentUser, ensure_sst_user_exists, get_current_user
+from app.core.config import settings
 from app.core.supabase_client import supabase
 from app.models.labeling import (
     CreateSuggestionsRequest,
     SuggestionResponse,
     SuggestionStatusValue,
     UpdateSuggestionRequest,
+)
+from app.models.llm_assist import (
+    LlmAssistRequest,
+    LlmAssistResponse,
+    LlmBatchAssistRequest,
+    LlmBatchAssistResponse,
+    LlmBatchErrorItem,
+    LlmInputMode,
+    LlmRecommendedAction,
 )
 from app.services.gamification.service import apply_suggestion_reward
 
@@ -355,6 +367,178 @@ async def export_suggestions(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="labels-{session_id}{file_suffix}.csv"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# LLM Assist endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/suggestions/{suggestion_id}/assist", response_model=LlmAssistResponse)
+async def request_assist(
+    suggestion_id: str,
+    body: LlmAssistRequest = LlmAssistRequest(),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """선택 suggestion 1건에 대한 LLM assist 생성."""
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
+
+    if not settings.llm_assist_enabled:
+        raise HTTPException(status_code=403, detail="LLM assist is disabled")
+
+    # suggestion 존재 확인
+    try:
+        check = (
+            supabase.table("sst_suggestions")
+            .select("id")
+            .eq("id", suggestion_id)
+            .limit(1)
+            .execute()
+        )
+        if not (check.data or []):
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify suggestion") from exc
+
+    try:
+        from app.services.llm_assist.service import SuggestionAssistService
+
+        service = SuggestionAssistService()
+        result = await service.assist(suggestion_id, body.input_mode)
+        return result
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=503, detail="LLM assist timed out")
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM response error: {exc}")
+    except Exception as exc:
+        logger.exception("LLM assist failed", extra={"suggestion_id": suggestion_id})
+        raise HTTPException(status_code=503, detail="LLM assist failed") from exc
+
+
+@router.get("/suggestions/{suggestion_id}/assist")
+async def get_assist(suggestion_id: str):
+    """이미 생성된 LLM assist 결과 조회 (캐시 역할)."""
+    try:
+        res = (
+            supabase.table("sst_suggestion_llm_reviews")
+            .select("*")
+            .eq("suggestion_id", suggestion_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+    except Exception as exc:
+        logger.exception("Failed to fetch assist", extra={"suggestion_id": suggestion_id})
+        raise HTTPException(status_code=503, detail="Failed to fetch assist") from exc
+
+    if not rows:
+        return Response(status_code=204)
+
+    row = rows[0]
+    return LlmAssistResponse(
+        id=row["id"],
+        suggestion_id=row["suggestion_id"],
+        provider=row.get("provider", "google"),
+        model=row.get("model", ""),
+        input_mode=LlmInputMode(row.get("input_mode", "text_features")),
+        recommended_action=LlmRecommendedAction(row["recommended_action"]),
+        suggested_label=row.get("suggested_label"),
+        llm_confidence=int(row.get("llm_confidence", 0)),
+        explanation=row.get("explanation", ""),
+        clip_start_time=row.get("clip_start_time"),
+        clip_end_time=row.get("clip_end_time"),
+        created_at=str(row.get("created_at", "")),
+        latency_ms=int(row.get("latency_ms", 0)),
+    )
+
+
+
+@router.post("/{session_id}/assist-batch", response_model=LlmBatchAssistResponse)
+async def request_batch_assist(
+    session_id: str,
+    body: LlmBatchAssistRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """복수 suggestion에 대한 LLM assist 배치 요청."""
+    if not ensure_sst_user_exists(current_user):
+        raise HTTPException(status_code=503, detail="Failed to initialize user profile")
+
+    if not settings.llm_assist_enabled:
+        raise HTTPException(status_code=403, detail="LLM assist is disabled")
+
+    # 빈 목록 조기 반환 + 중복 제거
+    unique_ids = list(dict.fromkeys(body.suggestion_ids))
+    if not unique_ids:
+        return LlmBatchAssistResponse(results=[], errors=[])
+
+    if len(unique_ids) > settings.llm_batch_max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Max {settings.llm_batch_max_size} suggestions per batch",
+        )
+
+    try:
+        from app.services.llm_assist.service import SuggestionAssistService
+
+        service = SuggestionAssistService()
+        results, errors = await service.batch_assist(unique_ids, body.input_mode)
+        return LlmBatchAssistResponse(
+            results=results,
+            errors=[LlmBatchErrorItem(**e) for e in errors],
+        )
+    except Exception as exc:
+        logger.exception("Batch assist failed", extra={"session_id": session_id})
+        raise HTTPException(status_code=503, detail="Batch assist failed") from exc
+
+
+@router.get("/{session_id}/assist-batch")
+async def get_batch_assist(session_id: str, ids: str = Query(...)):
+    """복수 suggestion의 캐시된 LLM assist 결과 벌크 조회."""
+    suggestion_ids = [s.strip() for s in ids.split(",") if s.strip()]
+    if not suggestion_ids:
+        return LlmBatchAssistResponse(results=[], errors=[])
+
+    try:
+        res = (
+            supabase.table("sst_suggestion_llm_reviews")
+            .select("*")
+            .in_("suggestion_id", suggestion_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except Exception as exc:
+        logger.exception("Failed to fetch batch assist")
+        raise HTTPException(status_code=503, detail="Failed to fetch batch assist") from exc
+
+    # suggestion_id별 최신 1건만
+    seen: set[str] = set()
+    results: list[LlmAssistResponse] = []
+    for row in (res.data or []):
+        sid = row["suggestion_id"]
+        if sid in seen:
+            continue
+        seen.add(sid)
+        results.append(LlmAssistResponse(
+            id=row["id"],
+            suggestion_id=sid,
+            provider=row.get("provider", "google"),
+            model=row.get("model", ""),
+            input_mode=LlmInputMode(row.get("input_mode", "text_features")),
+            recommended_action=LlmRecommendedAction(row["recommended_action"]),
+            suggested_label=row.get("suggested_label"),
+            llm_confidence=int(row.get("llm_confidence", 0)),
+            explanation=row.get("explanation", ""),
+            clip_start_time=row.get("clip_start_time"),
+            clip_end_time=row.get("clip_end_time"),
+            created_at=str(row.get("created_at", "")),
+            latency_ms=int(row.get("latency_ms", 0)),
+        ))
+
+    return LlmBatchAssistResponse(results=results, errors=[])
 
 
 def _row_to_response(s: dict) -> SuggestionResponse:

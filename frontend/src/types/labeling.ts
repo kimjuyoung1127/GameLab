@@ -82,6 +82,50 @@ export interface LabelingBookmark {
   createdAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// LLM Assist types (BE mirror: models/llm_assist.py)
+// ---------------------------------------------------------------------------
+
+export type LlmRecommendedAction = "confirm" | "reject" | "fix";
+export type LlmInputMode = "text_features" | "audio_clip";
+
+export interface SuggestionLlmAssist {
+  id: string;
+  suggestionId: string;
+  provider: string;
+  model: string;
+  inputMode: LlmInputMode;
+  recommendedAction: LlmRecommendedAction;
+  suggestedLabel: string | null;
+  llmConfidence: number;
+  explanation: string;
+  clipStartTime: number | null;
+  clipEndTime: number | null;
+  createdAt: string;
+  latencyMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// LLM Assist batch types (BE mirror: models/llm_assist.py Phase B)
+// ---------------------------------------------------------------------------
+
+export type AssistStatus = "idle" | "loading" | "cached" | "error";
+
+export interface LlmBatchAssistRequest {
+  suggestionIds: string[];
+  inputMode?: LlmInputMode;
+}
+
+export interface LlmBatchErrorItem {
+  suggestionId: string;
+  error: string;
+}
+
+export interface LlmBatchAssistResponse {
+  results: SuggestionLlmAssist[];
+  errors: LlmBatchErrorItem[];
+}
+
 export interface UpdateSuggestionPayload {
   status?: SuggestionStatus;
   label?: string;

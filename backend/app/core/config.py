@@ -14,6 +14,18 @@ class Settings(BaseSettings):
     analysis_timeout_sec: int = 120
     analysis_config_dir: str = "./config"
 
+    # LLM Assist
+    llm_assist_enabled: bool = True
+    llm_provider: str = "google"
+    llm_model: str = "gemini-2.5-flash"
+    llm_audio_mode: bool = True
+    llm_max_clip_sec: float = 10.0
+    llm_trigger_max_confidence: int = 70
+    llm_timeout_sec: int = 30
+    google_api_key: str = ""
+    llm_batch_concurrency: int = 5
+    llm_batch_max_size: int = 50
+
     class Config:
         env_file = ".env"
 

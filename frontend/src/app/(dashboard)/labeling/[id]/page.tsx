@@ -9,14 +9,22 @@ import { useScoreStore } from "@/lib/store/score-store";
 import { useSessionStore } from "@/lib/store/session-store";
 import { useAchievementStore } from "@/lib/store/achievement-store";
 import { useUIStore } from "@/lib/store/ui-store";
-import { loadSavedProgress, useAutosave } from "@/lib/hooks/use-autosave";
+import { useAutosave } from "@/lib/hooks/use-autosave";
 import { useWaveform } from "@/lib/hooks/use-waveform";
 import { useSpectrogram, type SpectrogramFftOptions } from "@/lib/hooks/use-spectrogram";
 import { useAudioPlayer } from "@/lib/hooks/use-audio-player";
 import { useSegmentPlayback } from "@/lib/hooks/use-segment-playback";
+import { useLabelingActions } from "@/lib/hooks/labeling/useLabelingActions";
 import { useLabelingHotkeys } from "@/lib/hooks/labeling/useLabelingHotkeys";
+import { useLabelingSessionData } from "@/lib/hooks/labeling/useLabelingSessionData";
+import { useLabelingSuggestions } from "@/lib/hooks/labeling/useLabelingSuggestions";
 import { useListeningSelection } from "@/lib/hooks/labeling/useListeningSelection";
-import { downloadBlob, exportFilteredSelectionAsWav } from "@/lib/audio/wav-export";
+import { useLabelingViewport } from "@/lib/hooks/labeling/useLabelingViewport";
+import { useLabelingFileNav } from "@/lib/hooks/labeling/useLabelingFileNav";
+import { useLabelingLoop } from "@/lib/hooks/labeling/useLabelingLoop";
+import { useLabelingBookmarks } from "@/lib/hooks/labeling/useLabelingBookmarks";
+import { useLabelingSegmentPlayback } from "@/lib/hooks/labeling/useLabelingSegmentPlayback";
+import { useLlmPrefetch } from "@/lib/hooks/labeling/useLlmPrefetch";
 import ActionHistoryPanel from "./components/ActionHistoryPanel";
 import AnalysisPanel from "./components/AnalysisPanel";
 import BookmarksPanel from "./components/BookmarksPanel";
@@ -28,14 +36,12 @@ import ToolBar from "./components/ToolBar";
 import { useDraftInteractions } from "./hooks/useDraftInteractions";
 import { useSuggestionInteractions } from "./hooks/useSuggestionInteractions";
 import { endpoints } from "@/lib/api/endpoints";
-import { enqueueStatusUpdate } from "@/lib/api/action-queue";
 import { authFetch } from "@/lib/api/auth-fetch";
 import type {
   ActionHistoryItem,
   AudioFile,
   BookmarkType,
   ManualDraft,
-  Session,
   Suggestion,
   SuggestionStatus,
 } from "@/types";
@@ -109,12 +115,6 @@ function suggestionBoxStyle(
   return { left: `${leftPct}%`, width: `${widthPct}%`, top: `${topPct}%`, height: `${heightPct}%` };
 }
 
-type ViewportSnapshot = {
-  zoomLevel: number;
-  freqMin: number;
-  freqMax: number;
-  scrollLeft: number;
-};
 
 const statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }> = {
   pending:   { border: "border-orange-400", bg: "bg-orange-400", tagBg: "bg-orange-400/90", label: "text-orange-400", dashed: true },
@@ -167,6 +167,7 @@ export default function LabelingWorkspacePage() {
     deleteSuggestion,
     statusFilter,
     setStatusFilter,
+    assistMap,
   } = useAnnotationStore();
 
   const {
@@ -191,9 +192,6 @@ export default function LabelingWorkspacePage() {
     files,
     currentFileId,
     setCurrentFile,
-    setCurrentSessionById,
-    setSessions,
-    setFiles,
   } = useSessionStore();
 
   const { checkAndUnlock, recentUnlock, clearRecent, load: loadAchievements } = useAchievementStore();
@@ -203,28 +201,15 @@ export default function LabelingWorkspacePage() {
   /* ----- Local UI state ------------------------------------------- */
   const [fileFilter, setFileFilter] = useState("");
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "done">("all");
-  const [sessionError, setSessionError] = useState<string | null>(null);
-  const [suggestionError, setSuggestionError] = useState<string | null>(null);
-  const [fileProgressMap, setFileProgressMap] = useState<Record<string, { total: number; reviewed: number }>>({});
-  const [fileCompleteToast, setFileCompleteToast] = useState(false);
+  // sessionError + suggestionError + fileProgressMap are managed by hooks below
   const [audioRetryKey, setAudioRetryKey] = useState(0);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [zoomBoxMode, setZoomBoxMode] = useState(false);
   const [fitToSuggestion, setFitToSuggestion] = useState(false);
   const [showFitToast, setShowFitToast] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
-  const [loopHudWarning, setLoopHudWarning] = useState(false);
-  const [highlightedBookmarkId, setHighlightedBookmarkId] = useState<string | null>(null);
-  const [segmentExportError, setSegmentExportError] = useState<string | null>(null);
-  const [freqMin, setFreqMin] = useState(0);
-  const [freqMax, setFreqMax] = useState(MAX_FREQ);
   const [freqAxisScale, setFreqAxisScale] = useState<"linear" | "log">("linear");
   const [fftOptions, setFftOptions] = useState<SpectrogramFftOptions>({});
-  const hasInteracted = useRef(false);
-  const completionHandled = useRef(false);
   const spectrogramRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const viewportUndoRef = useRef<ViewportSnapshot[]>([]);
 
   /* ----- Derived -------------------------------------------------- */
   const audioFiles: AudioFile[] = files;
@@ -239,24 +224,31 @@ export default function LabelingWorkspacePage() {
   const audioUrl: string | null = normalizeAudioUrl(activeFile?.audioUrl);
   const player = useAudioPlayer(audioUrl, parsedDuration, audioRetryKey);
   const { data: waveformData, error: waveformError } = useWaveform(audioUrl, audioRetryKey, targetSampleRate);
-  const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData, freqMin, freqMax, fftOptions);
   const audioLoadError = player.error ?? waveformError;
   const segmentPlayback = useSegmentPlayback({
     channelData: waveformData?.channelData,
     sampleRate: waveformData?.sampleRate,
   });
 
-  // Dynamic max frequency from spectrogram (Nyquist), fallback to 20kHz
+  const totalDuration = player.duration || parsedDuration;
+
+  /* ----- Viewport (zoom/pan/undo) ---------------------------------- */
+  const {
+    zoomLevel, setZoomLevel, freqMin, setFreqMin, freqMax, setFreqMax,
+    zoomBoxMode, setZoomBoxMode,
+    handleZoomLevelChange, handleZoomToBox, handleUndoAllEdits, handleResetView, clearViewportUndo,
+  } = useLabelingViewport({
+    effectiveMaxFreq: waveformData?.sampleRate ? Math.floor(waveformData.sampleRate / 2) : MAX_FREQ,
+    totalDuration,
+    scrollContainerRef,
+    showToast,
+    t,
+  });
+
+  /* ----- Spectrogram (needs freqMin/freqMax from viewport) --------- */
+  const { data: spectrogramData, loading: spectrogramLoading } = useSpectrogram(waveformData, freqMin, freqMax, fftOptions);
   const effectiveMaxFreq = spectrogramData?.maxFrequency ?? MAX_FREQ;
 
-  useEffect(() => {
-    const clampedMax = Math.min(Math.max(freqMax, 1), effectiveMaxFreq);
-    const clampedMin = Math.max(0, Math.min(freqMin, Math.max(clampedMax - 1, 0)));
-    if (clampedMin !== freqMin) setFreqMin(clampedMin);
-    if (clampedMax !== freqMax) setFreqMax(clampedMax);
-  }, [effectiveMaxFreq, freqMin, freqMax]);
-
-  const totalDuration = player.duration || parsedDuration;
   const playbackPct = totalDuration > 0 ? (player.currentTime / totalDuration) * 100 : 0;
   const {
     selection: listeningSelection,
@@ -273,6 +265,45 @@ export default function LabelingWorkspacePage() {
 
   /* ----- Autosave ------------------------------------------------- */
   useAutosave(activeFileId);
+
+  /* ----- LLM Assist prefetch --------------------------------------- */
+  useLlmPrefetch(sessionId);
+
+  /* ----- Session + Suggestion data hooks ----------------------------- */
+  const { sessionError } = useLabelingSessionData({
+    sessionId,
+    onSessionMissing: useCallback(() => router.replace("/sessions"), [router]),
+  });
+  const { suggestionError, fileProgressMap } = useLabelingSuggestions({
+    sessionId,
+    activeFileId,
+    loadSuggestions,
+    restoreSuggestions,
+  });
+
+  /* ----- Actions (confirm/reject/fix) ------------------------------ */
+  const { hasInteractedRef: hasInteracted, handleConfirm, handleReject, handleApplyFix } = useLabelingActions({
+    selectedSuggestionId,
+    suggestions,
+    confirmSuggestion,
+    rejectSuggestion,
+    applyFix,
+    addScore,
+    addConfirm,
+    addFix,
+    incrementStreak,
+    incrementDailyProgress,
+    checkAndUnlock,
+    refreshGamificationSnapshot,
+    showToast,
+    manualConfirmBlockedMsg: t("manualConfirmBlocked"),
+    assistMap,
+    aiToastConfirmAgree: ({ confidence }: { confidence: number }) => t("aiToastConfirmAgree", { confidence: String(confidence) }),
+    aiToastConfirmDisagree: ({ aiAction }: { aiAction: string }) => t("aiToastConfirmDisagree", { aiAction }),
+    aiToastRejectAgree: ({ confidence }: { confidence: number }) => t("aiToastRejectAgree", { confidence: String(confidence) }),
+    aiToastRejectDisagree: ({ aiAction }: { aiAction: string }) => t("aiToastRejectDisagree", { aiAction }),
+    getActionLabel: (action: string) => t(`llmAction_${action}` as Parameters<typeof t>[0]),
+  });
 
   const filteredFiles = audioFiles.filter((f) => {
     const matchesSearch = f.filename.toLowerCase().includes(fileFilter.toLowerCase());
@@ -321,134 +352,7 @@ export default function LabelingWorkspacePage() {
     }
   }, [recentUnlock, clearRecent, showToast]);
 
-  /* ----- Session init --------------------------------------------- */
-  useEffect(() => {
-    if (!sessionId) return;
-    setSessionError(null);
-    const loadSessionData = async () => {
-      try {
-        const [sessionsRes, filesRes] = await Promise.all([
-          authFetch(endpoints.sessions.list),
-          authFetch(endpoints.sessions.files(sessionId)),
-        ]);
-
-        if (!sessionsRes.ok) {
-          throw new Error("Failed to load sessions");
-        }
-        if (!filesRes.ok) {
-          throw new Error("Failed to load session files");
-        }
-
-        const sessionsData = (await sessionsRes.json()) as Session[];
-        const filesData = (await filesRes.json()) as AudioFile[];
-
-        setSessions(sessionsData);
-        const targetSession = setCurrentSessionById(sessionId);
-        setFiles(filesData);
-
-        if (!targetSession && filesData.length === 0) {
-          router.replace("/sessions");
-        }
-      } catch (err) {
-        setSessionError((err as Error).message || "Failed to load labeling data");
-      }
-    };
-
-    void loadSessionData();
-  }, [router, sessionId, setCurrentSessionById, setFiles, setSessions]);
-
-  useEffect(() => {
-    if (!sessionId || !activeFileId) return;
-    setSuggestionError(null);
-    let cancelled = false;
-
-    const loadSuggestionData = async (retryCount = 0) => {
-      try {
-        const res = await authFetch(endpoints.labeling.suggestions(sessionId));
-        if (!res.ok) {
-          throw new Error("Failed to load suggestions");
-        }
-        const allRaw = (await res.json()) as Suggestion[];
-        const all = allRaw.map((s) => ({ ...s, source: s.source ?? "ai", createdBy: s.createdBy ?? null }));
-        const filtered = all.filter((s) => s.audioId === activeFileId);
-
-        if (filtered.length === 0 && retryCount < 5 && !cancelled) {
-          await new Promise((r) => setTimeout(r, 3000));
-          if (!cancelled) return loadSuggestionData(retryCount + 1);
-          return;
-        }
-
-        if (cancelled) return;
-
-        // Compute per-file progress map from all session suggestions
-        const progressMap: Record<string, { total: number; reviewed: number }> = {};
-        for (const s of all) {
-          if (!progressMap[s.audioId]) progressMap[s.audioId] = { total: 0, reviewed: 0 };
-          progressMap[s.audioId].total++;
-          if (s.status !== "pending") progressMap[s.audioId].reviewed++;
-        }
-        setFileProgressMap(progressMap);
-
-        loadSuggestions(filtered);
-
-        const saved = loadSavedProgress(activeFileId);
-        if (saved?.suggestions?.length) {
-          restoreSuggestions(saved.suggestions);
-        }
-      } catch (err) {
-        if (cancelled) return;
-        loadSuggestions([]);
-        setSuggestionError((err as Error).message || "Failed to load suggestions");
-      }
-    };
-
-    void loadSuggestionData();
-    return () => { cancelled = true; };
-  }, [activeFileId, loadSuggestions, restoreSuggestions, sessionId]);
-
   /* ----- Handlers ------------------------------------------------- */
-  const handleConfirm = useCallback(() => {
-    hasInteracted.current = true;
-    const currentId = selectedSuggestionId;
-    const selected = suggestions.find((s) => s.id === currentId);
-    if (!selected || selected.source === "user") {
-      showToast(t("manualConfirmBlocked"));
-      return;
-    }
-    const result = confirmSuggestion();
-    if (result) {
-      addScore(result.points);
-      addConfirm();
-      incrementStreak();
-      incrementDailyProgress();
-      if (currentId) enqueueStatusUpdate(currentId, "confirmed");
-      void checkAndUnlock();
-      void refreshGamificationSnapshot();
-    }
-  }, [suggestions, selectedSuggestionId, showToast, t, confirmSuggestion, addScore, addConfirm, incrementStreak, incrementDailyProgress, checkAndUnlock, refreshGamificationSnapshot]);
-
-  const handleReject = useCallback(() => {
-    hasInteracted.current = true;
-    const currentId = selectedSuggestionId;
-    rejectSuggestion();
-    if (currentId) enqueueStatusUpdate(currentId, "rejected");
-  }, [rejectSuggestion, selectedSuggestionId]);
-
-  const handleApplyFix = useCallback(() => {
-    hasInteracted.current = true;
-    const currentId = selectedSuggestionId;
-    const result = applyFix();
-    if (result) {
-      addScore(result.points);
-      addFix();
-      incrementStreak();
-      incrementDailyProgress();
-      if (currentId) enqueueStatusUpdate(currentId, "corrected");
-      void checkAndUnlock();
-      void refreshGamificationSnapshot();
-    }
-  }, [applyFix, addScore, addFix, incrementStreak, incrementDailyProgress, selectedSuggestionId, checkAndUnlock, refreshGamificationSnapshot]);
-
   const seekTo = useCallback((time: number, trackHistory = false) => {
     player.seek(time);
     if (trackHistory) {
@@ -464,153 +368,26 @@ export default function LabelingWorkspacePage() {
     if (fitToSuggestion) {
       const segment = Math.max(selected.endTime - selected.startTime, 0.25);
       const desiredZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, totalDuration / (segment * 4)));
-      viewportUndoRef.current.push({
-        zoomLevel,
-        freqMin,
-        freqMax,
-        scrollLeft: scrollContainerRef.current?.scrollLeft ?? 0,
-      });
-      setZoomLevel(desiredZoom);
+      handleZoomLevelChange(() => desiredZoom);
       setShowFitToast(true);
     }
     seekTo((selected.startTime + selected.endTime) / 2, true);
-  }, [fitToSuggestion, freqMax, freqMin, seekTo, selectSuggestion, suggestions, totalDuration, zoomLevel]);
+  }, [fitToSuggestion, handleZoomLevelChange, seekTo, selectSuggestion, suggestions, totalDuration]);
 
-  const handleZoomLevelChange = useCallback(
-    (updater: (current: number) => number) => {
-      viewportUndoRef.current.push({
-        zoomLevel,
-        freqMin,
-        freqMax,
-        scrollLeft: scrollContainerRef.current?.scrollLeft ?? 0,
-      });
-      setZoomLevel((current) => updater(current));
-    },
-    [freqMax, freqMin, zoomLevel],
-  );
-
-  const handleZoomToBox = useCallback(
-    (box: { startTime: number; endTime: number; freqLow: number; freqHigh: number }) => {
-      const rawDuration = box.endTime - box.startTime;
-      const rawFreqRange = box.freqHigh - box.freqLow;
-      if (rawDuration < 0.05 || rawFreqRange < 100) {
-        showToast(t("zoomBoxTooSmall"));
-        setZoomBoxMode(false);
-        return;
-      }
-      const boxDuration = Math.max(rawDuration, 0.01);
-      const desiredZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, totalDuration / boxDuration));
-      const nextFreqMin = Math.max(0, box.freqLow);
-      const nextFreqMax = Math.min(effectiveMaxFreq, box.freqHigh);
-      if (nextFreqMax - nextFreqMin < 100) {
-        showToast(t("zoomBoxTooSmall"));
-        setZoomBoxMode(false);
-        return;
-      }
-
-      viewportUndoRef.current.push({
-        zoomLevel,
-        freqMin,
-        freqMax,
-        scrollLeft: scrollContainerRef.current?.scrollLeft ?? 0,
-      });
-
-      setZoomLevel(desiredZoom);
-      setFreqMin(nextFreqMin);
-      setFreqMax(nextFreqMax);
+  /* ----- File navigation ------------------------------------------ */
+  const { isLastFile, fileCompleteToast, handleFileClick, handleNextFile, handlePrevFile } = useLabelingFileNav({
+    activeFileId,
+    audioFiles,
+    setCurrentFile,
+    navigateToSessions: useCallback(() => router.push("/sessions"), [router]),
+    hasInteractedRef: hasInteracted,
+    pendingCount,
+    totalCount,
+    onFileChange: useCallback(() => {
       setZoomBoxMode(false);
-      showToast(t("zoomBoxApplied"));
-
-      requestAnimationFrame(() => {
-        const container = scrollContainerRef.current;
-        if (!container || totalDuration <= 0) return;
-        const centerRatio = ((box.startTime + box.endTime) / 2) / totalDuration;
-        const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-        const target = centerRatio * container.scrollWidth - container.clientWidth / 2;
-        container.scrollLeft = Math.max(0, Math.min(target, maxScrollLeft));
-      });
-    },
-    [effectiveMaxFreq, freqMax, freqMin, showToast, t, totalDuration, zoomLevel],
-  );
-
-  const handleUndoAllEdits = useCallback(() => {
-    const stack = viewportUndoRef.current;
-    const hadViewport = stack.length > 0;
-    // 모든 viewport 스냅샷을 한번에 되돌림 (첫 번째 = 줌 이전 원본 상태)
-    const viewportFirst = stack[0];
-    viewportUndoRef.current = [];
-
-    while (useAnnotationStore.getState().undoStack.length > 0) {
-      useAnnotationStore.getState().undo();
-    }
-
-    if (hadViewport && viewportFirst) {
-      setZoomLevel(viewportFirst.zoomLevel);
-      setFreqMin(viewportFirst.freqMin);
-      setFreqMax(viewportFirst.freqMax);
-    } else {
-      setZoomLevel(1);
-      setFreqMin(0);
-      setFreqMax(effectiveMaxFreq);
-    }
-    setZoomBoxMode(false);
-
-    requestAnimationFrame(() => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-      if (hadViewport && viewportFirst) {
-        const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
-        container.scrollLeft = Math.max(0, Math.min(viewportFirst.scrollLeft, maxScrollLeft));
-      } else {
-        container.scrollLeft = 0;
-      }
-    });
-    showToast(hadViewport ? t("zoomRestored") : t("allChangesReverted"));
-  }, [effectiveMaxFreq, showToast, t]);
-
-  const handleResetView = useCallback(() => {
-    setZoomLevel(1);
-    setFreqMin(0);
-    setFreqMax(effectiveMaxFreq);
-    setZoomBoxMode(false);
-    viewportUndoRef.current = [];
-    requestAnimationFrame(() => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-      container.scrollLeft = 0;
-    });
-    showToast(t("viewReset"));
-  }, [effectiveMaxFreq, showToast, t]);
-
-  const handleFileClick = useCallback((file: AudioFile) => {
-    setCurrentFile(file.id);
-  }, [setCurrentFile]);
-
-  const isLastFile = (() => {
-    if (!activeFileId) return true;
-    const idx = audioFiles.findIndex((f) => f.id === activeFileId);
-    return idx >= audioFiles.length - 1;
-  })();
-
-  const handleNextFile = useCallback(() => {
-    if (!activeFileId) return;
-    const idx = audioFiles.findIndex((f) => f.id === activeFileId);
-    const nextFile = audioFiles[idx + 1];
-    if (nextFile) {
-      setCurrentFile(nextFile.id);
-    } else {
-      router.push("/sessions");
-    }
-  }, [activeFileId, audioFiles, router, setCurrentFile]);
-
-  const handlePrevFile = useCallback(() => {
-    if (!activeFileId) return;
-    const idx = audioFiles.findIndex((f) => f.id === activeFileId);
-    const prevFile = audioFiles[idx - 1];
-    if (prevFile) {
-      setCurrentFile(prevFile.id);
-    }
-  }, [activeFileId, audioFiles, setCurrentFile]);
+      clearViewportUndo();
+    }, [setZoomBoxMode, clearViewportUndo]),
+  });
 
   const {
     isDraggingSuggestion,
@@ -720,150 +497,49 @@ export default function LabelingWorkspacePage() {
     }
   }, [manualDrafts, saveDraftsSuccess, selectedDraftId, sessionId, showToast, t]);
 
-  const handleSetLoopStart = useCallback(() => {
-    setLoopState({ start: player.currentTime });
-    pushHistory("loop_set", `Loop start ${player.currentTime.toFixed(2)}s`, {
-      loopStart: player.currentTime,
-      loopEnd: loopState.end,
-    });
-  }, [player.currentTime, pushHistory, setLoopState, loopState.end]);
-
-  const handleSetLoopEnd = useCallback(() => {
-    setLoopState({ end: player.currentTime });
-    pushHistory("loop_set", `Loop end ${player.currentTime.toFixed(2)}s`, {
-      loopStart: loopState.start,
-      loopEnd: player.currentTime,
-    });
-  }, [player.currentTime, pushHistory, setLoopState, loopState.start]);
-
-  const {
-    isPlaying: segmentIsPlaying,
-    mode: segmentMode,
-    stop: segmentStop,
-    segmentCurrentTime,
-    playOriginalSegment,
-    playFilteredSegment,
-  } = segmentPlayback;
-
-  const handlePlayOriginalSelection = useCallback(() => {
-    if (!spectroListeningEnabled || !listeningSelection) {
-      showToast(t("listeningNoSelection"));
-      return;
-    }
-    if (segmentIsPlaying && segmentMode === "original") {
-      segmentStop();
-      showToast(t("listeningOriginalStopped"));
-      return;
-    }
-    void playOriginalSegment(listeningSelection, player.playbackRate);
-  }, [listeningSelection, player.playbackRate, segmentIsPlaying, segmentMode, segmentStop, playOriginalSegment, showToast, spectroListeningEnabled, t]);
-
-  const handlePlayFilteredSelection = useCallback(() => {
-    if (!spectroListeningEnabled || !listeningSelection) {
-      showToast(t("listeningNoFilterSelection"));
-      return;
-    }
-    if (segmentIsPlaying && segmentMode === "filtered") {
-      segmentStop();
-      showToast(t("listeningFilteredStopped"));
-      return;
-    }
-    void playFilteredSegment(
-      listeningSelection,
-      { order: 4, normalize: true, method: "biquad_chain" },
-      player.playbackRate,
-    );
-  }, [listeningSelection, player.playbackRate, segmentIsPlaying, segmentMode, segmentStop, playFilteredSegment, showToast, spectroListeningEnabled, t]);
-
-  const handleDownloadFilteredSelection = useCallback(async () => {
-    if (!spectroListeningEnabled || !listeningSelection) {
-      setSegmentExportError(t("listeningExportNoSelection"));
-      showToast(t("listeningExportNoSelection"));
-      return;
-    }
-
-    try {
-      setSegmentExportError(null);
-      const result = await exportFilteredSelectionAsWav({
-        channelData: waveformData?.channelData,
-        sampleRate: waveformData?.sampleRate,
-        selection: listeningSelection,
-        baseFilename: activeFile?.filename ?? "audio",
-        normalize: true,
-      });
-      downloadBlob(result.blob, result.filename);
-      showToast(t("listeningExported", { filename: result.filename }));
-    } catch (err) {
-      const message = (err as Error).message || t("listeningExportFailed");
-      setSegmentExportError(message);
-      showToast(message);
-    }
-  }, [
-    activeFile?.filename,
-    listeningSelection,
+  /* ----- Loop controls -------------------------------------------- */
+  const { loopHudWarning, handleSetLoopStart, handleSetLoopEnd, handleToggleLoop } = useLabelingLoop({
+    loopState,
+    setLoopState,
+    currentTime: player.currentTime,
+    setLoopStart: player.setLoopStart,
+    setLoopEnd: player.setLoopEnd,
+    setLoopEnabled: player.setLoopEnabled,
+    pushHistory,
     showToast,
-    spectroListeningEnabled,
     t,
-    waveformData?.channelData,
-    waveformData?.sampleRate,
-  ]);
+  });
 
-  const handleToggleLoop = useCallback(() => {
-    if (loopState.start === null || loopState.end === null || loopState.end <= loopState.start) {
-      showToast(t("loopRequireBounds"));
-      setLoopHudWarning(true);
-      return;
-    }
-    setLoopHudWarning(false);
-    setLoopState({ enabled: !loopState.enabled });
-    showToast(loopState.enabled ? t("loopDisabled") : t("loopEnabled"));
-  }, [loopState, setLoopState, showToast, t]);
+  const { segmentCurrentTime, isPlaying: segmentIsPlaying, mode: segmentMode, stop: segmentStop } = segmentPlayback;
 
-  const handleAddBookmark = useCallback((preset: { type: BookmarkType; label: string; note: string }) => {
-    addBookmark({
-      time: player.currentTime,
-      type: preset.type,
-      note: preset.note,
-      suggestionId: selectedSuggestionId ?? undefined,
-    });
-    showToast(t("bookmarkAdded", { label: preset.label }));
-  }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
+  /* ----- Segment playback handlers -------------------------------- */
+  const { segmentExportError, handlePlayOriginalSelection, handlePlayFilteredSelection, handleDownloadFilteredSelection } = useLabelingSegmentPlayback({
+    spectroListeningEnabled,
+    listeningSelection,
+    segmentIsPlaying,
+    segmentMode,
+    segmentStop,
+    playOriginalSegment: segmentPlayback.playOriginalSegment,
+    playFilteredSegment: segmentPlayback.playFilteredSegment,
+    playbackRate: player.playbackRate,
+    channelData: waveformData?.channelData,
+    sampleRate: waveformData?.sampleRate,
+    activeFilename: activeFile?.filename ?? "audio",
+    showToast,
+    t,
+  });
 
-  const handleMarkNeedsAnalysis = useCallback(() => {
-    addBookmark({
-      time: player.currentTime,
-      type: "needs_analysis",
-      note: t("bookmarkNeedsAnalysisNote"),
-      suggestionId: selectedSuggestionId ?? undefined,
-    });
-    showToast(t("bookmarkNeedsAnalysisAdded"));
-  }, [addBookmark, player.currentTime, selectedSuggestionId, showToast, t]);
 
-  const handleBookmarkSeek = useCallback((time: number, bookmarkId: string) => {
-    seekTo(time, true);
-    setHighlightedBookmarkId(bookmarkId);
-    setTimeout(() => setHighlightedBookmarkId(null), 800);
-  }, [seekTo]);
-
-  const handleJumpToNextBookmark = useCallback(() => {
-    const sorted = [...bookmarks].sort((a, b) => a.time - b.time);
-    const next = sorted.find((b) => b.time > player.currentTime + 0.01);
-    if (next) {
-      seekTo(next.time, true);
-      setHighlightedBookmarkId(next.id);
-      setTimeout(() => setHighlightedBookmarkId(null), 800);
-    }
-  }, [bookmarks, player.currentTime, seekTo]);
-
-  const handleJumpToPrevBookmark = useCallback(() => {
-    const sorted = [...bookmarks].sort((a, b) => b.time - a.time);
-    const prev = sorted.find((b) => b.time < player.currentTime - 0.01);
-    if (prev) {
-      seekTo(prev.time, true);
-      setHighlightedBookmarkId(prev.id);
-      setTimeout(() => setHighlightedBookmarkId(null), 800);
-    }
-  }, [bookmarks, player.currentTime, seekTo]);
+  /* ----- Bookmarks ------------------------------------------------ */
+  const { highlightedBookmarkId, handleAddBookmark, handleMarkNeedsAnalysis, handleBookmarkSeek, handleJumpToNextBookmark, handleJumpToPrevBookmark } = useLabelingBookmarks({
+    currentTime: player.currentTime,
+    selectedSuggestionId,
+    bookmarks,
+    addBookmark,
+    seekTo,
+    showToast,
+    t,
+  });
 
   const handleReplayHistory = useCallback((item: ActionHistoryItem) => {
     if (typeof item.payload?.time === "number") {
@@ -878,29 +554,6 @@ export default function LabelingWorkspacePage() {
     }
   }, [setLoopState, seekTo]);
 
-  /* ----- File completion detection + auto-next -------------------- */
-  useEffect(() => {
-    if (!hasInteracted.current) return;
-    if (completionHandled.current) return;
-    if (pendingCount === 0 && totalCount > 0 && !fileCompleteToast) {
-      completionHandled.current = true;
-      setFileCompleteToast(true);
-      const timer = setTimeout(() => {
-        setFileCompleteToast(false);
-        handleNextFile();
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [pendingCount, totalCount, fileCompleteToast, handleNextFile]);
-
-  // Reset toast when file changes
-  useEffect(() => {
-    setFileCompleteToast(false);
-    hasInteracted.current = false;
-    completionHandled.current = false;
-    setZoomBoxMode(false);
-    viewportUndoRef.current = [];
-  }, [activeFileId]);
 
   useEffect(() => {
     if (!showFitToast) return;
@@ -914,20 +567,8 @@ export default function LabelingWorkspacePage() {
   }, [zoomBoxMode, showToast, t]);
 
   useEffect(() => {
-    if (!loopHudWarning) return;
-    const timer = setTimeout(() => setLoopHudWarning(false), 1600);
-    return () => clearTimeout(timer);
-  }, [loopHudWarning]);
-
-  useEffect(() => {
     clearCustomSelection();
   }, [clearCustomSelection, selectedSuggestionId, selectedDraftId]);
-
-  useEffect(() => {
-    player.setLoopStart(loopState.start);
-    player.setLoopEnd(loopState.end);
-    player.setLoopEnabled(loopState.enabled);
-  }, [loopState, player]);
 
   useLabelingHotkeys({
     mode,
@@ -1029,7 +670,7 @@ export default function LabelingWorkspacePage() {
             zoomLevel={zoomLevel}
             fileCompleteToast={fileCompleteToast}
             isLastFile={isLastFile}
-            onDismissCompleteToast={() => setFileCompleteToast(false)}
+            onDismissCompleteToast={() => {}}
             effectiveMaxFreq={effectiveMaxFreq}
             spectrogramRef={spectrogramRef}
             scrollContainerRef={scrollContainerRef}

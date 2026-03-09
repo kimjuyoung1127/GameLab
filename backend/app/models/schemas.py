@@ -14,6 +14,15 @@ from app.models.gamification import (
     ClaimMissionResponse,
     RewardEventResponse,
 )
+from app.models.llm_assist import (
+    LlmRecommendedAction,
+    LlmInputMode,
+    LlmAssistRequest,
+    LlmAssistResponse,
+    LlmBatchAssistRequest,
+    LlmBatchErrorItem,
+    LlmBatchAssistResponse,
+)
 
 __all__ = [
     "CamelModel", "to_camel",
@@ -28,4 +37,11 @@ __all__ = [
     "MissionsResponse",
     "ClaimMissionResponse",
     "RewardEventResponse",
+    "LlmRecommendedAction",
+    "LlmInputMode",
+    "LlmAssistRequest",
+    "LlmAssistResponse",
+    "LlmBatchAssistRequest",
+    "LlmBatchErrorItem",
+    "LlmBatchAssistResponse",
 ]

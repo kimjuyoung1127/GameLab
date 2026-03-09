@@ -29,6 +29,7 @@ Source: Supabase MCP DDL extraction
 | sst_suggestions | enabled | 2 |
 | sst_users | enabled | 5 |
 | sst_jobs | enabled | 0 |
+| sst_suggestion_llm_reviews | enabled | 0 |
 | goertzel_test_monitor | enabled | 0 |
 
 ---
@@ -150,6 +151,34 @@ Source: Supabase MCP DDL extraction
 - Atomically inserts into `sst_sessions`, `sst_audio_files`, `sst_suggestions`
 - Used by `backend/app/api/upload/router.py`
 - Source: `scripts/sql-chunks/create_upload_session_with_files.sql`
+
+---
+
+### 7) `sst_suggestion_llm_reviews`
+
+| column | type | nullable | default |
+|--------|------|----------|---------|
+| `id` | text | NO | `'llmr-' \|\| substr(gen_random_uuid()::text, 1, 8)` |
+| `suggestion_id` | text | NO | — |
+| `provider` | text | NO | `'google'` |
+| `model` | text | NO | `'gemini-2.5-flash'` |
+| `input_mode` | text | NO | — |
+| `recommended_action` | text | NO | — |
+| `suggested_label` | text | YES | — |
+| `llm_confidence` | integer | NO | — |
+| `explanation` | text | NO | `''` |
+| `clip_start_time` | double precision | YES | — |
+| `clip_end_time` | double precision | YES | — |
+| `created_at` | timestamptz | NO | `now()` |
+| `latency_ms` | integer | NO | `0` |
+
+**PK:** `id`
+**FK:** `suggestion_id -> sst_suggestions.id (ON DELETE CASCADE)`
+**CHECK:** `input_mode IN ('text_features', 'audio_clip')`
+**CHECK:** `recommended_action IN ('confirm', 'reject', 'fix')`
+**CHECK:** `llm_confidence >= 0 AND llm_confidence <= 100`
+**Indexes:** `idx_llm_reviews_suggestion(suggestion_id)`
+**RLS:** enabled
 
 ---
 

@@ -3,8 +3,9 @@
 
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, Flag, Sparkles, Wrench, X } from "lucide-react";
+import { Bot, Check, Flag, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useAnnotationStore } from "@/lib/store/annotation-store";
 import WaveformCanvas from "@/components/domain/labeling/WaveformCanvas";
 import SpectrogramCanvas from "@/components/domain/labeling/SpectrogramCanvas";
 import type { AudioPlayerState } from "@/lib/hooks/use-audio-player";
@@ -182,6 +183,10 @@ export default function SpectrogramPanel({
   onFftOptionsChange,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
+
+  /* AI assist store subscriptions (read-only, AnalysisPanel precedent) */
+  const assistMap = useAnnotationStore((s) => s.assistMap);
+  const assistStatusMap = useAnnotationStore((s) => s.assistStatusMap);
 
   /* Post-it note bubble state */
   const [hoveredBookmarkId, setHoveredBookmarkId] = useState<string | null>(null);
@@ -611,6 +616,14 @@ export default function SpectrogramPanel({
               const heightPct = Number.parseFloat(boxPos.height) || 0;
               const tagPlacement = getTagPlacementStyle({ leftPct, widthPct, topPct, heightPct });
               const labelDisplay = getLabelDisplay(s.label, s.description);
+              /* A1 badge + B1 overlay: AI assist visibility */
+              const aiStatus = assistStatusMap[s.id];
+              const aiAssist = assistMap[s.id];
+              const aiOverlay = s.status === "pending" && aiAssist
+                ? aiAssist.recommendedAction === "confirm" ? "shadow-[0_0_6px_rgba(34,197,94,0.6)]"
+                  : aiAssist.recommendedAction === "reject" ? "shadow-[0_0_6px_rgba(239,68,68,0.6)] border-dashed"
+                  : "shadow-[0_0_6px_rgba(234,179,8,0.6)] border-dashed"
+                : "";
               return (
                 <button
                   key={s.id}
@@ -619,7 +632,7 @@ export default function SpectrogramPanel({
                   onPointerMove={isEditable ? onSuggestionDragPointerMove : undefined}
                   onPointerUp={isEditable ? onSuggestionDragPointerUp : undefined}
                   onPointerCancel={isEditable ? onSuggestionDragPointerUp : undefined}
-                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 pointer-events-auto ${sc.border} ${sc.dashed ? "border-dashed" : ""} ${isEditable ? "cursor-move" : ""} ${
+                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 pointer-events-auto ${sc.border} ${sc.dashed ? "border-dashed" : ""} ${isEditable ? "cursor-move" : ""} ${aiOverlay} ${
                     isSelected ? "ring-2 ring-white/30 shadow-lg shadow-white/10" : "hover:ring-1 hover:ring-white/20"
                   }`}
                   style={{
@@ -632,13 +645,15 @@ export default function SpectrogramPanel({
                   }}
                   aria-label={`AI suggestion: ${labelDisplay.displayName} (${s.status})`}
                 >
-                  <div className={`absolute ${tagPlacement.className} ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap max-w-[140px] overflow-hidden border border-black/20 shadow-sm`}>
+                  <div className={`absolute ${tagPlacement.className} ${sc.tagBg} text-black text-[9px] font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 whitespace-nowrap max-w-[160px] overflow-hidden border border-black/20 shadow-sm`}>
                     {s.status === "pending" && <Sparkles className="w-2.5 h-2.5" />}
                     {s.status === "confirmed" && <Check className="w-2.5 h-2.5" />}
                     {s.status === "rejected" && <X className="w-2.5 h-2.5" />}
                     {s.status === "corrected" && <Wrench className="w-2.5 h-2.5" />}
                     <span title={labelDisplay.tooltip} className="truncate">{labelDisplay.displayCode}</span>
                     {isEditable && <span className="text-[7px] opacity-70">{t("userSuggestionTag")}</span>}
+                    {aiStatus === "cached" && <span title={t("llmAssistBadgeCached")}><Bot className="w-2.5 h-2.5 text-green-700" /></span>}
+                    {aiStatus === "loading" && <span title={t("llmAssistBadgeLoading")}><Bot className="w-2.5 h-2.5 text-purple-600 animate-pulse" /></span>}
                   </div>
                   {isSelected && !isEditable && (
                     <>

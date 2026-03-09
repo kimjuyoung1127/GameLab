@@ -1,8 +1,9 @@
-/** Session/file bootstrap hook for labeling page. */
+/** 세션/파일 부트스트랩 훅: 세션 목록 + 파일 로딩, authFetch 기반. */
 "use client";
 
 import { useEffect, useState } from "react";
 import { endpoints } from "@/lib/api/endpoints";
+import { authFetch } from "@/lib/api/auth-fetch";
 import { useSessionStore } from "@/lib/store/session-store";
 import type { AudioFile, Session } from "@/types";
 
@@ -29,8 +30,8 @@ export function useLabelingSessionData({ sessionId, onSessionMissing }: UseLabel
     const loadSessionData = async () => {
       try {
         const [sessionsRes, filesRes] = await Promise.all([
-          fetch(endpoints.sessions.list),
-          fetch(endpoints.sessions.files(sessionId)),
+          authFetch(endpoints.sessions.list),
+          authFetch(endpoints.sessions.files(sessionId)),
         ]);
 
         if (!sessionsRes.ok) throw new Error("Failed to load sessions");

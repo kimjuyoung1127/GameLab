@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import type {
   ActionHistoryItem,
+  AssistStatus,
   BookmarkType,
   DrawTool,
   HistorySnapshot,
@@ -10,6 +11,7 @@ import type {
   LoopState,
   ManualDraft,
   Suggestion,
+  SuggestionLlmAssist,
   SuggestionStatus,
 } from "@/types";
 import { useUIStore } from "./ui-store";
@@ -86,6 +88,16 @@ interface AnnotationState {
   setStatusFilter: (filter: SuggestionStatus | "all") => void;
   loadSuggestions: (items: Suggestion[]) => void;
   restoreSuggestions: (suggestions: Suggestion[]) => void;
+
+  // LLM Assist prefetch state
+  assistMap: Record<string, SuggestionLlmAssist>;
+  assistStatusMap: Record<string, AssistStatus>;
+  autoPrefetchEnabled: boolean;
+  setAssistResult: (id: string, result: SuggestionLlmAssist) => void;
+  setBulkAssistResults: (results: SuggestionLlmAssist[]) => void;
+  setBulkAssistStatus: (ids: string[], status: AssistStatus) => void;
+  toggleAutoPrefetch: () => void;
+  clearAssistState: () => void;
 }
 
 function makeSnapshot(state: AnnotationState): HistorySnapshot {
@@ -370,6 +382,8 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       manualDrafts: [],
       selectedDraftId: null,
       loopState: { enabled: false, start: null, end: null },
+      assistMap: {},
+      assistStatusMap: {},
     });
   },
 
@@ -382,4 +396,39 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       redoStack: [],
     });
   },
+
+  // LLM Assist prefetch state
+  assistMap: {},
+  assistStatusMap: {},
+  autoPrefetchEnabled: true,
+
+  setAssistResult: (id, result) =>
+    set((s) => ({
+      assistMap: { ...s.assistMap, [id]: result },
+      assistStatusMap: { ...s.assistStatusMap, [id]: "cached" as AssistStatus },
+    })),
+
+  setBulkAssistResults: (results) =>
+    set((s) => {
+      const nextMap = { ...s.assistMap };
+      const nextStatus = { ...s.assistStatusMap };
+      for (const r of results) {
+        nextMap[r.suggestionId] = r;
+        nextStatus[r.suggestionId] = "cached";
+      }
+      return { assistMap: nextMap, assistStatusMap: nextStatus };
+    }),
+
+  setBulkAssistStatus: (ids, status) =>
+    set((s) => {
+      const next = { ...s.assistStatusMap };
+      for (const id of ids) next[id] = status;
+      return { assistStatusMap: next };
+    }),
+
+  toggleAutoPrefetch: () =>
+    set((s) => ({ autoPrefetchEnabled: !s.autoPrefetchEnabled })),
+
+  clearAssistState: () =>
+    set({ assistMap: {}, assistStatusMap: {} }),
 }));

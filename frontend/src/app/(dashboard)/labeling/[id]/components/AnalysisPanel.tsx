@@ -1,9 +1,11 @@
 /** Right-side analysis panel with cards, metadata, bookmarks/history and next action. */
-import { Check, ChevronRight, Copy, Filter, Sparkles, Wrench, X } from "lucide-react";
+import { Bot, Check, ChevronRight, Copy, Filter, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { AudioFile, LabelingMode, Suggestion, SuggestionStatus } from "@/types";
 import { getLabelDisplay } from "@/lib/labeling/label-display";
+import { useAnnotationStore } from "@/lib/store/annotation-store";
 import { useUIStore } from "@/lib/store/ui-store";
+import LlmAssistBlock from "./LlmAssistBlock";
 
 type AnalysisPanelProps = {
   mode: LabelingMode;
@@ -39,6 +41,9 @@ export default function AnalysisPanel({
   children,
 }: AnalysisPanelProps) {
   const t = useTranslations("labeling");
+  const assistStatus = useAnnotationStore((s) =>
+    activeSuggestion ? s.assistStatusMap[activeSuggestion.id] : undefined,
+  );
   const activeLabelDisplay = activeSuggestion
     ? getLabelDisplay(activeSuggestion.label, activeSuggestion.description)
     : null;
@@ -119,9 +124,17 @@ export default function AnalysisPanel({
                 <p className="text-[10px] text-text-muted mt-1">{t("aiActionGuide")}</p>
               </div>
               <div className="text-right flex flex-col items-end gap-1">
-                <span className={`text-2xl font-black tabular-nums ${confidenceTextColor}`}>
-                  {t("confidence", { confidence: activeSuggestion.confidence })}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {assistStatus === "cached" && (
+                    <span title={t("llmAssistBadgeCached")}><Bot className="w-3.5 h-3.5 text-accent" /></span>
+                  )}
+                  {assistStatus === "loading" && (
+                    <span title={t("llmAssistBadgeLoading")}><Bot className="w-3.5 h-3.5 text-violet-400 animate-pulse" /></span>
+                  )}
+                  <span className={`text-2xl font-black tabular-nums ${confidenceTextColor}`}>
+                    {t("confidence", { confidence: activeSuggestion.confidence })}
+                  </span>
+                </div>
                 <button
                   onClick={handleCopy}
                   title={t("copySuggestion")}
@@ -137,6 +150,8 @@ export default function AnalysisPanel({
             </div>
 
             <p className="text-[11px] text-text-secondary leading-relaxed mb-4">{activeSuggestion.description}</p>
+
+            <LlmAssistBlock suggestion={activeSuggestion} />
 
             <div className="flex gap-2">
               <button

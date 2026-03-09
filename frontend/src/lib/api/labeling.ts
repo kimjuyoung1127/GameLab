@@ -7,6 +7,11 @@ export const labelingEndpoints = {
   updateSuggestionStatus: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
   updateSuggestion: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
   deleteSuggestion: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}`,
+  requestAssist: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}/assist`,
+  getAssist: (suggestionId: string) => `${API_BASE}/labeling/suggestions/${suggestionId}/assist`,
+  assistBatch: (sessionId: string) => `${API_BASE}/labeling/${sessionId}/assist-batch`,
+  getAssistBatch: (sessionId: string, ids: string[]) =>
+    `${API_BASE}/labeling/${sessionId}/assist-batch?ids=${ids.join(",")}`,
   export: (
     sessionId: string,
     format: "csv" | "json" = "csv",
