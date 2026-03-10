@@ -31,3 +31,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+import logging as _logging
+_config_logger = _logging.getLogger(__name__)
+if settings.llm_assist_enabled and not settings.google_api_key:
+    _config_logger.warning(
+        "llm_assist_enabled=True but google_api_key is empty — LLM assist will fail at runtime"
+    )

@@ -1,6 +1,7 @@
 """오디오 클립 추출: Supabase Storage에서 다운로드 → soundfile seek → WAV bytes 반환."""
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
@@ -15,16 +16,12 @@ from app.core.supabase_client import supabase
 logger = logging.getLogger(__name__)
 
 
-async def extract_clip(
+def _extract_clip_sync(
     audio_file_row: dict,
     start_time: float,
     end_time: float,
 ) -> tuple[bytes, float, float]:
-    """suggestion 주변 오디오 클립을 추출하여 WAV bytes로 반환.
-
-    Returns:
-        (wav_bytes, actual_start, actual_end)
-    """
+    """동기 클립 추출 본체. asyncio.to_thread()로 호출."""
     max_sec = settings.llm_max_clip_sec
     padding = 1.0  # 전후 여유
 
@@ -77,3 +74,18 @@ async def extract_clip(
                 os.unlink(temp_path)
             except Exception:
                 logger.warning("Failed to cleanup temp file: %s", temp_path)
+
+
+async def extract_clip(
+    audio_file_row: dict,
+    start_time: float,
+    end_time: float,
+) -> tuple[bytes, float, float]:
+    """suggestion 주변 오디오 클립을 추출하여 WAV bytes로 반환.
+
+    Returns:
+        (wav_bytes, actual_start, actual_end)
+    """
+    return await asyncio.to_thread(
+        _extract_clip_sync, audio_file_row, start_time, end_time,
+    )

@@ -42,24 +42,29 @@ class SuggestionAssistService:
         clip_end: float | None = None
 
         # 1) suggestion 조회
-        sug_resp = (
-            supabase.table("sst_suggestions")
+        sug_resp = await asyncio.to_thread(
+            lambda: supabase.table("sst_suggestions")
             .select("*")
             .eq("id", suggestion_id)
             .single()
             .execute()
         )
         suggestion = sug_resp.data
+        if not suggestion:
+            raise ValueError(f"Suggestion {suggestion_id} not found")
 
         # 2) audio_file 메타 조회
-        audio_resp = (
-            supabase.table("sst_audio_files")
+        audio_id = suggestion["audio_id"]
+        audio_resp = await asyncio.to_thread(
+            lambda: supabase.table("sst_audio_files")
             .select("*")
-            .eq("id", suggestion["audio_id"])
+            .eq("id", audio_id)
             .single()
             .execute()
         )
         audio_file = audio_resp.data
+        if not audio_file:
+            raise ValueError(f"Audio file not found for suggestion {suggestion_id}")
 
         # DB text -> numeric conversion
         def _to_float(val, default=0.0):
@@ -144,7 +149,9 @@ class SuggestionAssistService:
             "latency_ms": elapsed_ms,
         }
 
-        supabase.table("sst_suggestion_llm_reviews").insert(row).execute()
+        await asyncio.to_thread(
+            lambda: supabase.table("sst_suggestion_llm_reviews").insert(row).execute()
+        )
 
         logger.info(
             "llm_assist suggestion=%s mode=%s action=%s confidence=%d latency_ms=%d",
@@ -184,10 +191,11 @@ class SuggestionAssistService:
             return results, errors
 
         # 1) 이미 캐시된 결과 조회
-        cached_resp = (
-            supabase.table("sst_suggestion_llm_reviews")
+        ids_copy = list(suggestion_ids)
+        cached_resp = await asyncio.to_thread(
+            lambda: supabase.table("sst_suggestion_llm_reviews")
             .select("*")
-            .in_("suggestion_id", suggestion_ids)
+            .in_("suggestion_id", ids_copy)
             .order("created_at", desc=True)
             .execute()
         )
