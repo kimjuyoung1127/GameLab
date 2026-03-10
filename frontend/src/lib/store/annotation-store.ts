@@ -17,6 +17,10 @@ import type {
 import { useUIStore } from "./ui-store";
 
 const MAX_HISTORY_ITEMS = 20;
+const MAX_UNDO_STACK_SIZE = 50;
+function trimStack<T>(stack: T[]): T[] {
+  return stack.length > MAX_UNDO_STACK_SIZE ? stack.slice(-MAX_UNDO_STACK_SIZE) : stack;
+}
 
 function findNextPendingSuggestionId(
   suggestions: Suggestion[],
@@ -135,7 +139,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     const prev = makeSnapshot(state);
     set({
       loopState: { ...state.loopState, ...next },
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
   },
@@ -152,7 +156,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       manualDrafts: [...state.manualDrafts, draft],
       selectedDraftId: id,
       selectedSuggestionId: null,
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
     return id;
@@ -164,7 +168,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       const prev = makeSnapshot(state);
       set({
         manualDrafts: state.manualDrafts.map((d) => (d.id === id ? { ...d, ...patch } : d)),
-        undoStack: [...state.undoStack, prev],
+        undoStack: trimStack([...state.undoStack, prev]),
         redoStack: [],
       });
       return;
@@ -180,7 +184,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({
       manualDrafts: state.manualDrafts.filter((d) => d.id !== id),
       selectedDraftId: state.selectedDraftId === id ? null : state.selectedDraftId,
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
     get().pushHistory("manual_delete", "Removed manual draft");
@@ -195,7 +199,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       suggestions: [...created, ...state.suggestions],
       manualDrafts: state.manualDrafts.filter((d) => !removedDraftIds.includes(d.id)),
       selectedDraftId: null,
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
     get().pushHistory("manual_create", `Saved ${created.length} manual suggestion(s)`);
@@ -207,7 +211,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       const prev = makeSnapshot(state);
       set({
         suggestions: state.suggestions.map((s) => (s.id === id ? { ...s, ...patch } : s)),
-        undoStack: [...state.undoStack, prev],
+        undoStack: trimStack([...state.undoStack, prev]),
         redoStack: [],
       });
       return;
@@ -223,7 +227,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({
       suggestions: state.suggestions.filter((s) => s.id !== id),
       selectedSuggestionId: state.selectedSuggestionId === id ? null : state.selectedSuggestionId,
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
     get().pushHistory("suggestion_delete", "Deleted saved suggestion");
@@ -246,7 +250,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({
       suggestions: updated,
       selectedSuggestionId: nextId,
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
     get().pushHistory("ai_confirm", "Confirmed selected AI suggestion");
@@ -264,7 +268,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
     set({
       suggestions: updated,
       mode: "edit",
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
     get().pushHistory("reject", "Rejected selected suggestion");
@@ -286,7 +290,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       suggestions: updated,
       mode: "review",
       selectedSuggestionId: nextSuggestionId,
-      undoStack: [...state.undoStack, prev],
+      undoStack: trimStack([...state.undoStack, prev]),
       redoStack: [],
     });
     get().pushHistory("apply_fix", "Applied fix for rejected suggestion");
@@ -306,7 +310,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       selectedDraftId: prev.selectedDraftId,
       loopState: prev.loopState,
       undoStack: state.undoStack.slice(0, -1),
-      redoStack: [...state.redoStack, current],
+      redoStack: trimStack([...state.redoStack, current]),
     });
     get().pushHistory("undo", "Undo latest action");
   },
@@ -324,7 +328,7 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       selectedDraftId: next.selectedDraftId,
       loopState: next.loopState,
       redoStack: state.redoStack.slice(0, -1),
-      undoStack: [...state.undoStack, current],
+      undoStack: trimStack([...state.undoStack, current]),
     });
     get().pushHistory("redo", "Redo latest action");
   },
