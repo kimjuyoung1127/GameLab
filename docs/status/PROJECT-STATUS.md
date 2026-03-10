@@ -1,6 +1,6 @@
 ﻿# GameLab Project Status
 
-Last Updated: 2026-03-09 (KST)
+Last Updated: 2026-03-10 (KST)
 Owner Doc: `CLAUDE.md` (root slim index)
 
 ## Current Phase
@@ -18,15 +18,17 @@ Owner Doc: `CLAUDE.md` (root slim index)
 4. **0.25x 재생 속도 확장**: 최소 속도 0.5x → 0.25x 하한 확장
 5. **PNG 스크린샷 내보내기**: 스펙트로그램 canvas → PNG 다운로드 (ToolBar 내보내기 메뉴)
 
-## Sprint 14.1 — 라벨링 워크플로우 최적화 (구현 완료 + 검증 보강, 2026-03-09)
+## Sprint 14.1 — 라벨링 워크플로우 최적화 (구현 완료 + 검증 보강, 2026-03-10)
 1. **신뢰도 컬러 강도**: confidence 구간별 프로그레스 바/텍스트 색상 (80%+ 초록, 50~79% 주황, <50% 빨강)
 2. **제안 상태 필터 칩**: AnalysisPanel 헤더에 클릭 가능한 전체/대기/확인/수정 필터 → 스펙트로그램 표시 필터링
 3. **순차 자동 이동**: C키 확정/수정 적용 모두 현재 위치 기준 다음 pending 순차 탐색 + AUTO OFF 시 apply-fix 현재 제안 유지
-4. **fitToSuggestion 기본값 OFF**: 제안 클릭 시 자동 줌 비활성화 (FIT 버튼으로 수동 켜기)
+4. **제안 클릭 전체 Fit**: AI suggestion/manual draft 박스 single click 시 시간+주파수 뷰포트를 함께 맞춤 확대
 5. **제안 클립보드 복사**: 선택 제안의 라벨/시간/주파수/설명/상태를 포맷 텍스트로 복사 (Copy 아이콘)
 6. **Store 단위 테스트 + 정적 검증**: `vitest` 도입, AUTO 상태 전이 6개 테스트 추가, `lint/test/build` 통과
+7. **BAND 포커스 + 뷰포트 undo**: ToolBar `BAND` 액션으로 선택된 구간의 주파수 대역만 재정렬 + Ctrl+Z로 이전 뷰 복원
+8. **ToolBar 프리셋 정리**: `FIT` 제거, LIN/LOG 축 토글·분석/저/중/고 프리셋·FFT 설정 패널 제거 → `BAND`와 "전체" 액션만 유지
 
-## Spectrogram Listening Scope (Locked: 2026-03-03 KST)
+## Spectrogram Listening Scope (Locked: 2026-03-10 KST)
 - Workspace target: `frontend/src/app/(dashboard)/labeling/[id]` only
 - MVP included:
   - selection-based original playback (`O`)
@@ -34,12 +36,15 @@ Owner Doc: `CLAUDE.md` (root slim index)
   - filtered segment WAV download
   - selection info panel (time/frequency)
   - spectrogram hover metrics (time/frequency/estimated dB)
-  - frequency axis toggle (linear/log display)
-  - FFT 설정 패널 (크기/윈도우/동적범위)
+  - 박스 single click 전체 Fit + `BAND` 주파수 포커스 + "전체" 버튼으로 뷰 리셋
   - 구간 재생 커서 동기화 (녹색 세로선)
   - 피치 보존 모드 (속도 변경 시 음높이 유지)
   - 0.25x~2.0x 재생 속도 범위
   - PNG 스크린샷 내보내기
+- Removed from current UI (2026-03-10):
+  - LIN/LOG 축 토글
+  - FFT 설정 패널 (크기/윈도우/동적범위)
+  - 분석/저/중/고 주파수 프리셋
 
 ## Hotkey Policy (Current)
 | 키 | 동작 |
@@ -63,7 +68,7 @@ Owner Doc: `CLAUDE.md` (root slim index)
 | `Tab`/`Shift+Tab` | 다음/이전 pending 제안 |
 | `↑`/`↓` | 제안 목록 탐색 |
 | `Shift+↑`/`Shift+↓` | 볼륨 증가/감소 |
-| `Ctrl+Z` | Undo |
+| `Ctrl+Z` | Undo (뷰포트 스택 우선 → annotation 폴백) |
 | `Ctrl+Shift+Z` | Redo |
 | `Shift+Z` | Undo All (뷰포트+어노테이션 전체 되돌리기) |
 | `Shift+0` | 뷰 리셋 |
@@ -85,10 +90,11 @@ Owner Doc: `CLAUDE.md` (root slim index)
 3. QA pass for gamification endpoints (`/api/gamification/*`) and leaderboard scope tabs.
 4. Profile(`/profile`) 중심으로 배지/미션/진행상황 UX 세부 고도화(빈 상태/반응형/정렬)
 
-## Recent Hotfixes (2026-03-09 KST)
+## Recent Hotfixes (2026-03-10 KST)
 - AUTO semantics sync: `Apply Fix`도 `AUTO` 토글을 따르도록 정렬 (`AUTO OFF` 시 현재 corrected suggestion 유지)
 - frontend quality recovery: labeling/upload 훅 lint 오류 해소 + `BookmarksPanel`/`useSpectrogram` 경고 제거
 - Vitest 도입: labeling annotation store 상태 전이 테스트 6개 추가
+- suggestion zoom UX rework: single click full fit, `BAND` one-shot focus, `FIT` 토글 제거
 - Shift+Z(Undo All): viewport 스냅샷 전체 한번에 되돌리기 (1단계씩 → 전체)
 - Ctrl+Shift+Z(Redo): Shift 누를 때 대문자 Z 매칭 수정
 - R키 박스 선택: 오버레이 div pointer-events-none 추가로 이벤트 통과 수정

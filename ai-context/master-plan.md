@@ -1,14 +1,14 @@
 ﻿# GameLab Master Plan
 
-기준일: 2026-03-03 (KST)
+기준일: 2026-03-10 (KST)
 프로젝트: Smart Spectro-Tagging
 협업 문서 경로: `ai-context`
 
 ## 1) 현재 상태
-- 현재 단계: **Phase 2E 완료** (스펙트로그램 리스닝 + 분석 도구 강화)
+- 현재 단계: **Phase 2E 완료 -> Phase 2F** (라벨링 워크플로우 최적화)
 - 배포 상태: FE(Vercel) + BE(Railway) 운영 중
 - 제품 상태: AI 검수 + 수동 구간 생성 + **스펙트로그램 분석 도구** 통합 완료
-- 최신 라벨링 UX: 박스 생성/이동/리사이즈, FFT 설정, 구간 재생 커서, 피치 보존, PNG 내보내기
+- 최신 라벨링 UX: 박스 생성/이동/리사이즈, single click 전체 Fit + `BAND` 포커스, 구간 재생 커서, 피치 보존, PNG 내보내기
 
 ## 2) 문서 우선순위
 1. `ai-context/START-HERE.md`
@@ -28,6 +28,12 @@
 - 피치 보존 모드: `HTMLAudioElement.preservesPitch` 토글
 - 0.25x 재생 속도 확장: 최소 속도 0.5x → 0.25x
 - PNG 스크린샷 내보내기: canvas → PNG 다운로드
+
+### Sprint 14.1 추가 (2026-03-10)
+- 제안 클릭 전체 Fit: 박스 single click → 시간+주파수 뷰포트를 함께 맞춤 확대
+- `BAND` one-shot 포커스: 현재 선택된 구간의 주파수 대역만 다시 정렬
+- Ctrl+Z 뷰포트 undo: 뷰포트 스택 우선 복원, 비어있으면 annotation undo 폴백
+- ToolBar 정리: `FIT` 제거, `BAND`와 "전체" 액션만 유지 (LIN/LOG·FFT 설정·분석/저/중/고 프리셋 UI 제거)
 
 ### 핫키 버그 수정 (2026-03-03)
 - Shift+Z(Undo All): viewport 스냅샷 전체 한번에 되돌리기 수정

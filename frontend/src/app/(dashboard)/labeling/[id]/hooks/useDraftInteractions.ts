@@ -19,12 +19,12 @@ type UseDraftInteractionsArgs = {
   spectrogramRef: React.RefObject<HTMLDivElement | null>;
   isDraggingSuggestion: boolean;
   isResizingSuggestion: boolean;
-  seekTo: (time: number, trackHistory?: boolean) => void;
   t: (key: string) => string;
   startDraft: (input: Omit<ManualDraft, "id" | "source">) => void;
   onZoomToBox: (box: { startTime: number; endTime: number; freqLow: number; freqHigh: number }) => void;
   updateDraft: (id: string, patch: Partial<ManualDraft>, options?: { trackHistory?: boolean }) => void;
   selectDraft: (id: string | null) => void;
+  clearSelection: () => void;
   pushHistory: (type: ActionType, summary: string, payload?: { time?: number; loopStart?: number | null; loopEnd?: number | null }) => void;
 };
 
@@ -39,12 +39,12 @@ export function useDraftInteractions({
   spectrogramRef,
   isDraggingSuggestion,
   isResizingSuggestion,
-  seekTo,
   t,
   startDraft,
   onZoomToBox,
   updateDraft,
   selectDraft,
+  clearSelection,
   pushHistory,
 }: UseDraftInteractionsArgs) {
   const [isDrawingDraft, setIsDrawingDraft] = useState(false);
@@ -95,18 +95,6 @@ export function useDraftInteractions({
     setIsDrawingDraft(false);
   }, []);
 
-  const handleScrubFromSpectrogram = useCallback(
-    (clientX: number) => {
-      const area = spectrogramRef.current;
-      if (!area || totalDuration <= 0) return;
-      const rect = area.getBoundingClientRect();
-      const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-      const ratio = rect.width > 0 ? x / rect.width : 0;
-      seekTo(ratio * totalDuration, false);
-    },
-    [seekTo, spectrogramRef, totalDuration],
-  );
-
   const pointerToDomain = useCallback(
     (clientX: number, clientY: number) => {
       const area = spectrogramRef.current;
@@ -126,7 +114,7 @@ export function useDraftInteractions({
       if (!activeFileId) return;
       if (isDraggingDraft || isResizingDraft || isDraggingSuggestion || isResizingSuggestion) return;
       if (tool !== "box" && !zoomBoxMode) {
-        handleScrubFromSpectrogram(e.clientX);
+        clearSelection();
         return;
       }
       const mapped = pointerToDomain(e.clientX, e.clientY);
@@ -153,14 +141,14 @@ export function useDraftInteractions({
       activeFileId,
       freqMin,
       freqMax,
-      handleScrubFromSpectrogram,
-      isDraggingDraft,
-      isDraggingSuggestion,
-      isResizingDraft,
-      isResizingSuggestion,
-      pointerToDomain,
-      snapEnabled,
-      t,
+        isDraggingDraft,
+        isDraggingSuggestion,
+        isResizingDraft,
+        isResizingSuggestion,
+        clearSelection,
+        pointerToDomain,
+        snapEnabled,
+        t,
       tool,
       zoomBoxMode,
     ],

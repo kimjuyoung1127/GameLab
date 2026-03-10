@@ -13,10 +13,8 @@ import { tools, zoomTools } from "./constants";
 type ToolBarProps = {
   tool: DrawTool;
   snapEnabled: boolean;
-  fitToSuggestion: boolean;
   onToolChange: (tool: DrawTool) => void;
   onToggleSnap: () => void;
-  onToggleFit: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onZoomLevelChange: (updater: (current: number) => number) => void;
@@ -30,15 +28,20 @@ type ToolBarProps = {
   pendingDraftCount: number;
   bookmarkCount: number;
   spectrogramRef?: React.RefObject<HTMLDivElement | null>;
+  /* Frequency range */
+  freqMin: number;
+  freqMax: number;
+  effectiveMaxFreq: number;
+  onFreqRangeChange: (min: number, max: number) => void;
+  onBandFocusSelected: () => void;
+  canBandFocus: boolean;
 };
 
 export default function ToolBar({
   tool,
   snapEnabled,
-  fitToSuggestion,
   onToolChange,
   onToggleSnap,
-  onToggleFit,
   onUndo,
   onRedo,
   onZoomLevelChange,
@@ -52,6 +55,12 @@ export default function ToolBar({
   pendingDraftCount,
   bookmarkCount,
   spectrogramRef,
+  freqMin,
+  freqMax,
+  effectiveMaxFreq,
+  onFreqRangeChange,
+  onBandFocusSelected,
+  canBandFocus,
 }: ToolBarProps) {
   const t = useTranslations("labeling");
   const [exportOpen, setExportOpen] = useState(false);
@@ -137,13 +146,16 @@ export default function ToolBar({
       ))}
 
       <button
-        onClick={onToggleFit}
-        title={t("fitToSuggestion")}
+        onClick={onBandFocusSelected}
+        title={t("bandFocusTitle")}
+        disabled={!canBandFocus}
         className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
-          fitToSuggestion ? "bg-primary/20 text-primary-light" : "bg-surface text-text-muted hover:text-text-secondary"
+          canBandFocus
+            ? "bg-surface text-text-muted hover:bg-panel-light hover:text-text-secondary"
+            : "bg-surface/60 text-text-muted/40 cursor-not-allowed"
         }`}
       >
-        {t("fitShort")}
+        {t("bandFocusShort")}
       </button>
 
       <button
@@ -164,6 +176,25 @@ export default function ToolBar({
       <button onClick={onRedo} title={t("redoTitle")} className="p-2 rounded-md text-text-secondary hover:bg-panel-light hover:text-text transition-colors">
         <Redo2 className="w-4 h-4" />
       </button>
+
+      <div className="h-5 w-px bg-border-light mx-1" />
+
+      {/* Full frequency view reset */}
+      {(() => {
+        const isFullView = freqMin === 0 && freqMax === effectiveMaxFreq;
+        return (
+          <button
+            onClick={() => onFreqRangeChange(0, effectiveMaxFreq)}
+            className={`px-1.5 py-1 rounded-md text-[10px] font-mono transition-colors ${
+              isFullView
+                ? "bg-primary/20 text-primary-light"
+                : "bg-surface text-text-muted hover:bg-panel-light hover:text-text-secondary"
+            }`}
+          >
+            {t("freqPresetFull")}
+          </button>
+        );
+      })()}
 
       <div className="ml-auto flex items-center gap-3 text-[11px] text-text-muted">
         <span className="text-text-secondary">

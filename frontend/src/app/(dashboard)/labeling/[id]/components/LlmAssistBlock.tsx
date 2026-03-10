@@ -1,4 +1,4 @@
-/** LLM Assist 블록: 스토어 기반 assist 결과 표시 + 수동 요청/재분석 버튼. */
+/** LLM assist panel for cached recommendations and manual assist refresh. */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -16,8 +16,9 @@ type LlmAssistBlockProps = {
 
 export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
   const t = useTranslations("labeling");
+  const suggestionId = suggestion?.id ?? null;
+  const suggestionStatus = suggestion?.status ?? null;
 
-  // 스토어에서 프리페치 결과 읽기
   const storeResult = useAnnotationStore((s) =>
     suggestion ? s.assistMap[suggestion.id] : undefined,
   );
@@ -26,54 +27,57 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
   );
   const setAssistResult = useAnnotationStore((s) => s.setAssistResult);
 
-  // 로컬: 캐시 확인 중 + 수동 요청 중 로딩
   const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState("");
   const [checkedId, setCheckedId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    return () => { abortRef.current?.abort(); };
+    return () => {
+      abortRef.current?.abort();
+    };
   }, []);
 
-  // suggestion 변경 시 캐시 확인 (스토어에 결과 없을 때만)
   useEffect(() => {
-    if (!suggestion || suggestion.status !== "pending") {
+    if (!suggestionId || suggestionStatus !== "pending") {
       setCheckedId(null);
       return;
     }
     if (storeResult || storeStatus === "loading") {
-      setCheckedId(suggestion.id);
+      setCheckedId(suggestionId);
       return;
     }
-    if (suggestion.id === checkedId) return;
+    if (suggestionId === checkedId) return;
 
     let cancelled = false;
     setLocalLoading(true);
 
     (async () => {
       try {
-        const res = await authFetch(labelingEndpoints.getAssist(suggestion.id));
+        const res = await authFetch(labelingEndpoints.getAssist(suggestionId));
         if (cancelled) return;
 
         if (res.ok && res.status !== 204) {
           const data: SuggestionLlmAssist = await res.json();
           if (data) {
-            setAssistResult(suggestion.id, data);
-            setCheckedId(suggestion.id);
+            setAssistResult(suggestionId, data);
+            setCheckedId(suggestionId);
             setLocalLoading(false);
             return;
           }
         }
-        setCheckedId(suggestion.id);
+
+        setCheckedId(suggestionId);
         setLocalLoading(false);
       } catch {
         if (!cancelled) setLocalLoading(false);
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [suggestion?.id, suggestion?.status, storeResult, storeStatus, setAssistResult]);
+    return () => {
+      cancelled = true;
+    };
+  }, [checkedId, setAssistResult, storeResult, storeStatus, suggestionId, suggestionStatus]);
 
   const requestAssist = useCallback(async () => {
     if (!suggestion) return;
@@ -104,16 +108,14 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
       setLocalLoading(false);
       useUIStore.getState().showToast(t("llmAssistError"));
     }
-  }, [suggestion, t, setAssistResult]);
+  }, [setAssistResult, suggestion, t]);
 
   if (!suggestion || suggestion.status !== "pending") return null;
 
-  // 실제 표시할 결과와 상태 결정
   const result = storeResult ?? null;
   const isLoading = localLoading || storeStatus === "loading";
   const hasError = !isLoading && !result && error;
 
-  // 캐시 확인 or 프리페치 로딩
   if (isLoading && !result) {
     return (
       <div className="px-4 py-2 flex items-center gap-2 text-text-muted">
@@ -123,7 +125,6 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
     );
   }
 
-  // 에러 상태
   if (hasError) {
     return (
       <div className="px-4 py-2">
@@ -142,7 +143,6 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
     );
   }
 
-  // 결과 있으면 표시
   if (result) {
     const actionConfig = {
       confirm: { label: t("llmAssistConfirm"), bg: "bg-accent/10", border: "border-accent/30", text: "text-accent" },
@@ -188,7 +188,6 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
     );
   }
 
-  // idle — 요청 버튼
   return (
     <div className="px-4 py-2">
       <button

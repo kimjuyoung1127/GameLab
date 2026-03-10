@@ -10,7 +10,7 @@ Source of truth for route-level execution status.
 | `/sessions` | Sessions | Dashboard | P0 | InProgress | unassigned | `page-sessions-upgrade` | `feature-data-binding-and-loading`, `feature-analytics-and-tracking` | `docs/status/PROJECT-STATUS.md` | 2026-03-03 |
 | `/leaderboard` | Leaderboard | Dashboard | P1 | Ready | unassigned | `page-leaderboard-upgrade` | `feature-ui-empty-and-skeleton`, `feature-data-binding-and-loading` | `docs/status/PROJECT-STATUS.md` | 2026-03-03 |
 | `/profile` | Profile | Dashboard | P1 | QA | unassigned | `page-profile-upgrade` | `feature-data-binding-and-loading`, `feature-ui-empty-and-skeleton` | `docs/status/PROJECT-STATUS.md` | 2026-03-03 |
-| `/labeling/[id]` | Labeling Workspace | Labeling | P0 | QA | unassigned | `page-labeling-upgrade` | `feature-navigation-and-gesture`, `feature-error-and-retry-state` | `docs/status/PROJECT-STATUS.md`, `docs/ref/architecture-diagrams.md` | 2026-03-09 |
+| `/labeling/[id]` | Labeling Workspace | Labeling | P0 | QA | unassigned | `page-labeling-upgrade` | `feature-navigation-and-gesture`, `feature-error-and-retry-state` | `docs/status/PROJECT-STATUS.md`, `docs/ref/architecture-diagrams.md` | 2026-03-10 |
 
 ## Status Flow
 
@@ -30,12 +30,14 @@ Source of truth for route-level execution status.
   - 피치 보존 모드 (HTMLAudioElement.preservesPitch) — 기존 deferred에서 구현 완료
   - 0.25x~2.0x 재생 속도 범위
   - PNG 스크린샷 내보내기
-- Sprint 14.1 구현 완료 + QA/테스트 보강 (2026-03-09):
+- Sprint 14.1 구현 완료 + QA/테스트 보강 (2026-03-10):
   - 신뢰도 컬러 강도 (confidence 구간별 색상)
   - 제안 상태 필터 칩 (전체/대기/확인/수정)
   - 순차 자동 이동 + AUTO 토글 (`Apply Fix`도 `AUTO OFF` 시 자동 이동하지 않음)
-  - fitToSuggestion 기본값 OFF
+  - 박스 single click 전체 Fit (시간+주파수 동시 맞춤)
   - 제안 클립보드 복사 (Copy 아이콘 → 포맷 텍스트)
   - annotation store Vitest 6개 + frontend `lint/test/build` 통과
+  - `BAND` one-shot 주파수 포커스 + Ctrl+Z 뷰포트 undo (2026-03-10)
+  - ToolBar 정리: `FIT` 제거, `BAND`와 "전체" 액션만 유지 (LIN/LOG·FFT 설정·분석/저/중/고 프리셋 UI 제거를 공식화)
 - Deferred:
   - pitch-shift listening assist (저주파 모니터링)

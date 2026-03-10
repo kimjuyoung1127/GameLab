@@ -36,6 +36,7 @@ type UseLabelingHotkeysParams = {
   zoomBoxMode: boolean;
   onUndoAll: () => void;
   onResetView: () => void;
+  onViewportUndo?: () => boolean;
   spectroListeningEnabled?: boolean;
   onPlayOriginalSelection?: () => void;
   onPlayFilteredSelection?: () => void;
@@ -72,6 +73,7 @@ export function useLabelingHotkeys({
   zoomBoxMode,
   onUndoAll,
   onResetView,
+  onViewportUndo,
   spectroListeningEnabled = false,
   onPlayOriginalSelection,
   onPlayFilteredSelection,
@@ -89,7 +91,11 @@ export function useLabelingHotkeys({
         if (e.key === "z" || e.key === "Z") {
           e.preventDefault();
           if (e.shiftKey) redo();
-          else undo();
+          else {
+            // 뷰포트 undo 스택이 있으면 먼저 복원, 없으면 annotation undo
+            const viewportRestored = onViewportUndo?.();
+            if (!viewportRestored) undo();
+          }
           return;
         }
         if (e.shiftKey && e.key === "ArrowRight") {
@@ -300,6 +306,7 @@ export function useLabelingHotkeys({
     zoomBoxMode,
     onUndoAll,
     onResetView,
+    onViewportUndo,
     spectroListeningEnabled,
     onPlayOriginalSelection,
     onPlayFilteredSelection,

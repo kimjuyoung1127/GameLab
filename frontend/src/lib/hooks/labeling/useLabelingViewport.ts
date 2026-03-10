@@ -1,7 +1,7 @@
-/** 뷰포트 줌/팬/언두: 줌 레벨, 주파수 범위, 뷰포트 스냅샷 되돌리기. */
+/** Viewport state hook for zoom, frequency range, and viewport undo snapshots. */
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useAnnotationStore } from "@/lib/store/annotation-store";
 
 type ViewportSnapshot = {
@@ -10,6 +10,13 @@ type ViewportSnapshot = {
   freqMax: number;
   scrollLeft: number;
 };
+
+type FrequencyRange = {
+  freqMin: number;
+  freqMax: number;
+};
+
+type NumberStateUpdate = number | ((current: number) => number);
 
 const MAX_FREQ = 20_000;
 
@@ -23,6 +30,13 @@ type UseLabelingViewportParams = {
   minZoom?: number;
 };
 
+function clampFrequencyRange(rawMin: number, rawMax: number, effectiveMaxFreq: number): FrequencyRange {
+  const safeMaxFreq = Math.max(1, effectiveMaxFreq);
+  const freqMax = Math.min(Math.max(rawMax, 1), safeMaxFreq);
+  const freqMin = Math.max(0, Math.min(rawMin, Math.max(freqMax - 1, 0)));
+  return { freqMin, freqMax };
+}
+
 export function useLabelingViewport({
   effectiveMaxFreq,
   totalDuration,
@@ -33,18 +47,55 @@ export function useLabelingViewport({
   minZoom = 1,
 }: UseLabelingViewportParams) {
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [freqMin, setFreqMin] = useState(0);
-  const [freqMax, setFreqMax] = useState(MAX_FREQ);
+  const [frequencyRange, setFrequencyRange] = useState<FrequencyRange>({
+    freqMin: 0,
+    freqMax: MAX_FREQ,
+  });
   const [zoomBoxMode, setZoomBoxMode] = useState(false);
   const viewportUndoRef = useRef<ViewportSnapshot[]>([]);
+  const { freqMin, freqMax } = clampFrequencyRange(
+    frequencyRange.freqMin,
+    frequencyRange.freqMax,
+    effectiveMaxFreq,
+  );
 
-  // freq clamping
-  useEffect(() => {
-    const clampedMax = Math.min(Math.max(freqMax, 1), effectiveMaxFreq);
-    const clampedMin = Math.max(0, Math.min(freqMin, Math.max(clampedMax - 1, 0)));
-    if (clampedMin !== freqMin) setFreqMin(clampedMin);
-    if (clampedMax !== freqMax) setFreqMax(clampedMax);
-  }, [effectiveMaxFreq, freqMin, freqMax]);
+  const setFreqRange = useCallback(
+    (nextMinInput: NumberStateUpdate, nextMaxInput: NumberStateUpdate) => {
+      setFrequencyRange((current) => {
+        const currentRange = clampFrequencyRange(current.freqMin, current.freqMax, effectiveMaxFreq);
+        const nextMin =
+          typeof nextMinInput === "function" ? nextMinInput(currentRange.freqMin) : nextMinInput;
+        const nextMax =
+          typeof nextMaxInput === "function" ? nextMaxInput(currentRange.freqMax) : nextMaxInput;
+        return clampFrequencyRange(nextMin, nextMax, effectiveMaxFreq);
+      });
+    },
+    [effectiveMaxFreq],
+  );
+
+  const setFreqMin = useCallback(
+    (nextMinInput: NumberStateUpdate) => {
+      setFrequencyRange((current) => {
+        const currentRange = clampFrequencyRange(current.freqMin, current.freqMax, effectiveMaxFreq);
+        const nextMin =
+          typeof nextMinInput === "function" ? nextMinInput(currentRange.freqMin) : nextMinInput;
+        return clampFrequencyRange(nextMin, currentRange.freqMax, effectiveMaxFreq);
+      });
+    },
+    [effectiveMaxFreq],
+  );
+
+  const setFreqMax = useCallback(
+    (nextMaxInput: NumberStateUpdate) => {
+      setFrequencyRange((current) => {
+        const currentRange = clampFrequencyRange(current.freqMin, current.freqMax, effectiveMaxFreq);
+        const nextMax =
+          typeof nextMaxInput === "function" ? nextMaxInput(currentRange.freqMax) : nextMaxInput;
+        return clampFrequencyRange(currentRange.freqMin, nextMax, effectiveMaxFreq);
+      });
+    },
+    [effectiveMaxFreq],
+  );
 
   const handleZoomLevelChange = useCallback(
     (updater: (current: number) => number) => {
@@ -56,7 +107,7 @@ export function useLabelingViewport({
       });
       setZoomLevel((current) => updater(current));
     },
-    [freqMax, freqMin, zoomLevel, scrollContainerRef],
+    [freqMax, freqMin, scrollContainerRef, zoomLevel],
   );
 
   const handleZoomToBox = useCallback(
@@ -68,6 +119,7 @@ export function useLabelingViewport({
         setZoomBoxMode(false);
         return;
       }
+
       const boxDuration = Math.max(rawDuration, 0.01);
       const desiredZoom = Math.min(maxZoom, Math.max(minZoom, totalDuration / boxDuration));
       const nextFreqMin = Math.max(0, box.freqLow);
@@ -86,8 +138,7 @@ export function useLabelingViewport({
       });
 
       setZoomLevel(desiredZoom);
-      setFreqMin(nextFreqMin);
-      setFreqMax(nextFreqMax);
+      setFreqRange(nextFreqMin, nextFreqMax);
       setZoomBoxMode(false);
       showToast(t("zoomBoxApplied"));
 
@@ -100,7 +151,19 @@ export function useLabelingViewport({
         container.scrollLeft = Math.max(0, Math.min(target, maxScrollLeft));
       });
     },
-    [effectiveMaxFreq, freqMax, freqMin, showToast, t, totalDuration, zoomLevel, scrollContainerRef, maxZoom, minZoom],
+    [
+      effectiveMaxFreq,
+      freqMax,
+      freqMin,
+      maxZoom,
+      minZoom,
+      scrollContainerRef,
+      setFreqRange,
+      showToast,
+      t,
+      totalDuration,
+      zoomLevel,
+    ],
   );
 
   const handleUndoAllEdits = useCallback(() => {
@@ -115,12 +178,10 @@ export function useLabelingViewport({
 
     if (hadViewport && viewportFirst) {
       setZoomLevel(viewportFirst.zoomLevel);
-      setFreqMin(viewportFirst.freqMin);
-      setFreqMax(viewportFirst.freqMax);
+      setFreqRange(viewportFirst.freqMin, viewportFirst.freqMax);
     } else {
       setZoomLevel(1);
-      setFreqMin(0);
-      setFreqMax(effectiveMaxFreq);
+      setFreqRange(0, effectiveMaxFreq);
     }
     setZoomBoxMode(false);
 
@@ -135,12 +196,11 @@ export function useLabelingViewport({
       }
     });
     showToast(hadViewport ? t("zoomRestored") : t("allChangesReverted"));
-  }, [effectiveMaxFreq, showToast, t, scrollContainerRef]);
+  }, [effectiveMaxFreq, scrollContainerRef, setFreqRange, showToast, t]);
 
   const handleResetView = useCallback(() => {
     setZoomLevel(1);
-    setFreqMin(0);
-    setFreqMax(effectiveMaxFreq);
+    setFreqRange(0, effectiveMaxFreq);
     setZoomBoxMode(false);
     viewportUndoRef.current = [];
     requestAnimationFrame(() => {
@@ -149,11 +209,37 @@ export function useLabelingViewport({
       container.scrollLeft = 0;
     });
     showToast(t("viewReset"));
-  }, [effectiveMaxFreq, showToast, t, scrollContainerRef]);
+  }, [effectiveMaxFreq, scrollContainerRef, setFreqRange, showToast, t]);
 
   const clearViewportUndo = useCallback(() => {
     viewportUndoRef.current = [];
   }, []);
+
+  /** Store the current viewport so pointer-based fit changes can be undone with Ctrl+Z. */
+  const pushViewportSnapshot = useCallback(() => {
+    viewportUndoRef.current.push({
+      zoomLevel,
+      freqMin,
+      freqMax,
+      scrollLeft: scrollContainerRef.current?.scrollLeft ?? 0,
+    });
+  }, [freqMax, freqMin, scrollContainerRef, zoomLevel]);
+
+  /** Restore the latest viewport-only snapshot without touching annotation history. */
+  const handleViewportUndo = useCallback(() => {
+    const stack = viewportUndoRef.current;
+    const snapshot = stack.pop();
+    if (!snapshot) return false;
+    setZoomLevel(snapshot.zoomLevel);
+    setFreqRange(snapshot.freqMin, snapshot.freqMax);
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+      container.scrollLeft = Math.max(0, Math.min(snapshot.scrollLeft, maxScrollLeft));
+    });
+    return true;
+  }, [scrollContainerRef, setFreqRange]);
 
   return {
     zoomLevel,
@@ -168,6 +254,8 @@ export function useLabelingViewport({
     handleZoomToBox,
     handleUndoAllEdits,
     handleResetView,
+    handleViewportUndo,
+    pushViewportSnapshot,
     clearViewportUndo,
   };
 }

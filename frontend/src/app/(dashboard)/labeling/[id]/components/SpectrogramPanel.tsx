@@ -21,7 +21,6 @@ import type {
   WaveformData,
 } from "@/types";
 import type { ListeningSelection } from "@/lib/audio/listening-types";
-import type { SpectrogramFftOptions } from "@/lib/hooks/use-spectrogram";
 import { getLabelDisplay, getTagPlacementStyle } from "@/lib/labeling/label-display";
 import { bookmarkColors } from "./constants";
 
@@ -48,7 +47,7 @@ type SpectrogramPanelProps = {
   selectedSuggestionId: string | null;
   selectedDraftId: string | null;
   onSelectSuggestion: (id: string) => void;
-  onSelectDraft: (id: string) => void;
+  onSelectDraft: (id: string | null) => void;
   onDraftPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onDraftPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
   onDraftPointerUp: (e?: React.PointerEvent<HTMLDivElement>) => void;
@@ -72,7 +71,6 @@ type SpectrogramPanelProps = {
   };
   freqMin: number;
   freqMax: number;
-  onFreqRangeChange: (min: number, max: number) => void;
   listeningEnabled: boolean;
   listeningSelection: ListeningSelection | null;
   onListeningSelectionChange: (selection: ListeningSelection) => void;
@@ -86,9 +84,6 @@ type SpectrogramPanelProps = {
   onStopSegmentPlayback: () => void;
   segmentExportError: string | null;
   freqAxisScale: FrequencyAxisScale;
-  onFreqAxisScaleChange: (scale: FrequencyAxisScale) => void;
-  fftOptions: SpectrogramFftOptions;
-  onFftOptionsChange: (options: SpectrogramFftOptions) => void;
   statusColors: Record<SuggestionStatus, { border: string; bg: string; tagBg: string; label: string; dashed: boolean }>;
   draftPreview: ManualDraft | null;
   playbackPct: number;
@@ -96,8 +91,8 @@ type SpectrogramPanelProps = {
   loopState: LoopState;
   bookmarks: LabelingBookmark[];
   loopRangeLabel: string;
-  fitToSuggestion: boolean;
-  showFitToast: boolean;
+  viewportToastKey: "suggestionFitApplied" | "bandFocusApplied" | null;
+  viewportPulseTargetId: string | null;
   loopHudWarning: boolean;
   activeSuggestion: Suggestion | null;
   onConfirm: () => void;
@@ -152,8 +147,6 @@ export default function SpectrogramPanel({
   loopState,
   bookmarks,
   loopRangeLabel,
-  fitToSuggestion,
-  showFitToast,
   loopHudWarning,
   activeSuggestion,
   onConfirm,
@@ -164,7 +157,6 @@ export default function SpectrogramPanel({
   highlightedBookmarkId,
   freqMin,
   freqMax,
-  onFreqRangeChange,
   listeningEnabled,
   listeningSelection,
   onListeningSelectionChange,
@@ -178,9 +170,8 @@ export default function SpectrogramPanel({
   onStopSegmentPlayback,
   segmentExportError,
   freqAxisScale,
-  onFreqAxisScaleChange,
-  fftOptions,
-  onFftOptionsChange,
+  viewportToastKey,
+  viewportPulseTargetId,
 }: SpectrogramPanelProps) {
   const t = useTranslations("labeling");
 
@@ -194,7 +185,7 @@ export default function SpectrogramPanel({
   const [hoverMetrics, setHoverMetrics] = useState<{ timeSec: number; freqHz: number; db: number } | null>(null);
   const hoverMetricsRef = useRef<{ timeSec: number; freqHz: number; db: number } | null>(null);
   const hoverRafRef = useRef<number>(0);
-  const [fftSettingsOpen, setFftSettingsOpen] = useState(false);
+
 
   const handleBookmarkClick = useCallback((e: React.MouseEvent, bId: string) => {
     e.stopPropagation();
@@ -226,6 +217,7 @@ export default function SpectrogramPanel({
   const activeSuggestionDisplay = activeSuggestion
     ? getLabelDisplay(activeSuggestion.label, activeSuggestion.description)
     : null;
+  const isBandFocused = freqMin > 0 || freqMax < effectiveMaxFreq;
 
   const frequencyTicks = useMemo(() => {
     if (freqAxisScale === "linear") {
@@ -495,111 +487,6 @@ export default function SpectrogramPanel({
                   </span>
                 );
               })}
-              {/* Frequency range preset buttons */}
-              <div className="absolute -left-0.5 bottom-0 translate-y-full pt-1 flex flex-col gap-0.5 pointer-events-auto z-20">
-                <button
-                  onClick={() => onFreqAxisScaleChange(freqAxisScale === "linear" ? "log" : "linear")}
-                  className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-surface/80 text-text-muted hover:bg-panel-light hover:text-text-secondary"
-                >
-                  {t("listeningAxisLabel", { scale: freqAxisScale === "linear" ? "LIN" : "LOG" })}
-                </button>
-                {([
-                  { label: t("freqPresetFull"), min: 0, max: effectiveMaxFreq },
-                  { label: t("freqPresetLow"), min: 0, max: 5000 },
-                  { label: t("freqPresetMid"), min: 1000, max: 8000 },
-                  { label: t("freqPresetHigh"), min: 5000, max: effectiveMaxFreq },
-                ] as const).map((preset) => {
-                  const active = freqMin === preset.min && freqMax === preset.max;
-                  return (
-                    <button
-                      key={preset.label}
-                      onClick={() => onFreqRangeChange(preset.min, Math.min(preset.max, effectiveMaxFreq))}
-                      className={`px-1.5 py-0.5 rounded text-[8px] font-mono transition-colors ${
-                        active
-                          ? "bg-primary/30 text-primary-light"
-                          : "bg-surface/80 text-text-muted hover:bg-panel-light hover:text-text-secondary"
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setFftSettingsOpen((prev) => !prev)}
-                  className={`px-1.5 py-0.5 rounded text-[8px] font-mono transition-colors mt-0.5 ${
-                    fftSettingsOpen
-                      ? "bg-primary/30 text-primary-light"
-                      : "bg-surface/80 text-text-muted hover:bg-panel-light hover:text-text-secondary"
-                  }`}
-                >
-                  {t("fftSettingsToggle")}
-                </button>
-              </div>
-              {/* FFT Settings Panel */}
-              {fftSettingsOpen && (
-                <div className="absolute left-0 bottom-0 translate-y-full mt-1 pointer-events-auto z-30 bg-panel border border-border rounded-lg shadow-lg px-3 py-2.5 min-w-[200px]" style={{ marginLeft: "52px" }}>
-                  <div className="text-[10px] text-text-muted uppercase tracking-wider font-medium mb-2">{t("fftSettingsTitle")}</div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-[10px] text-text-secondary">{t("fftSize")}</label>
-                      <select
-                        value={fftOptions.fftSize ?? 2048}
-                        onChange={(e) => onFftOptionsChange({ ...fftOptions, fftSize: Number(e.target.value) })}
-                        className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] text-text font-mono"
-                      >
-                        <option value={512}>512</option>
-                        <option value={1024}>1024</option>
-                        <option value={2048}>2048</option>
-                        <option value={4096}>4096</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-[10px] text-text-secondary">{t("fftWindow")}</label>
-                      <select
-                        value={fftOptions.windowFn ?? "hann"}
-                        onChange={(e) => onFftOptionsChange({ ...fftOptions, windowFn: e.target.value as "hann" | "hamming" | "blackman" })}
-                        className="bg-surface border border-border rounded px-1.5 py-0.5 text-[10px] text-text font-mono"
-                      >
-                        <option value="hann">Hann</option>
-                        <option value="hamming">Hamming</option>
-                        <option value="blackman">Blackman</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-[10px] text-text-secondary">{t("fftMinDb")}</label>
-                      <input
-                        type="range"
-                        min={-120}
-                        max={-30}
-                        step={5}
-                        value={fftOptions.minDb ?? -90}
-                        onChange={(e) => onFftOptionsChange({ ...fftOptions, minDb: Number(e.target.value) })}
-                        className="w-16 h-1 accent-primary cursor-pointer"
-                      />
-                      <span className="text-[9px] font-mono text-text-muted w-8 text-right">{fftOptions.minDb ?? -90}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="text-[10px] text-text-secondary">{t("fftMaxDb")}</label>
-                      <input
-                        type="range"
-                        min={-30}
-                        max={0}
-                        step={5}
-                        value={fftOptions.maxDb ?? -10}
-                        onChange={(e) => onFftOptionsChange({ ...fftOptions, maxDb: Number(e.target.value) })}
-                        className="w-16 h-1 accent-primary cursor-pointer"
-                      />
-                      <span className="text-[9px] font-mono text-text-muted w-8 text-right">{fftOptions.maxDb ?? -10}</span>
-                    </div>
-                    <button
-                      onClick={() => onFftOptionsChange({})}
-                      className="w-full mt-1 px-2 py-1 rounded text-[10px] bg-surface hover:bg-panel-light text-text-muted transition-colors"
-                    >
-                      {t("fftResetDefaults")}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div
@@ -623,7 +510,7 @@ export default function SpectrogramPanel({
               </div>
             </div>
 
-            <div className="absolute top-0 left-12 right-0 bottom-6 pointer-events-none">
+            <div className="absolute top-0 left-12 right-0 bottom-6 pointer-events-none overflow-hidden">
             {suggestions.map((s) => {
               const sc = statusColors[s.status];
               const isSelected = s.id === selectedSuggestionId;
@@ -643,6 +530,7 @@ export default function SpectrogramPanel({
                   : aiAssist.recommendedAction === "reject" ? "shadow-[0_0_6px_rgba(239,68,68,0.6)] border-dashed"
                   : "shadow-[0_0_6px_rgba(234,179,8,0.6)] border-dashed"
                 : "";
+              const pulseClass = viewportPulseTargetId === s.id ? "animate-pulse" : "";
               return (
                 <button
                   key={s.id}
@@ -651,7 +539,7 @@ export default function SpectrogramPanel({
                   onPointerMove={isEditable ? onSuggestionDragPointerMove : undefined}
                   onPointerUp={isEditable ? onSuggestionDragPointerUp : undefined}
                   onPointerCancel={isEditable ? onSuggestionDragPointerUp : undefined}
-                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 pointer-events-auto ${sc.border} ${sc.dashed ? "border-dashed" : ""} ${isEditable ? "cursor-move" : ""} ${aiOverlay} ${
+                  className={`absolute border-2 rounded-sm z-20 transition-all duration-200 pointer-events-auto ${sc.border} ${sc.dashed ? "border-dashed" : ""} ${isEditable ? "cursor-move" : ""} ${aiOverlay} ${pulseClass} ${
                     isSelected ? "ring-2 ring-white/30 shadow-lg shadow-white/10" : "hover:ring-1 hover:ring-white/20"
                   }`}
                   style={{
@@ -700,6 +588,7 @@ export default function SpectrogramPanel({
             {manualDrafts.map((draft) => {
               const pos = suggestionBoxStyle(draft, totalDuration, freqMin, freqMax);
               const isSelected = draft.id === selectedDraftId;
+              const pulseClass = viewportPulseTargetId === draft.id ? "animate-pulse" : "";
               return (
                 <button
                   key={draft.id}
@@ -708,7 +597,7 @@ export default function SpectrogramPanel({
                   onPointerMove={onDraftDragPointerMove}
                   onPointerUp={onDraftDragPointerUp}
                   onPointerCancel={onDraftDragPointerUp}
-                  className={`absolute border-2 rounded-sm z-20 transition-all pointer-events-auto ${
+                  className={`absolute border-2 rounded-sm z-20 transition-all pointer-events-auto ${pulseClass} ${
                     isSelected ? "border-cyan-300 bg-cyan-300/10 ring-2 ring-cyan-100/50" : "border-cyan-400/80 bg-cyan-400/10 hover:border-cyan-300"
                   }`}
                   style={{
@@ -873,8 +762,10 @@ export default function SpectrogramPanel({
 
             <div className="absolute top-8 right-3 rounded-lg border border-white/10 bg-black/45 backdrop-blur-sm px-2.5 py-2 text-[10px] space-y-1 min-w-[180px]">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-text-muted">{t("stateHudFit")}</span>
-                <span className={fitToSuggestion ? "text-accent font-semibold" : "text-text-secondary"}>{fitToSuggestion ? "ON" : "OFF"}</span>
+                <span className="text-text-muted">{t("stateHudBand")}</span>
+                <span className={isBandFocused ? "text-primary-light font-semibold" : "text-text-secondary"}>
+                  {isBandFocused ? t("stateHudFocused") : t("stateHudFull")}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-text-muted">{t("stateHudZoom")}</span>
@@ -901,11 +792,11 @@ export default function SpectrogramPanel({
             )}
 
             <div className="absolute bottom-8 left-3 bg-black/55 text-[9px] text-text-muted px-2 py-1 rounded font-mono">
-              {zoomBoxMode ? t("zoomBoxHint") : t("clickDragSeekHint")}
+              {zoomBoxMode ? t("zoomBoxHint") : t("clickBoxFitHint")}
             </div>
-            {showFitToast && (
+            {viewportToastKey && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-accent/90 text-white text-[10px] font-semibold px-2.5 py-1 rounded">
-                {t("autoFitApplied")}
+                {t(viewportToastKey)}
               </div>
             )}
 

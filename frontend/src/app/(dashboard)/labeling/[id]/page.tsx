@@ -101,6 +101,37 @@ function parseSampleRateHz(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : undefined;
 }
 
+const MIN_BOX_HEIGHT_PCT = 2;
+
+type ViewportRegion = {
+  id: string;
+  startTime: number;
+  endTime: number;
+  freqLow: number;
+  freqHigh: number;
+};
+
+type ViewportToastKey = "suggestionFitApplied" | "bandFocusApplied";
+
+function toViewportRegion(item: Suggestion | ManualDraft): ViewportRegion {
+  return {
+    id: item.id,
+    startTime: item.startTime,
+    endTime: item.endTime,
+    freqLow: item.freqLow,
+    freqHigh: item.freqHigh,
+  };
+}
+
+function getFocusedFrequencyRange(region: ViewportRegion, effectiveMaxFreq: number) {
+  const freqRange = region.freqHigh - region.freqLow;
+  const pad = Math.max(50, freqRange * 0.5);
+  return {
+    min: Math.max(0, Math.floor(region.freqLow - pad)),
+    max: Math.min(effectiveMaxFreq, Math.ceil(region.freqHigh + pad)),
+  };
+}
+
 function suggestionBoxStyle(
   s: Suggestion | ManualDraft,
   totalDuration: number,
@@ -110,8 +141,10 @@ function suggestionBoxStyle(
   const leftPct = (s.startTime / totalDuration) * 100;
   const widthPct = ((s.endTime - s.startTime) / totalDuration) * 100;
   const range = fMax - fMin || 1;
-  const topPct = Math.max(0, ((fMax - s.freqHigh) / range) * 100);
-  const heightPct = Math.min(100 - topPct, ((s.freqHigh - s.freqLow) / range) * 100);
+  const rawHeightPct = ((s.freqHigh - s.freqLow) / range) * 100;
+  const heightPct = Math.max(MIN_BOX_HEIGHT_PCT, Math.min(100, rawHeightPct));
+  const centerPct = ((fMax - (s.freqHigh + s.freqLow) / 2) / range) * 100;
+  const topPct = Math.max(0, Math.min(100 - heightPct, centerPct - heightPct / 2));
   return { left: `${leftPct}%`, width: `${widthPct}%`, top: `${topPct}%`, height: `${heightPct}%` };
 }
 
@@ -203,11 +236,11 @@ export default function LabelingWorkspacePage() {
   const [filterTab, setFilterTab] = useState<"all" | "pending" | "done">("all");
   // sessionError + suggestionError + fileProgressMap are managed by hooks below
   const [audioRetryKey, setAudioRetryKey] = useState(0);
-  const [fitToSuggestion, setFitToSuggestion] = useState(false);
-  const [showFitToast, setShowFitToast] = useState(false);
+  const [viewportToast, setViewportToast] = useState<{ key: ViewportToastKey; nonce: number } | null>(null);
+  const [viewportPulseTargetId, setViewportPulseTargetId] = useState<string | null>(null);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
-  const [freqAxisScale, setFreqAxisScale] = useState<"linear" | "log">("linear");
-  const [fftOptions, setFftOptions] = useState<SpectrogramFftOptions>({});
+  const [freqAxisScale] = useState<"linear" | "log">("linear");
+  const [fftOptions] = useState<SpectrogramFftOptions>({});
   const spectrogramRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -236,7 +269,7 @@ export default function LabelingWorkspacePage() {
   const {
     zoomLevel, setZoomLevel, freqMin, setFreqMin, freqMax, setFreqMax,
     zoomBoxMode, setZoomBoxMode,
-    handleZoomLevelChange, handleZoomToBox, handleUndoAllEdits, handleResetView, clearViewportUndo,
+    handleZoomLevelChange, handleZoomToBox, handleUndoAllEdits, handleResetView, handleViewportUndo, pushViewportSnapshot, clearViewportUndo,
   } = useLabelingViewport({
     effectiveMaxFreq: waveformData?.sampleRate ? Math.floor(waveformData.sampleRate / 2) : MAX_FREQ,
     totalDuration,
@@ -324,6 +357,20 @@ export default function LabelingWorkspacePage() {
       ? suggestions.find((s) => s.id === selectedSuggestionId && s.status === "rejected")
       : null;
 
+  const selectedRegion = useMemo<ViewportRegion | null>(() => {
+    if (selectedDraftId) {
+      const draft = manualDrafts.find((item) => item.id === selectedDraftId);
+      return draft ? toViewportRegion(draft) : null;
+    }
+
+    if (selectedSuggestionId) {
+      const suggestion = suggestions.find((item) => item.id === selectedSuggestionId);
+      return suggestion ? toViewportRegion(suggestion) : null;
+    }
+
+    return null;
+  }, [manualDrafts, selectedDraftId, selectedSuggestionId, suggestions]);
+
   const pendingCount = useMemo(() => suggestions.filter((s) => s.status === "pending").length, [suggestions]);
   const confirmedCount = useMemo(() => suggestions.filter((s) => s.status === "confirmed").length, [suggestions]);
   const totalCount = suggestions.length;
@@ -361,19 +408,84 @@ export default function LabelingWorkspacePage() {
     }
   }, [player, pushHistory]);
 
+  const handleFreqRangeChange = useCallback((min: number, max: number) => {
+    const nextMax = Math.min(Math.max(max, 1), effectiveMaxFreq);
+    const nextMin = Math.max(0, Math.min(min, Math.max(nextMax - 1, 0)));
+    setFreqMin(nextMin);
+    setFreqMax(nextMax);
+  }, [effectiveMaxFreq, setFreqMax, setFreqMin]);
+
+  const centerViewportOnTime = useCallback((time: number) => {
+    requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      if (!container || totalDuration <= 0) return;
+      const centerRatio = time / totalDuration;
+      const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+      const target = centerRatio * container.scrollWidth - container.clientWidth / 2;
+      container.scrollLeft = Math.max(0, Math.min(target, maxScrollLeft));
+    });
+  }, [scrollContainerRef, totalDuration]);
+
+  const triggerViewportPulse = useCallback((id: string) => {
+    setViewportPulseTargetId(null);
+    requestAnimationFrame(() => setViewportPulseTargetId(id));
+  }, []);
+
+  const showViewportFeedback = useCallback((key: ViewportToastKey) => {
+    setViewportToast({ key, nonce: Date.now() });
+  }, []);
+
+  const applyBandFocusToRegion = useCallback((region: ViewportRegion) => {
+    pushViewportSnapshot();
+    const nextRange = getFocusedFrequencyRange(region, effectiveMaxFreq);
+    handleFreqRangeChange(nextRange.min, nextRange.max);
+    triggerViewportPulse(region.id);
+    showViewportFeedback("bandFocusApplied");
+  }, [effectiveMaxFreq, handleFreqRangeChange, pushViewportSnapshot, showViewportFeedback, triggerViewportPulse]);
+
+  const applyFullFitToRegion = useCallback((region: ViewportRegion) => {
+    pushViewportSnapshot();
+    const nextRange = getFocusedFrequencyRange(region, effectiveMaxFreq);
+    handleFreqRangeChange(nextRange.min, nextRange.max);
+
+    const segment = Math.max(region.endTime - region.startTime, 0.25);
+    const desiredZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, totalDuration / (segment * 4)));
+    setZoomLevel(desiredZoom);
+
+    const centerTime = (region.startTime + region.endTime) / 2;
+    centerViewportOnTime(centerTime);
+    seekTo(centerTime, true);
+    triggerViewportPulse(region.id);
+    showViewportFeedback("suggestionFitApplied");
+  }, [centerViewportOnTime, effectiveMaxFreq, handleFreqRangeChange, pushViewportSnapshot, seekTo, setZoomLevel, showViewportFeedback, totalDuration, triggerViewportPulse]);
+
   const handleSelectSuggestion = useCallback((id: string | null) => {
     selectSuggestion(id);
     if (!id) return;
+
     const selected = suggestions.find((item) => item.id === id);
     if (!selected) return;
-    if (fitToSuggestion) {
-      const segment = Math.max(selected.endTime - selected.startTime, 0.25);
-      const desiredZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, totalDuration / (segment * 4)));
-      handleZoomLevelChange(() => desiredZoom);
-      setShowFitToast(true);
-    }
-    seekTo((selected.startTime + selected.endTime) / 2, true);
-  }, [fitToSuggestion, handleZoomLevelChange, seekTo, selectSuggestion, suggestions, totalDuration]);
+    applyFullFitToRegion(toViewportRegion(selected));
+  }, [applyFullFitToRegion, selectSuggestion, suggestions]);
+
+  const handleSelectDraft = useCallback((id: string | null) => {
+    selectDraft(id);
+    if (!id) return;
+
+    const draft = manualDrafts.find((item) => item.id === id);
+    if (!draft) return;
+    applyFullFitToRegion(toViewportRegion(draft));
+  }, [applyFullFitToRegion, manualDrafts, selectDraft]);
+
+  const handleClearSelection = useCallback(() => {
+    selectSuggestion(null);
+    selectDraft(null);
+  }, [selectDraft, selectSuggestion]);
+
+  const handleBandFocusSelected = useCallback(() => {
+    if (!selectedRegion) return;
+    applyBandFocusToRegion(selectedRegion);
+  }, [applyBandFocusToRegion, selectedRegion]);
 
   /* ----- File navigation ------------------------------------------ */
   const { isLastFile, fileCompleteToast, handleFileClick, handleNextFile, handlePrevFile } = useLabelingFileNav({
@@ -440,12 +552,12 @@ export default function LabelingWorkspacePage() {
     spectrogramRef,
     isDraggingSuggestion,
     isResizingSuggestion,
-    seekTo,
     t: (key) => t(key),
     startDraft,
     onZoomToBox: handleZoomToBox,
     updateDraft,
     selectDraft,
+    clearSelection: handleClearSelection,
     pushHistory,
   });
 
@@ -557,10 +669,16 @@ export default function LabelingWorkspacePage() {
 
 
   useEffect(() => {
-    if (!showFitToast) return;
-    const timer = setTimeout(() => setShowFitToast(false), 1200);
+    if (!viewportToast) return;
+    const timer = setTimeout(() => setViewportToast(null), 1200);
     return () => clearTimeout(timer);
-  }, [showFitToast]);
+  }, [viewportToast]);
+
+  useEffect(() => {
+    if (!viewportPulseTargetId) return;
+    const timer = setTimeout(() => setViewportPulseTargetId(null), 900);
+    return () => clearTimeout(timer);
+  }, [viewportPulseTargetId]);
 
   useEffect(() => {
     if (!zoomBoxMode) return;
@@ -596,12 +714,13 @@ export default function LabelingWorkspacePage() {
     manualDrafts,
     selectedDraftId,
     selectedSuggestionId,
-    selectSuggestion: handleSelectSuggestion,
+    selectSuggestion,
     setZoomLevel: handleZoomLevelChange,
     setZoomBoxMode,
     zoomBoxMode,
     onUndoAll: handleUndoAllEdits,
     onResetView: handleResetView,
+    onViewportUndo: handleViewportUndo,
     spectroListeningEnabled,
     onPlayOriginalSelection: handlePlayOriginalSelection,
     onPlayFilteredSelection: handlePlayFilteredSelection,
@@ -643,10 +762,8 @@ export default function LabelingWorkspacePage() {
           <ToolBar
             tool={tool}
             snapEnabled={snapEnabled}
-            fitToSuggestion={fitToSuggestion}
             onToolChange={setTool}
             onToggleSnap={toggleSnap}
-            onToggleFit={() => setFitToSuggestion((prev) => !prev)}
             onUndo={undo}
             onRedo={redo}
             onZoomLevelChange={handleZoomLevelChange}
@@ -660,6 +777,12 @@ export default function LabelingWorkspacePage() {
             pendingDraftCount={manualDrafts.length}
             bookmarkCount={bookmarks.length}
             spectrogramRef={spectrogramRef}
+            freqMin={freqMin}
+            freqMax={freqMax}
+            effectiveMaxFreq={effectiveMaxFreq}
+            onFreqRangeChange={handleFreqRangeChange}
+            onBandFocusSelected={handleBandFocusSelected}
+            canBandFocus={selectedRegion !== null}
           />
 
           <SpectrogramPanel
@@ -682,7 +805,7 @@ export default function LabelingWorkspacePage() {
             selectedSuggestionId={selectedSuggestionId}
             selectedDraftId={selectedDraftId}
             onSelectSuggestion={handleSelectSuggestion}
-            onSelectDraft={selectDraft}
+            onSelectDraft={handleSelectDraft}
             onDraftPointerDown={handleDraftPointerDown}
             onDraftPointerMove={handleDraftPointerMove}
             onDraftPointerUp={handleDraftPointerUp}
@@ -705,12 +828,6 @@ export default function LabelingWorkspacePage() {
             suggestionBoxStyle={suggestionBoxStyle}
             freqMin={freqMin}
             freqMax={freqMax}
-            onFreqRangeChange={(min, max) => {
-              const nextMax = Math.min(Math.max(max, 1), effectiveMaxFreq);
-              const nextMin = Math.max(0, Math.min(min, Math.max(nextMax - 1, 0)));
-              setFreqMin(nextMin);
-              setFreqMax(nextMax);
-            }}
             listeningEnabled={spectroListeningEnabled}
             listeningSelection={listeningSelection}
             onListeningSelectionChange={setListeningSelection}
@@ -724,9 +841,6 @@ export default function LabelingWorkspacePage() {
             onDownloadFilteredSelection={handleDownloadFilteredSelection}
             segmentExportError={segmentExportError}
             freqAxisScale={freqAxisScale}
-            onFreqAxisScaleChange={setFreqAxisScale}
-            fftOptions={fftOptions}
-            onFftOptionsChange={setFftOptions}
             statusColors={statusColors}
             draftPreview={draftPreview}
             playbackPct={playbackPct}
@@ -734,8 +848,8 @@ export default function LabelingWorkspacePage() {
             loopState={loopState}
             bookmarks={bookmarks}
             loopRangeLabel={loopRangeLabel}
-            fitToSuggestion={fitToSuggestion}
-            showFitToast={showFitToast}
+            viewportToastKey={viewportToast?.key ?? null}
+            viewportPulseTargetId={viewportPulseTargetId}
             loopHudWarning={loopHudWarning}
             activeSuggestion={activeSuggestion ?? null}
             onConfirm={handleConfirm}
