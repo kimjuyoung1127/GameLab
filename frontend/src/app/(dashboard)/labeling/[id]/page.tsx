@@ -1,7 +1,7 @@
 /** Labeling workspace route: orchestrates 3-panel layout, state wiring, and interaction handlers. */
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { useAnnotationStore } from "@/lib/store/annotation-store";
@@ -305,38 +305,39 @@ export default function LabelingWorkspacePage() {
     getActionLabel: (action: string) => t(`llmAction_${action}` as Parameters<typeof t>[0]),
   });
 
-  const filteredFiles = audioFiles.filter((f) => {
+  const filteredFiles = useMemo(() => audioFiles.filter((f) => {
     const matchesSearch = f.filename.toLowerCase().includes(fileFilter.toLowerCase());
     const matchesTab =
       filterTab === "all" ||
       (filterTab === "pending" && f.status === "pending") ||
       (filterTab === "done" && f.status === "done");
     return matchesSearch && matchesTab;
-  });
+  }), [audioFiles, fileFilter, filterTab]);
 
-  const activeSuggestion =
+  const activeSuggestion = useMemo(() =>
     suggestions.find((s) => s.id === selectedSuggestionId && s.status === "pending" && s.source !== "user") ??
-    suggestions.find((s) => s.status === "pending" && s.source !== "user");
+    suggestions.find((s) => s.status === "pending" && s.source !== "user"),
+  [suggestions, selectedSuggestionId]);
 
   const rejectedSuggestion =
     mode === "edit"
       ? suggestions.find((s) => s.id === selectedSuggestionId && s.status === "rejected")
       : null;
 
-  const pendingCount = suggestions.filter((s) => s.status === "pending").length;
-  const confirmedCount = suggestions.filter((s) => s.status === "confirmed").length;
+  const pendingCount = useMemo(() => suggestions.filter((s) => s.status === "pending").length, [suggestions]);
+  const confirmedCount = useMemo(() => suggestions.filter((s) => s.status === "confirmed").length, [suggestions]);
   const totalCount = suggestions.length;
-  const displaySuggestions = statusFilter === "all" ? suggestions : suggestions.filter((s) => s.status === statusFilter);
+  const displaySuggestions = useMemo(() => statusFilter === "all" ? suggestions : suggestions.filter((s) => s.status === statusFilter), [suggestions, statusFilter]);
   const loopRangeLabel =
     loopState.start !== null && loopState.end !== null && loopState.end > loopState.start
       ? `${formatTimecode(loopState.start)} ~ ${formatTimecode(loopState.end)}`
       : t("stateHudOff");
-  const bookmarkPresets: { type: BookmarkType; label: string; note: string }[] = [
+  const bookmarkPresets = useMemo<{ type: BookmarkType; label: string; note: string }[]>(() => [
     { type: "recheck", label: t("bookmarkRecheck"), note: t("bookmarkRecheckNote") },
     { type: "noise_suspect", label: t("bookmarkNoise"), note: t("bookmarkNoiseNote") },
     { type: "edge_case", label: t("bookmarkEdge"), note: t("bookmarkEdgeNote") },
     { type: "needs_analysis", label: t("bookmarkNeedsAnalysis"), note: t("bookmarkNeedsAnalysisNote") },
-  ];
+  ], [t]);
 
   /* ----- Score sync + achievement load ------------------------------ */
   useEffect(() => {

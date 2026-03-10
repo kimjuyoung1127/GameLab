@@ -2,7 +2,7 @@
 "use client";
 
 import type React from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Check, Flag, Sparkles, Wrench, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAnnotationStore } from "@/lib/store/annotation-store";
@@ -192,6 +192,8 @@ export default function SpectrogramPanel({
   const [hoveredBookmarkId, setHoveredBookmarkId] = useState<string | null>(null);
   const [pinnedBookmarkId, setPinnedBookmarkId] = useState<string | null>(null);
   const [hoverMetrics, setHoverMetrics] = useState<{ timeSec: number; freqHz: number; db: number } | null>(null);
+  const hoverMetricsRef = useRef<{ timeSec: number; freqHz: number; db: number } | null>(null);
+  const hoverRafRef = useRef<number>(0);
   const [fftSettingsOpen, setFftSettingsOpen] = useState(false);
 
   const handleBookmarkClick = useCallback((e: React.MouseEvent, bId: string) => {
@@ -208,6 +210,12 @@ export default function SpectrogramPanel({
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [pinnedBookmarkId]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverRafRef.current) cancelAnimationFrame(hoverRafRef.current);
+    };
+  }, []);
 
   const bookmarkTypeLabel: Record<BookmarkType, string> = {
     recheck: t("bookmarkRecheck"),
@@ -261,11 +269,22 @@ export default function SpectrogramPanel({
       db = -90 + luminance * 80;
     }
 
-    setHoverMetrics({ timeSec, freqHz, db });
+    hoverMetricsRef.current = { timeSec, freqHz, db };
+    if (!hoverRafRef.current) {
+      hoverRafRef.current = requestAnimationFrame(() => {
+        setHoverMetrics(hoverMetricsRef.current);
+        hoverRafRef.current = 0;
+      });
+    }
   }, [freqAxisScale, freqMax, freqMin, onDraftPointerMove, spectrogramData, totalDuration]);
 
   const handleSpectrogramPointerLeave = useCallback((e?: React.PointerEvent<HTMLDivElement>) => {
     onDraftPointerUp(e);
+    hoverMetricsRef.current = null;
+    if (hoverRafRef.current) {
+      cancelAnimationFrame(hoverRafRef.current);
+      hoverRafRef.current = 0;
+    }
     setHoverMetrics(null);
   }, [onDraftPointerUp]);
 

@@ -1,7 +1,7 @@
 /** LLM Assist 블록: 스토어 기반 assist 결과 표시 + 수동 요청/재분석 버튼. */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Loader2, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { Suggestion, SuggestionLlmAssist } from "@/types";
@@ -30,6 +30,11 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
   const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState("");
   const [checkedId, setCheckedId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   // suggestion 변경 시 캐시 확인 (스토어에 결과 없을 때만)
   useEffect(() => {
@@ -72,6 +77,9 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
 
   const requestAssist = useCallback(async () => {
     if (!suggestion) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLocalLoading(true);
     setError("");
 
@@ -80,6 +88,7 @@ export default function LlmAssistBlock({ suggestion }: LlmAssistBlockProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inputMode: "audio_clip" }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
