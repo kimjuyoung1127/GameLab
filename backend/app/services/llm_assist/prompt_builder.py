@@ -1,6 +1,14 @@
 """LLM 프롬프트 빌더: suggestion 메타데이터 기반 프롬프트 생성 (PII 제외)."""
 from __future__ import annotations
 
+import re
+
+
+def _sanitize_field(value: str, max_len: int = 500) -> str:
+    """제어문자 제거 + 길이 제한으로 prompt injection 방어."""
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", str(value))
+    return cleaned[:max_len]
+
 
 SYSTEM_INSTRUCTION = (
     "You are a sound event analysis expert. "
@@ -59,14 +67,14 @@ def build_text_features_prompt(
     start = suggestion.get("start_time", 0)
     end = suggestion.get("end_time", 0)
     return _TEXT_FEATURES_TEMPLATE.format(
-        label=suggestion.get("label", "Unknown"),
+        label=_sanitize_field(suggestion.get("label", "Unknown"), 100),
         confidence=suggestion.get("confidence", 0),
         start_time=start,
         end_time=end,
         duration=end - start,
         freq_low=suggestion.get("freq_low", 0),
         freq_high=suggestion.get("freq_high", 0),
-        description=suggestion.get("description", ""),
+        description=_sanitize_field(suggestion.get("description", ""), 500),
         sample_rate=audio_meta.get("sample_rate", 0),
         file_duration=audio_meta.get("duration", 0),
     )
@@ -80,12 +88,12 @@ def build_audio_clip_prompt(
     start = suggestion.get("start_time", 0)
     end = suggestion.get("end_time", 0)
     return _AUDIO_CLIP_TEMPLATE.format(
-        label=suggestion.get("label", "Unknown"),
+        label=_sanitize_field(suggestion.get("label", "Unknown"), 100),
         confidence=suggestion.get("confidence", 0),
         start_time=start,
         end_time=end,
         duration=end - start,
         freq_low=suggestion.get("freq_low", 0),
         freq_high=suggestion.get("freq_high", 0),
-        description=suggestion.get("description", ""),
+        description=_sanitize_field(suggestion.get("description", ""), 500),
     )

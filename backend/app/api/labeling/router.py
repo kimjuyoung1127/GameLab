@@ -387,17 +387,40 @@ async def request_assist(
     if not settings.llm_assist_enabled:
         raise HTTPException(status_code=403, detail="LLM assist is disabled")
 
-    # suggestion 존재 확인
+    # suggestion 존재 + 소유권 확인
     try:
-        check = (
+        sug_check = (
             supabase.table("sst_suggestions")
-            .select("id")
+            .select("id, audio_id")
             .eq("id", suggestion_id)
             .limit(1)
             .execute()
         )
-        if not (check.data or []):
+        sug_rows = sug_check.data or []
+        if not sug_rows:
             raise HTTPException(status_code=404, detail="Suggestion not found")
+
+        audio_check = (
+            supabase.table("sst_audio_files")
+            .select("session_id")
+            .eq("id", sug_rows[0]["audio_id"])
+            .limit(1)
+            .execute()
+        )
+        audio_rows = audio_check.data or []
+        if not audio_rows:
+            raise HTTPException(status_code=404, detail="Audio file not found")
+
+        session_check = (
+            supabase.table("sst_sessions")
+            .select("user_id")
+            .eq("id", audio_rows[0]["session_id"])
+            .limit(1)
+            .execute()
+        )
+        session_rows = session_check.data or []
+        if not session_rows or session_rows[0].get("user_id") != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
     except HTTPException:
         raise
     except Exception as exc:
@@ -412,14 +435,17 @@ async def request_assist(
     except asyncio.TimeoutError:
         raise HTTPException(status_code=503, detail="LLM assist timed out")
     except ValueError as exc:
-        raise HTTPException(status_code=502, detail=f"LLM response error: {exc}")
+        raise HTTPException(status_code=502, detail="LLM response error")
     except Exception as exc:
         logger.exception("LLM assist failed", extra={"suggestion_id": suggestion_id})
         raise HTTPException(status_code=503, detail="LLM assist failed") from exc
 
 
 @router.get("/suggestions/{suggestion_id}/assist")
-async def get_assist(suggestion_id: str):
+async def get_assist(
+    suggestion_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """이미 생성된 LLM assist 결과 조회 (캐시 역할)."""
     try:
         res = (
@@ -481,6 +507,42 @@ async def request_batch_assist(
             detail=f"Max {settings.llm_batch_max_size} suggestions per batch",
         )
 
+    # 소유권 일괄 검증
+    try:
+        sug_check = (
+            supabase.table("sst_suggestions")
+            .select("id, audio_id")
+            .in_("id", unique_ids)
+            .execute()
+        )
+        sug_rows = sug_check.data or []
+        if len(sug_rows) != len(unique_ids):
+            raise HTTPException(status_code=404, detail="Some suggestions not found")
+
+        audio_ids = list({r["audio_id"] for r in sug_rows})
+        audio_check = (
+            supabase.table("sst_audio_files")
+            .select("id, session_id")
+            .in_("id", audio_ids)
+            .execute()
+        )
+        audio_rows = audio_check.data or []
+        session_ids = list({r["session_id"] for r in audio_rows})
+
+        session_check = (
+            supabase.table("sst_sessions")
+            .select("id, user_id")
+            .in_("id", session_ids)
+            .execute()
+        )
+        for sr in (session_check.data or []):
+            if sr.get("user_id") != current_user.id:
+                raise HTTPException(status_code=403, detail="Access denied")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Failed to verify suggestions") from exc
+
     try:
         from app.services.llm_assist.service import SuggestionAssistService
 
@@ -496,9 +558,18 @@ async def request_batch_assist(
 
 
 @router.get("/{session_id}/assist-batch")
-async def get_batch_assist(session_id: str, ids: str = Query(...)):
+async def get_batch_assist(
+    session_id: str,
+    ids: str = Query(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """복수 suggestion의 캐시된 LLM assist 결과 벌크 조회."""
     suggestion_ids = [s.strip() for s in ids.split(",") if s.strip()]
+    if len(suggestion_ids) > settings.llm_batch_max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Max {settings.llm_batch_max_size} ids per request",
+        )
     if not suggestion_ids:
         return LlmBatchAssistResponse(results=[], errors=[])
 

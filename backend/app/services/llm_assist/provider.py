@@ -83,7 +83,10 @@ class GeminiProvider:
             if "{" in raw_text and "}" in raw_text:
                 json_start = raw_text.index("{")
                 json_end = raw_text.rindex("}") + 1
-                result = json.loads(raw_text[json_start:json_end])
+                try:
+                    result = json.loads(raw_text[json_start:json_end])
+                except json.JSONDecodeError:
+                    raise ValueError(f"Cannot parse Gemini response as JSON: {raw_text[:200]}")
             else:
                 raise ValueError(f"Cannot parse Gemini response as JSON: {raw_text[:200]}")
 
